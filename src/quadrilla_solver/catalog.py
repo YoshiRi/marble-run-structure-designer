@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -26,6 +26,101 @@ class SetInventory:
     source_path: Path
 
 
+@dataclass(frozen=True)
+class PartCatalog:
+    raw: Mapping[str, Any]
+    rails: Mapping[str, RailSpec]
+
+    def _find_part(self, part_type: str) -> tuple[str, Mapping[str, Any]] | None:
+        for category in ("routing_blocks", "structural_parts", "special_parts"):
+            group = self.raw.get(category, {})
+            if isinstance(group, Mapping) and part_type in group:
+                spec = group[part_type]
+                if isinstance(spec, Mapping):
+                    return category, spec
+
+        accessories = self.raw.get("accessories", {})
+        if isinstance(accessories, Mapping):
+            for subcategory in ("routing_affecting", "non_routing"):
+                group = accessories.get(subcategory, {})
+                if isinstance(group, Mapping) and part_type in group:
+                    spec = group[part_type]
+                    if isinstance(spec, Mapping):
+                        return f"accessories.{subcategory}", spec
+        return None
+
+    def has_part(self, part_type: str) -> bool:
+        return part_type in self.rails or self._find_part(part_type) is not None
+
+    def category(self, part_type: str) -> str | None:
+        if part_type in self.rails:
+            return "rails"
+        found = self._find_part(part_type)
+        return found[0] if found else None
+
+    def part_spec(self, part_type: str) -> Mapping[str, Any] | None:
+        found = self._find_part(part_type)
+        return found[1] if found else None
+
+    def height_units(self, part_type: str) -> int | None:
+        if part_type in self.rails:
+            return self.rails[part_type].height_units
+        spec = self.part_spec(part_type)
+        if spec is None:
+            return None
+        value = spec.get("height")
+        return int(value) if value is not None else None
+
+    def mass_g(self, part_type: str) -> float | None:
+        if part_type in self.rails:
+            return self.rails[part_type].mass_g
+
+        found = self._find_part(part_type)
+        if found is None:
+            return None
+        category, spec = found
+        measured = _mass_value(dict(spec))
+        if measured is not None:
+            return measured
+
+        if category == "routing_blocks" and int(spec.get("height", 0)) == 4:
+            default_raw = (
+                self.raw.get("mass_defaults", {})
+                .get("standard_routing_block_g", {})
+            )
+            if isinstance(default_raw, (int, float)):
+                return float(default_raw)
+            if isinstance(default_raw, Mapping) and default_raw.get("value") is not None:
+                return float(default_raw["value"])
+        return None
+
+    def allowed_rotations(self, part_type: str) -> tuple[int, ...] | None:
+        spec = self.part_spec(part_type)
+        if spec is None:
+            return None
+        rotations = spec.get("rotations_deg")
+        if rotations is None:
+            return None
+        return tuple(int(v) % 360 for v in rotations)
+
+    def internal_routes(self, part_type: str) -> tuple[tuple[str, str], ...]:
+        spec = self.part_spec(part_type)
+        if spec is None:
+            return ()
+        result: list[tuple[str, str]] = []
+        for route in spec.get("routes", ()) or ():
+            if not isinstance(route, Mapping):
+                continue
+            source = route.get("from")
+            if source is None:
+                continue
+            if route.get("to") is not None:
+                result.append((str(source), str(route["to"])))
+            for target in route.get("to_any_of", ()) or ():
+                result.append((str(source), str(target)))
+        return tuple(result)
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -46,35 +141,13 @@ def _mass_value(spec: dict[str, Any]) -> float | None:
 
 
 def load_routing_block_masses(parts_path: str | Path) -> dict[str, float | None]:
-    data = _load_yaml(Path(parts_path))
-    blocks = data.get("routing_blocks", {})
-    default_raw = (
-        data.get("mass_defaults", {})
-        .get("standard_routing_block_g", {})
-    )
-    default_mass: float | None = None
-    if isinstance(default_raw, (int, float)):
-        default_mass = float(default_raw)
-    elif isinstance(default_raw, dict) and default_raw.get("value") is not None:
-        default_mass = float(default_raw["value"])
-
-    result: dict[str, float | None] = {}
-    for name, spec in blocks.items():
-        if not isinstance(spec, dict):
-            result[name] = None
-            continue
-        measured = _mass_value(spec)
-        if measured is not None:
-            result[name] = measured
-            continue
-
-        # Temporary 55 g fallback applies only to unmeasured standard-height
-        # routing blocks, not thin blocks or unrelated accessories.
-        if int(spec.get("height", 0)) == 4:
-            result[name] = default_mass
-        else:
-            result[name] = None
-    return result
+    catalog = load_catalog(parts_path)
+    blocks = catalog.raw.get("routing_blocks", {})
+    return {
+        name: catalog.mass_g(name)
+        for name in blocks
+        if isinstance(name, str)
+    }
 
 
 def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
@@ -98,6 +171,12 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
     return result
 
 
+def load_catalog(parts_path: str | Path) -> PartCatalog:
+    path = Path(parts_path)
+    raw = _load_yaml(path)
+    return PartCatalog(raw=raw, rails=load_rail_specs(path))
+
+
 def load_set_inventory(path: str | Path) -> SetInventory:
     path = Path(path)
     data = _load_yaml(path)
@@ -119,8 +198,6 @@ def load_set_inventory(path: str | Path) -> SetInventory:
     thin_blocks = int(thin.get("purple_drop", 0) or 0)
     foundations = int(thin.get("wooden_foundation", 0) or 0)
 
-    # Height optimization intentionally uses only straight rails whose structural
-    # behavior is represented by the MVP solver. Curves and spirals are deferred.
     straight_rails = 0
     for name, value in contents.get("rails", {}).items():
         if not name.startswith("straight_"):
