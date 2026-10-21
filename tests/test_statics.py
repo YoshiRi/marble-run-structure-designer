@@ -176,3 +176,14 @@ def test_support_cycle_is_rejected():
     result = analyze_structure({"a": a, "b": b})
     assert not result.valid
     assert any(reason.startswith("support_cycle:") for reason in result.reasons)
+
+
+def test_measured_rail_masses_are_loaded_from_catalog():
+    from pathlib import Path
+    from quadrilla_solver.catalog import load_rail_specs
+
+    root = Path(__file__).resolve().parents[1]
+    rails = load_rail_specs(root / "catalog" / "parts.yaml")
+
+    assert rails["straight_long"].mass_g == pytest.approx(135)
+    assert rails["straight_short"].mass_g == pytest.approx(74)
