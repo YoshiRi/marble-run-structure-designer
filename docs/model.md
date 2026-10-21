@@ -183,7 +183,25 @@ Initial rail rule:
 - every support must ultimately reach ground through already-stable components
 - a rail cannot be considered a valid support until that rail itself is stable
 
-This permits real constructions where rails support other rails, including non-rectangular/triangular arrangements, without requiring full force simulation.
+This permits real constructions where rails support other rails, including non-rectangular/triangular arrangements, without requiring full rigid-body simulation.
+
+#### Quasi-static force model
+
+For straight-rail stacks, a second stability layer treats each rail as a rigid 1D beam with exactly two compression-only supports.
+
+For each rail, the model recursively aggregates:
+
+- the rail's own weight
+- attached point masses
+- support reactions transmitted from upper rails
+
+It then computes the effective center of mass and the two support reactions from force/moment equilibrium. Reactions are propagated downward to lower rails until ground.
+
+If either solved support reaction is negative, the configuration would require a support to pull downward/upward rather than merely carry compression, so the rail is classified as tipping/unstable.
+
+The helper also reports a stability margin: the distance from the effective COM to the nearest support. A normalized margin of 1 means the COM is centered between supports; 0 means it lies on a support boundary; negative means tipping in the current model.
+
+Physical force values require actual component masses. Until masses are measured, this helper is used with explicit synthetic/test masses rather than guessed catalog values.
 
 ### Connectivity
 
