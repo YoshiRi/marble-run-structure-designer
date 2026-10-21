@@ -1,4 +1,4 @@
-schema_version: "0.4"
+schema_version: "0.5"
 
 height_units:
   rail: 1
@@ -72,13 +72,15 @@ routing_blocks:
     appearance: red
     height: 4
     rotations_deg: [0, 90, 180, 270]
+    ports: [top, front, right]
+    routes:
+      - from: top
+        to_any_of: [front, right]
+        selection: random
     port_geometry:
-      top_input: true
-      horizontal_outputs: 2
       output_angle_deg: 90
-    routes: []
-    confidence: existence_confirmed_routing_unconfirmed
-    todo: confirm whether TOP randomly selects one of the two orthogonal horizontal exits
+    confidence: confirmed
+    todo: probability distribution is unspecified
 
   orange_vertical:
     height: 4
@@ -183,9 +185,22 @@ special_parts:
       allowed_for_reachability: true
       approximation: branch_to_either_rail_end
 
+  melody_step:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
+  round_spinner:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
+  clear_fall:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
 deferred:
   - curved_rails
   - s_rails
   - seesaw_detailed_state_machine
   - seesaw_geometry
   - spiral_geometry
+  - funny_function_special_geometry
