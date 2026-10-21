@@ -22,6 +22,13 @@ from .geometry import (
     find_triangle,
     valid_support_pairs,
 )
+from .inventory import (
+    Inventory,
+    InventoryResult,
+    layout_usage,
+    load_inventory,
+    validate_inventory,
+)
 from .layout_stability import (
     GlobalStabilityResult,
     LayoutStaticsResult,
@@ -72,6 +79,8 @@ __all__ = [
     "SupportPair",
     "StackingOption",
     "TriangleSolution",
+    "Inventory",
+    "InventoryResult",
     "GlobalStabilityResult",
     "LayoutStaticsResult",
     "Layout",
@@ -98,6 +107,9 @@ __all__ = [
     "load_set_inventory",
     "build_routing_graph",
     "validate_connectivity",
+    "layout_usage",
+    "load_inventory",
+    "validate_inventory",
     "valid_support_pairs",
     "find_stacking_options",
     "find_triangle",
