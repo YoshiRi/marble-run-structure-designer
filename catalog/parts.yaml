@@ -1,4 +1,4 @@
-schema_version: "0.3"
+schema_version: "0.4"
 
 height_units:
   rail: 1
@@ -68,6 +68,18 @@ routing_blocks:
     confidence: confirmed
     todo: probability distribution is unspecified
 
+  red_right_angle:
+    appearance: red
+    height: 4
+    rotations_deg: [0, 90, 180, 270]
+    port_geometry:
+      top_input: true
+      horizontal_outputs: 2
+      output_angle_deg: 90
+    routes: []
+    confidence: existence_confirmed_routing_unconfirmed
+    todo: confirm whether TOP randomly selects one of the two orthogonal horizontal exits
+
   orange_vertical:
     height: 4
     rotations_deg: [0, 90, 180, 270]
@@ -135,6 +147,9 @@ accessories:
       resulting_hole_state: covered
       confidence: confirmed
     covered_slope:
+      aliases:
+        - covered_accelerator
+        - "フタ付加速パーツ"
       resulting_hole_state: covered_slope
       confidence: partial
       todo: define exact route/behavior and orientation semantics
