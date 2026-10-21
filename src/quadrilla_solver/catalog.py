@@ -45,6 +45,38 @@ def _mass_value(spec: dict[str, Any]) -> float | None:
     return None
 
 
+def load_routing_block_masses(parts_path: str | Path) -> dict[str, float | None]:
+    data = _load_yaml(Path(parts_path))
+    blocks = data.get("routing_blocks", {})
+    default_raw = (
+        data.get("mass_defaults", {})
+        .get("standard_routing_block_g", {})
+    )
+    default_mass: float | None = None
+    if isinstance(default_raw, (int, float)):
+        default_mass = float(default_raw)
+    elif isinstance(default_raw, dict) and default_raw.get("value") is not None:
+        default_mass = float(default_raw["value"])
+
+    result: dict[str, float | None] = {}
+    for name, spec in blocks.items():
+        if not isinstance(spec, dict):
+            result[name] = None
+            continue
+        measured = _mass_value(spec)
+        if measured is not None:
+            result[name] = measured
+            continue
+
+        # Temporary 55 g fallback applies only to unmeasured standard-height
+        # routing blocks, not thin blocks or unrelated accessories.
+        if int(spec.get("height", 0)) == 4:
+            result[name] = default_mass
+        else:
+            result[name] = None
+    return result
+
+
 def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
     data = _load_yaml(Path(parts_path))
     rails = data.get("rails", {})
