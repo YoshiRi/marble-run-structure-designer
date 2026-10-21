@@ -1,4 +1,19 @@
-from .catalog import RailSpec, SetInventory, load_rail_specs, load_set_inventory
+from .assembly import AssemblyResult, validate_assembly
+from .catalog import (
+    PartCatalog,
+    RailSpec,
+    SetInventory,
+    load_catalog,
+    load_rail_specs,
+    load_routing_block_masses,
+    load_set_inventory,
+)
+from .connectivity import (
+    ConnectivityResult,
+    RoutingGraph,
+    build_routing_graph,
+    validate_connectivity,
+)
 from .geometry import (
     SupportPair,
     StackingOption,
@@ -7,37 +22,32 @@ from .geometry import (
     find_triangle,
     valid_support_pairs,
 )
+from .layout_stability import (
+    GlobalStabilityResult,
+    LayoutStaticsResult,
+    analyze_global_stability,
+    analyze_layout_statics,
+    convex_hull,
+)
+from .model import (
+    Layout,
+    PlacedPart,
+    PlacedRail,
+    PortRef,
+    RouteLink,
+    SupportLink,
+    load_layout,
+    part_com_world,
+    rail_com_world,
+    rail_hole_world,
+    rail_local_to_world,
+)
 from .optimizer import HeightSolution, maximize_straight_tower
-from .stability import StabilityResult, check_support_chain, check_triangle_vertex_supports
-
-__all__ = [
-    "RailSpec",
-    "SetInventory",
-    "SupportPair",
-    "StackingOption",
-    "TriangleSolution",
-    "HeightSolution",
-    "StabilityResult",
-    "load_rail_specs",
-    "load_set_inventory",
-    "valid_support_pairs",
-    "find_stacking_options",
-    "find_triangle",
-    "check_support_chain",
-    "check_triangle_vertex_supports",
-    "maximize_straight_tower",
-    "GRAVITY_M_S2",
-    "AppliedLoad",
-    "GroundReaction",
-    "PointMass",
-    "RailBody",
-    "RailStatics",
-    "StructureStatics",
-    "SupportConnection",
-    "SupportReaction",
-    "analyze_structure",
-]
-
+from .stability import (
+    StabilityResult,
+    check_support_chain,
+    check_triangle_vertex_supports,
+)
 from .statics import (
     GRAVITY_M_S2,
     AppliedLoad,
@@ -50,3 +60,59 @@ from .statics import (
     SupportReaction,
     analyze_structure,
 )
+from .validation import LayoutValidationResult, validate_layout
+
+__all__ = [
+    "AssemblyResult",
+    "PartCatalog",
+    "RailSpec",
+    "SetInventory",
+    "ConnectivityResult",
+    "RoutingGraph",
+    "SupportPair",
+    "StackingOption",
+    "TriangleSolution",
+    "GlobalStabilityResult",
+    "LayoutStaticsResult",
+    "Layout",
+    "PlacedPart",
+    "PlacedRail",
+    "PortRef",
+    "RouteLink",
+    "SupportLink",
+    "HeightSolution",
+    "StabilityResult",
+    "LayoutValidationResult",
+    "GRAVITY_M_S2",
+    "AppliedLoad",
+    "GroundReaction",
+    "PointMass",
+    "RailBody",
+    "RailStatics",
+    "StructureStatics",
+    "SupportConnection",
+    "SupportReaction",
+    "load_catalog",
+    "load_rail_specs",
+    "load_routing_block_masses",
+    "load_set_inventory",
+    "build_routing_graph",
+    "validate_connectivity",
+    "valid_support_pairs",
+    "find_stacking_options",
+    "find_triangle",
+    "analyze_global_stability",
+    "analyze_layout_statics",
+    "convex_hull",
+    "load_layout",
+    "part_com_world",
+    "rail_com_world",
+    "rail_hole_world",
+    "rail_local_to_world",
+    "maximize_straight_tower",
+    "check_support_chain",
+    "check_triangle_vertex_supports",
+    "analyze_structure",
+    "validate_assembly",
+    "validate_layout",
+]
