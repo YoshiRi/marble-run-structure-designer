@@ -8,6 +8,25 @@ Local direction convention:
 - `LEFT`, `RIGHT`, and `REAR` are relative to `FRONT`.
 - rotating the physical block rotates all local ports together.
 
+## Part categories
+
+The working catalog separates physical parts into:
+
+- **Block**
+  - standard routing block
+  - thin routing block
+  - foundation block
+- **Rail**
+- **Special**
+  - e.g. seesaw
+- **Routing-affecting accessory**
+  - cover
+  - covered slope
+- **Non-routing accessory**
+  - accelerator plate
+
+A rail hole has a resulting logical state, but the physical accessory that creates that state is modeled separately.
+
 ## Standard block height
 
 Working height: **4 units**.
@@ -55,13 +74,52 @@ LEFT  <-> RIGHT
 
 The horizontal pass-through line is perpendicular to the output used by a marble entering from the top.
 
+## Natural-wood routing block
+
+Confirmed behavior:
+
+```text
+FRONT -> BOTTOM
+REAR  -> BOTTOM
+```
+
+This is a standard-height routing block and is distinct from the thin wooden foundation piece.
+
+Other possible ports/routes are currently left unspecified rather than inferred.
+
+## Red routing block
+
+Confirmed behavior:
+
+```text
+TOP -> FRONT or REAR
+```
+
+The output is selected randomly between the two opposite horizontal exits.
+
+This should be modeled as a probabilistic branch, not as an alternating/stateful switch unless later physical testing shows otherwise. The exact probability distribution is not yet specified.
+
+## Orange routing block
+
+Confirmed behavior:
+
+```text
+TOP -> BOTTOM
+```
+
+Horizontal directions are blocked; no horizontal route is currently modeled.
+
 ## Purple drop block
 
 Height: **1 unit**.
 
-Known role: a routing component used to drop a marble downward.
+Confirmed behavior:
 
-Exact input/output port geometry is not yet encoded.
+```text
+TOP -> BOTTOM
+```
+
+It is therefore a thin vertical pass-through routing block.
 
 ## Wooden foundation block
 
@@ -70,8 +128,10 @@ Height: **1 unit**.
 Structural role only:
 
 - used as a foundation/base
-- not treated as a general routing component
+- not treated as a routing component
 - not treated as an arbitrary spacer in the initial model
+
+This is distinct from the standard-height natural-wood routing block.
 
 ## Straight rails
 
@@ -109,14 +169,25 @@ The end-hole spacing follows the same pattern as the long rail, giving the curre
 
 A hole can be used for block insertion and can also act as a marble opening.
 
-Current logical configurations:
+Current logical configurations include:
 
-- empty
-- block
-- cover (pass-through)
-- covered accelerator / red diagonal accelerator
+- empty/open
+- block-connected
+- covered/pass-through
+- covered-slope
 
-Some holes can also accept a seesaw mechanism; that is deferred.
+Some holes can also accept special mechanisms such as a seesaw; that is deferred.
+
+## Accessories
+
+### Routing-affecting
+
+- **Cover** — changes an open hole into a rail pass-through.
+- **Covered slope** — affects the marble route/behavior; exact routing semantics and orientation still need to be encoded.
+
+### Non-routing
+
+- **Accelerator plate** — affects motion but not graph connectivity, so it can be ignored by the initial solver and retained only for viewer/construction-assist purposes.
 
 ## Spiral
 
@@ -128,11 +199,10 @@ The exact footprint, entry location, exit location, and support points remain to
 
 The catalog still needs exact definitions for:
 
-- red/stateful routing blocks
-- orange routing block
-- other natural-wood routing blocks, if distinct from the foundation piece
 - curved rails
 - S-shaped rails
 - spiral geometry
 - seesaw mechanism
+- covered-slope routing semantics
 - exact support/stacking rules
+- any unobserved ports/routes on the natural-wood block
