@@ -1,0 +1,54 @@
+schema_version: "0.1"
+
+# Reference contents transcribed from the user-provided standard-set parts image.
+# This is a product/set reference, NOT the user's actual owned inventory.
+
+set:
+  name: quadrilla_standard_set_reference
+  source: user_provided_parts_image
+
+contents:
+  routing_blocks:
+    blue: 2
+    green: 1
+    natural_drop: 1
+    cyan: 1
+    yellow: 1
+    red_random_split: 1
+    red_right_angle: 1
+
+  rails:
+    straight_long: 2
+    curved_rail_s:
+      count: 2
+      catalog_status: deferred
+
+  thin_and_structural_blocks:
+    purple_drop:
+      count: 5
+      label_in_image: "高さ台"
+    wooden_foundation:
+      count: 3
+      label_in_image: "土台"
+
+  special_parts:
+    seesaw: 1
+
+  routing_accessories:
+    covered_slope:
+      count: 2
+      label_in_image: "フタ付加速パーツ"
+
+  documentation:
+    japanese_assembly_guide: 1
+
+not_present_in_this_reference_set:
+  - orange_vertical
+  - straight_short
+  - standalone_cover
+  - accelerator_plate
+  - spiral
+
+notes:
+  - "Do not copy these counts into inventory.yaml; the owned collection has missing pieces and multiple sets."
+  - "Red right-angle routing semantics remain unconfirmed."
