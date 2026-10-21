@@ -1,4 +1,11 @@
-schema_version: "0.6"
+schema_version: "0.7"
+
+mass_defaults:
+  standard_routing_block_g:
+    value: 55
+    source: temporary_user_assumption
+    confidence: provisional
+    scope: unmeasured_height_4_routing_blocks
 
 height_units:
   rail: 1
@@ -88,6 +95,10 @@ routing_blocks:
 
   orange_vertical:
     height: 4
+    mass_g:
+      value: 58
+      source: user_measurement
+      confidence: measured
     rotations_deg: [0, 90, 180, 270]
     ports: [top, bottom]
     routes:
@@ -178,6 +189,10 @@ accessories:
 
   non_routing:
     accelerator_plate:
+      mass_g:
+        value: 2.5
+        source: user_measurement
+        confidence: measured
       affects_routing_graph: false
       confidence: confirmed
       note: keep for viewer/construction-assist if desired
