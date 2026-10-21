@@ -99,6 +99,17 @@ The output is selected randomly between the two opposite horizontal exits.
 
 This should be modeled as a probabilistic branch. The exact probability distribution is not yet specified.
 
+## Red right-angle variant
+
+The standard-set parts image includes a distinct **red (right-angle)** block in addition to the ordinary red block.
+
+Confirmed from the image:
+
+- it is a separate physical block variant
+- its two horizontal output directions are arranged at 90 degrees rather than opposite each other
+
+Its exact routing semantics are not yet confirmed. In particular, do not assume that it uses the same random split behavior as the ordinary red block until physically tested.
+
 ## Orange routing block
 
 Confirmed behavior:
@@ -185,7 +196,7 @@ Some rail variants also provide a dedicated center mount for a seesaw.
 ### Routing-affecting
 
 - **Cover** — changes an open hole into a rail pass-through.
-- **Covered slope** — affects the marble route/behavior; exact routing semantics and orientation still need to be encoded.
+- **Covered slope / covered accelerator (フタ付加速パーツ)** — the standard-set image shows two of these. It affects the marble route/behavior; exact routing semantics and orientation still need to be encoded.
 
 ### Non-routing
 
