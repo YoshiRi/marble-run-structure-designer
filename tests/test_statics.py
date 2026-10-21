@@ -205,3 +205,14 @@ def test_routing_block_mass_fallback_and_measured_overrides():
     assert masses["red_right_angle"] == pytest.approx(55)
     assert masses["natural_drop"] == pytest.approx(55)
     assert masses["purple_drop"] == pytest.approx(12)
+
+
+def test_foundation_mass_is_recorded_as_12g():
+    from pathlib import Path
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    with (root / "catalog" / "parts.yaml").open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    assert data["structural_parts"]["wooden_foundation"]["mass_g"]["value"] == pytest.approx(12)
