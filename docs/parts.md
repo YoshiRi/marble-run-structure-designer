@@ -34,11 +34,15 @@ User-measured values currently available:
 | Part | Mass |
 | --- | ---: |
 | Blue routing block | 53 g |
+| Orange routing block | 58 g |
 | Purple thin/drop block | 12 g |
+| Accelerator plate | 2.5 g |
 | Short straight rail | 74 g |
 | Long straight rail | 135 g |
 
-These values are used as direct statics inputs where the exact part type is known. The 53 g blue-block measurement is **not** automatically generalized to other standard routing-block colors.
+These values are used as direct statics inputs where the exact part type is known.
+
+Until additional measurements are available, every **unmeasured standard-height (height 4) routing block** uses a provisional mass of **55 g**. Measured values override this fallback, so blue remains 53 g and orange remains 58 g. The fallback does not apply to thin blocks, rails, accessories, foundations, spirals, or special parts.
 
 ## Standard block height
 
