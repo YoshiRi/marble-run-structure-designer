@@ -53,14 +53,52 @@ Each placed component has:
 
 Validation follows support edges downward until ground.
 
+The MVP now also includes a recursive quasi-static helper for straight rails.
+
+### Recursive rail statics
+
+Each rail is treated as a rigid 1D beam under vertical gravity loads.
+
+Inputs per rail:
+
+- rail mass and local center of mass
+- optional point masses
+- exactly two downward support locations
+- optional lower-rail target for each support
+- optional support-column mass
+
+For each rail the helper computes:
+
+- total vertical load
+- effective center of mass including all upper structure
+- left/right support reactions
+- stability margin from the effective COM to the nearest support
+- normalized balance margin
+- downward reactions transmitted to lower rails
+
+Upper-rail reactions are propagated recursively as point loads onto lower rails.
+
+A rail is considered tipped when the solved reaction at either compression-only support is negative. This is equivalent, in the current 1D model, to the effective COM lying outside the support interval.
+
+Current exclusions:
+
+- lateral force
+- 2D/3D global center of mass
+- rail bending
+- friction
+- connection pull-out
+- more than two supports
+- exact mass values for real Quadrilla parts
+
+Actual force values therefore require measured part masses; the solver does not invent them.
+
 Later refinements may add:
 
-- center-of-mass estimates
+- 2D global statics for non-parallel/triangular structures
 - cantilever limits
-- different stability classes for rail shapes
+- rail bending/compliance
+- support capacity and connection strength
 - tolerance/clearance
-
-These are not required for the initial checker.
 
 ## 3. Connectivity Validator — does the marble route work?
 
