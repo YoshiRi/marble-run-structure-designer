@@ -1,4 +1,4 @@
-schema_version: "0.5"
+schema_version: "0.6"
 
 height_units:
   rail: 1
@@ -20,6 +20,10 @@ routing_blocks:
 
   blue:
     height: 4
+    mass_g:
+      value: 53
+      source: user_measurement
+      confidence: measured
     rotations_deg: [0, 90, 180, 270]
     ports: [top, front, rear, bottom]
     routes:
@@ -93,6 +97,10 @@ routing_blocks:
 
   purple_drop:
     height: 1
+    mass_g:
+      value: 12
+      source: user_measurement
+      confidence: measured
     rotations_deg: [0, 90, 180, 270]
     ports: [top, bottom]
     routes:
@@ -111,12 +119,20 @@ rails:
   straight_long:
     height: 1
     length_cm: 50
+    mass_g:
+      value: 135
+      source: user_measurement
+      confidence: measured
     hole_positions_cm: [2, 7, 43, 48]
     confidence: measured
 
   straight_long_center:
     height: 1
     length_cm: 50
+    mass_g:
+      value: 135
+      source: user_measurement_assumed_same_physical_rail_family
+      confidence: provisional
     hole_positions_cm: [2, 7, 25, 43, 48]
     center_special_mount:
       possible: true
@@ -127,6 +143,10 @@ rails:
   straight_short:
     height: 1
     length_cm: 27
+    mass_g:
+      value: 74
+      source: user_measurement
+      confidence: measured
     hole_positions_cm: [2, 7, 20, 25]
     confidence: inferred_from_measured_end_spacing
     todo: confirm all hole centers directly
