@@ -39,11 +39,20 @@ def triangle_with_long_rails(repo_root: str | Path) -> dict:
     long_rail = rails["straight_long"]
     triangle = find_triangle((long_rail, long_rail, long_rail))
     if triangle is None:
-        return {"assembly_possible": False, "stability": None}
+        return {
+            "plan_geometry_possible": False,
+            "assembly_possible": None,
+            "stability": None,
+        }
 
     stability = check_triangle_vertex_supports((True, True, True))
     return {
-        "assembly_possible": True,
+        "plan_geometry_possible": True,
+        "assembly_possible": None,
+        "assembly_note": (
+            "Plan-view closure is proven, but full stacked assembly still needs "
+            "explicit joint-Z/overlap rules at triangle vertices."
+        ),
         "solution": asdict(triangle),
         "stability_if_all_three_vertices_have_stable_downward_support": asdict(stability),
     }
