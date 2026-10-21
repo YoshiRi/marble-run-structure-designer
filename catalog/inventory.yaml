@@ -1,8 +1,8 @@
-schema_version: "0.1"
+schema_version: "0.2"
 
 # Counts are intentionally unknown.
-# The owned collection combines a Basic set and an older Twist/Cyclone-era set
-# with some missing pieces. Populate this file from a manual count.
+# The owned collection combines multiple sets and has missing pieces.
+# Populate this file from a manual count. Null means UNKNOWN, not unlimited.
 
 parts:
   routing_blocks:
@@ -10,6 +10,10 @@ parts:
     blue: null
     green: null
     cyan: null
+    natural_drop: null
+    red_random_split: null
+    red_right_angle: null
+    orange_vertical: null
     purple_drop: null
 
   structural_parts:
@@ -20,10 +24,17 @@ parts:
     straight_long_center: null
     straight_short: null
 
-  routing_modifiers:
+  special_parts:
+    seesaw: null
+
+  routing_accessories:
     cover: null
-    accelerator: null
+    covered_slope: null
+
+  non_routing_accessories:
+    accelerator_plate: null
 
 notes:
   - "Do not infer owned counts from commercial set specifications."
-  - "Add additional part types as the physical collection is cataloged."
+  - "Null is treated as unknown by InventoryValidator."
+  - "Add curved/spiral/special parts when their geometry/catalog entries are enabled."
