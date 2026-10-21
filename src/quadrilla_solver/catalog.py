@@ -13,6 +13,7 @@ class RailSpec:
     length_cm: float
     holes_cm: tuple[float, ...]
     height_units: int = 1
+    mass_g: float | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,17 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def _mass_value(spec: dict[str, Any]) -> float | None:
+    raw = spec.get("mass_g")
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, dict) and raw.get("value") is not None:
+        return float(raw["value"])
+    return None
+
+
 def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
     data = _load_yaml(Path(parts_path))
     rails = data.get("rails", {})
@@ -49,6 +61,7 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
             length_cm=float(length),
             holes_cm=tuple(float(x) for x in holes),
             height_units=int(spec.get("height", 1)),
+            mass_g=_mass_value(spec),
         )
     return result
 
