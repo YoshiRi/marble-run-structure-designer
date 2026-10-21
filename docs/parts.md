@@ -95,20 +95,19 @@ Confirmed behavior:
 TOP -> FRONT or REAR
 ```
 
-The output is selected randomly between the two opposite horizontal exits.
-
-This should be modeled as a probabilistic branch. The exact probability distribution is not yet specified.
+The output is randomly distributed between the two opposite horizontal exits.
 
 ## Red right-angle variant
 
-The standard-set parts image includes a distinct **red (right-angle)** block in addition to the ordinary red block.
+Confirmed behavior:
 
-Confirmed from the image:
+```text
+TOP -> FRONT or RIGHT
+```
 
-- it is a separate physical block variant
-- its two horizontal output directions are arranged at 90 degrees rather than opposite each other
+This is also a random distributor, but its two horizontal exits are arranged at 90 degrees instead of opposite each other.
 
-Its exact routing semantics are not yet confirmed. In particular, do not assume that it uses the same random split behavior as the ordinary red block until physically tested.
+The exact probability distribution is not needed for initial reachability solving.
 
 ## Orange routing block
 
@@ -196,7 +195,7 @@ Some rail variants also provide a dedicated center mount for a seesaw.
 ### Routing-affecting
 
 - **Cover** — changes an open hole into a rail pass-through.
-- **Covered slope / covered accelerator (フタ付加速パーツ)** — the standard-set image shows two of these. It affects the marble route/behavior; exact routing semantics and orientation still need to be encoded.
+- **Covered slope / covered accelerator (フタ付加速パーツ)** — affects the marble route/behavior; exact routing semantics and orientation still need to be encoded.
 
 ### Non-routing
 
@@ -241,6 +240,7 @@ The initial solver may ignore:
 - S-shaped rails
 - seesaw state transitions
 - detailed seesaw geometry
+- Funny Function special-part geometry
 
 Still unresolved for the parts that remain in the MVP path:
 
