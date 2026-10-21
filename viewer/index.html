@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quadrilla Structure Viewer</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div>
+        <h1>Quadrilla Structure Viewer</h1>
+        <div id="layoutMeta" class="muted">loading…</div>
+      </div>
+      <div class="toolbar-actions">
+        <label>
+          Example
+          <select id="exampleSelect">
+            <option value="./examples/two-level-supported.yaml">two-level-supported</option>
+          </select>
+        </label>
+        <label class="file-button">
+          Load YAML
+          <input id="layoutFile" type="file" accept=".yaml,.yml,text/yaml">
+        </label>
+        <button id="resetCamera" type="button">Reset camera</button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <section class="viewport-panel">
+        <canvas id="renderCanvas" aria-label="Quadrilla 3D viewer"></canvas>
+        <div class="overlay-controls">
+          <label><input id="toggleHoles" type="checkbox" checked> Holes</label>
+          <label><input id="toggleSupports" type="checkbox" checked> Supports</label>
+          <label><input id="toggleRoute" type="checkbox" checked> Route</label>
+          <label><input id="toggleCom" type="checkbox" checked> COM</label>
+          <label><input id="togglePolygon" type="checkbox" checked> Support polygon</label>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section>
+          <h2>Structure</h2>
+          <dl id="summary" class="summary"></dl>
+        </section>
+        <section>
+          <h2>Global COM</h2>
+          <div id="comSummary" class="mono muted">not computed</div>
+        </section>
+        <section>
+          <h2>Selected</h2>
+          <pre id="selection">Click a rail or block.</pre>
+        </section>
+        <section>
+          <h2>Browser solver status</h2>
+          <p class="muted">
+            Viewer and global COM are client-side. Full Assembly / local statics /
+            Connectivity / Inventory validation currently remains in the Python solver.
+          </p>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
