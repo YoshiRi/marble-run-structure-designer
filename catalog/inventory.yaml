@@ -1,0 +1,29 @@
+schema_version: "0.1"
+
+# Counts are intentionally unknown.
+# The owned collection combines a Basic set and an older Twist/Cyclone-era set
+# with some missing pieces. Populate this file from a manual count.
+
+parts:
+  routing_blocks:
+    yellow: null
+    blue: null
+    green: null
+    cyan: null
+    purple_drop: null
+
+  structural_parts:
+    wooden_foundation: null
+
+  rails:
+    straight_long: null
+    straight_long_center: null
+    straight_short: null
+
+  routing_modifiers:
+    cover: null
+    accelerator: null
+
+notes:
+  - "Do not infer owned counts from commercial set specifications."
+  - "Add additional part types as the physical collection is cataloged."
