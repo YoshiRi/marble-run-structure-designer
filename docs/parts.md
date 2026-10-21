@@ -36,13 +36,14 @@ User-measured values currently available:
 | Blue routing block | 53 g |
 | Orange routing block | 58 g |
 | Purple thin/drop block | 12 g |
+| Wooden foundation block | 12 g |
 | Accelerator plate | 2.5 g |
 | Short straight rail | 74 g |
 | Long straight rail | 135 g |
 
 These values are used as direct statics inputs where the exact part type is known.
 
-Until additional measurements are available, every **unmeasured standard-height (height 4) routing block** uses a provisional mass of **55 g**. Measured values override this fallback, so blue remains 53 g and orange remains 58 g. The fallback does not apply to thin blocks, rails, accessories, foundations, spirals, or special parts.
+Until additional measurements are available, every **unmeasured standard-height (height 4) routing block** uses a provisional mass of **55 g**. Measured values override this fallback, so blue remains 53 g and orange remains 58 g. The fallback does not apply to thin blocks, rails, accessories, foundations, spirals, or special parts. The wooden foundation is measured at 12 g. Because it is ground-only in the current model, its mass affects total mass / ground reaction accounting but not upper-rail tipping calculations.
 
 ## Standard block height
 
