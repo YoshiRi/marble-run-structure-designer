@@ -1,4 +1,4 @@
-name: deploy-viewer-pages
+name: viewer-static-site
 
 on:
   push:
@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check browser JavaScript
+        run: node --check viewer/app.js
       - name: Assemble static site
         run: |
           mkdir -p _site
@@ -37,6 +39,7 @@ jobs:
           path: _site
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
