@@ -4,7 +4,6 @@ Items here should be resolved by measurement, photographs, manuals, or repeatabl
 
 ## Current MVP priority
 
-- Confirm the red right-angle block's exact route semantics (existence and 90-degree output geometry are confirmed).
 - Confirm whether spiral height is exactly 3 discrete units.
 - Define the covered-slope accessory's exact routing effect and orientation.
 - Check whether the natural-wood routing block has any additional routes beyond FRONT/REAR -> BOTTOM.
@@ -34,10 +33,11 @@ Curved/S-shaped rails and detailed seesaw behavior are intentionally **out of th
 
 ## Probabilistic / stateful routing
 
-### Red block
+### Red blocks
 
-- modeled as `TOP -> {FRONT, REAR}` with random selection
-- exact probability distribution is not needed for reachability
+- ordinary red: `TOP -> {FRONT, REAR}`, random
+- right-angle red: `TOP -> {FRONT, RIGHT}`, random
+- exact probability distributions are not needed for reachability
 
 ### Seesaw — deferred
 
@@ -61,6 +61,7 @@ Still intentionally unresolved:
 - curved rails
 - S-shaped rails
 - detailed seesaw geometry
+- Funny Function special-part geometry
 
 ## Inventory
 
