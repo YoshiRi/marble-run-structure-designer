@@ -122,6 +122,10 @@ structural_parts:
   wooden_foundation:
     appearance: natural_wood
     height: 1
+    mass_g:
+      value: 12
+      source: user_measurement
+      confidence: measured
     routing: false
     role: foundation
     confidence: confirmed
