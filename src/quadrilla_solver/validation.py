@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Sequence
+
+from .assembly import AssemblyResult, validate_assembly
+from .catalog import PartCatalog
+from .connectivity import ConnectivityResult, validate_connectivity
+from .layout_stability import (
+    GlobalStabilityResult,
+    LayoutStaticsResult,
+    analyze_global_stability,
+    analyze_layout_statics,
+)
+from .model import Layout, PortRef
+
+
+@dataclass(frozen=True)
+class LayoutValidationResult:
+    valid: bool
+    assembly: AssemblyResult
+    global_stability: GlobalStabilityResult
+    local_statics: LayoutStaticsResult
+    connectivity: ConnectivityResult | None
+
+
+def validate_layout(
+    layout: Layout,
+    catalog: PartCatalog,
+    *,
+    source: PortRef | None = None,
+    sinks: Sequence[PortRef] = (),
+) -> LayoutValidationResult:
+    """
+    Run the common layout through the independent validators.
+
+    Overall validity requires:
+    - buildable assembly
+    - evaluable and stable global COM/support polygon
+    - evaluable and stable per-rail statics
+    - connectivity, when a source/sink query is supplied
+    """
+
+    assembly = validate_assembly(layout, catalog)
+    global_stability = analyze_global_stability(layout, catalog)
+    local_statics = analyze_layout_statics(layout, catalog)
+
+    connectivity: ConnectivityResult | None = None
+    if source is not None or sinks:
+        if source is None or not sinks:
+            raise ValueError(
+                "connectivity validation requires both source and at least one sink"
+            )
+        connectivity = validate_connectivity(
+            layout, catalog, source=source, sinks=sinks
+        )
+
+    local_valid = (
+        local_statics.evaluable
+        and local_statics.statics is not None
+        and local_statics.statics.valid
+    )
+    connectivity_valid = connectivity.valid if connectivity is not None else True
+
+    return LayoutValidationResult(
+        valid=(
+            assembly.valid
+            and global_stability.evaluable
+            and global_stability.stable
+            and local_valid
+            and connectivity_valid
+        ),
+        assembly=assembly,
+        global_stability=global_stability,
+        local_statics=local_statics,
+        connectivity=connectivity,
+    )
