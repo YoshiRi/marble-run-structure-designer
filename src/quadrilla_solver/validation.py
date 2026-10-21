@@ -12,6 +12,7 @@ from .layout_stability import (
     analyze_global_stability,
     analyze_layout_statics,
 )
+from .inventory import Inventory, InventoryResult, validate_inventory
 from .model import Layout, PortRef
 
 
@@ -22,6 +23,7 @@ class LayoutValidationResult:
     global_stability: GlobalStabilityResult
     local_statics: LayoutStaticsResult
     connectivity: ConnectivityResult | None
+    inventory: InventoryResult | None
 
 
 def validate_layout(
@@ -30,6 +32,7 @@ def validate_layout(
     *,
     source: PortRef | None = None,
     sinks: Sequence[PortRef] = (),
+    inventory: Inventory | None = None,
 ) -> LayoutValidationResult:
     """
     Run the common layout through the independent validators.
@@ -46,6 +49,9 @@ def validate_layout(
     local_statics = analyze_layout_statics(layout, catalog)
 
     connectivity: ConnectivityResult | None = None
+    inventory_result: InventoryResult | None = (
+        validate_inventory(layout, inventory) if inventory is not None else None
+    )
     if source is not None or sinks:
         if source is None or not sinks:
             raise ValueError(
@@ -61,6 +67,7 @@ def validate_layout(
         and local_statics.statics.valid
     )
     connectivity_valid = connectivity.valid if connectivity is not None else True
+    inventory_valid = inventory_result.valid if inventory_result is not None else True
 
     return LayoutValidationResult(
         valid=(
@@ -69,9 +76,11 @@ def validate_layout(
             and global_stability.stable
             and local_valid
             and connectivity_valid
+            and inventory_valid
         ),
         assembly=assembly,
         global_stability=global_stability,
         local_statics=local_statics,
         connectivity=connectivity,
+        inventory=inventory_result,
     )
