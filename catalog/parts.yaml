@@ -1,4 +1,4 @@
-schema_version: "0.2"
+schema_version: "0.3"
 
 height_units:
   rail: 1
@@ -104,6 +104,10 @@ rails:
     height: 1
     length_cm: 50
     hole_positions_cm: [2, 7, 25, 43, 48]
+    center_special_mount:
+      possible: true
+      confidence: partial
+      note: some rail variants have a center groove/mount for the seesaw; exact compatibility must be checked
     confidence: measured
 
   straight_short:
@@ -143,11 +147,30 @@ accessories:
 
 special_parts:
   seesaw:
-    confidence: deferred
-    todo: define compatible holes, ports, routing behavior, and state
+    implementation_scope: deferred
+    mount:
+      location: rail_center
+      requires:
+        - center_hole
+        - center_groove_or_mount
+      confidence: confirmed_partial
+    ports: [top, left_end, right_end]
+    routes:
+      - from: top
+        to_any_of: [left_end, right_end]
+        selection: hysteretic_state
+    state:
+      type: hysteretic_direction
+      approximate_switch_scale_marbles: [4, 5]
+      confidence: approximate
+      todo: define exact switching rule and threshold
+    simplified_solver_model:
+      allowed_for_reachability: true
+      approximation: branch_to_either_rail_end
 
 deferred:
-  - spiral_geometry
   - curved_rails
   - s_rails
-  - seesaw_geometry_and_behavior
+  - seesaw_detailed_state_machine
+  - seesaw_geometry
+  - spiral_geometry
