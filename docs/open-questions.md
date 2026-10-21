@@ -2,20 +2,22 @@
 
 Items here should be resolved by measurement, photographs, manuals, or repeatable physical tests.
 
-## Highest priority
+## Current MVP priority
 
 - Confirm whether spiral height is exactly 3 discrete units.
-- Measure curved and S-shaped rail connection coordinates.
 - Define the covered-slope accessory's exact routing effect and orientation.
-- Define the seesaw's compatible holes, ports, state, and routing behavior.
 - Check whether the natural-wood routing block has any additional routes beyond FRONT/REAR -> BOTTOM.
+- Formalize the minimum support/stacking rules needed by the validator.
+
+Curved/S-shaped rails and detailed seesaw behavior are intentionally **out of the initial solver scope**.
 
 ## Rail geometry
 
 - Confirm short-rail hole positions numerically rather than only by repeated end spacing.
 - Measure rail width and hole center coordinates in the transverse direction if needed by the solver.
 - Determine which rail variants have center holes.
-- Determine whether every hole has identical structural constraints.
+- Determine which center-hole rail variants also have the groove/mount required by the seesaw.
+- Determine whether every ordinary hole has identical structural constraints.
 
 ## Structural rules
 
@@ -28,12 +30,36 @@ Items here should be resolved by measurement, photographs, manuals, or repeatabl
 
 - Define the covered-slope accessory's exact route/behavior and orientation.
 - Confirm whether cover behavior is always a pure pass-through.
-- Add seesaw behavior later.
 
-## Probabilistic routing
+## Probabilistic / stateful routing
 
-- Red block is currently modeled as TOP -> {FRONT, REAR} with random selection.
-- Exact probability distribution is not needed for reachability, but may be measured later for route simulation/viewer behavior.
+### Red block
+
+- modeled as `TOP -> {FRONT, REAR}` with random selection
+- exact probability distribution is not needed for reachability
+
+### Seesaw — deferred
+
+Known enough to reserve the model shape:
+
+- mounts at the center of compatible rails with a center hole and groove/mount
+- accepts a marble from above
+- routes toward the left or right rail end
+- switching has approximately 4-5 marbles of hysteresis
+
+Still intentionally unresolved:
+
+- exact state-transition rule
+- exact threshold
+- initial state
+- whether the 4-5 marble value is fixed or only approximate
+- exact set of compatible rail variants
+
+## Deferred geometry
+
+- curved rails
+- S-shaped rails
+- detailed seesaw geometry
 
 ## Inventory
 
