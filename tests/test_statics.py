@@ -187,3 +187,21 @@ def test_measured_rail_masses_are_loaded_from_catalog():
 
     assert rails["straight_long"].mass_g == pytest.approx(135)
     assert rails["straight_short"].mass_g == pytest.approx(74)
+
+
+def test_routing_block_mass_fallback_and_measured_overrides():
+    from pathlib import Path
+    from quadrilla_solver.catalog import load_routing_block_masses
+
+    root = Path(__file__).resolve().parents[1]
+    masses = load_routing_block_masses(root / "catalog" / "parts.yaml")
+
+    assert masses["blue"] == pytest.approx(53)
+    assert masses["orange_vertical"] == pytest.approx(58)
+    assert masses["green"] == pytest.approx(55)
+    assert masses["cyan"] == pytest.approx(55)
+    assert masses["yellow"] == pytest.approx(55)
+    assert masses["red_random_split"] == pytest.approx(55)
+    assert masses["red_right_angle"] == pytest.approx(55)
+    assert masses["natural_drop"] == pytest.approx(55)
+    assert masses["purple_drop"] == pytest.approx(12)
