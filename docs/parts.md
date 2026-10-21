@@ -27,6 +27,19 @@ The working catalog separates physical parts into:
 
 A rail hole has a resulting logical state, but the physical accessory that creates that state is modeled separately.
 
+## Measured masses
+
+User-measured values currently available:
+
+| Part | Mass |
+| --- | ---: |
+| Blue routing block | 53 g |
+| Purple thin/drop block | 12 g |
+| Short straight rail | 74 g |
+| Long straight rail | 135 g |
+
+These values are used as direct statics inputs where the exact part type is known. The 53 g blue-block measurement is **not** automatically generalized to other standard routing-block colors.
+
 ## Standard block height
 
 Working height: **4 units**.
