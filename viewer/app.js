@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  const DATA_ROOT = window.location.pathname.includes("/viewer/") ? "../" : "./";
   const HEIGHT_SCALE_CM = 3.0;
   const RAIL_WIDTH_CM = 3.0;
   const BLOCK_WIDTH_CM = 5.0;
@@ -433,13 +434,13 @@
   }
 
   async function loadCatalog() {
-    const response = await fetch("./catalog/parts.yaml");
+    const response = await fetch(DATA_ROOT + "catalog/parts.yaml");
     if (!response.ok) throw new Error("Failed to load catalog/parts.yaml");
     return jsyaml.load(await response.text());
   }
 
   async function loadExample(path) {
-    const response = await fetch(path);
+    const response = await fetch(DATA_ROOT + path);
     if (!response.ok) throw new Error("Failed to load " + path);
     layout = jsyaml.load(await response.text());
     renderAll();
