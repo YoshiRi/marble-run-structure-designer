@@ -1,0 +1,104 @@
+schema_version: "0.1"
+
+height_units:
+  rail: 1
+  standard_block: 4
+  spiral:
+    value: 3
+    confidence: tentative
+  purple_drop_block: 1
+  wooden_foundation: 1
+
+routing_blocks:
+  yellow:
+    height: 4
+    rotations_deg: [0, 90, 180, 270]
+    ports: [top, front]
+    routes:
+      - { from: top, to: front }
+    confidence: confirmed
+
+  blue:
+    height: 4
+    rotations_deg: [0, 90, 180, 270]
+    ports: [top, front, rear, bottom]
+    routes:
+      - { from: top, to: front }
+      - { from: rear, to: bottom }
+    confidence: confirmed
+
+  green:
+    height: 4
+    rotations_deg: [0, 90, 180, 270]
+    ports: [top, front, left, bottom]
+    routes:
+      - { from: top, to: front }
+      - { from: left, to: bottom }
+    confidence: confirmed
+
+  cyan:
+    height: 4
+    rotations_deg: [0, 90, 180, 270]
+    ports: [top, front, left, right]
+    routes:
+      - { from: top, to: front }
+      - { from: left, to: right }
+      - { from: right, to: left }
+    confidence: confirmed
+
+  purple_drop:
+    height: 1
+    rotations_deg: [0, 90, 180, 270]
+    behavior: drop
+    ports: []
+    routes: []
+    confidence: partial
+    todo: define exact port geometry
+
+structural_parts:
+  wooden_foundation:
+    height: 1
+    routing: false
+    role: foundation
+    confidence: confirmed
+
+rails:
+  straight_long:
+    height: 1
+    length_cm: 50
+    hole_positions_cm: [2, 7, 43, 48]
+    confidence: measured
+
+  straight_long_center:
+    height: 1
+    length_cm: 50
+    hole_positions_cm: [2, 7, 25, 43, 48]
+    confidence: measured
+
+  straight_short:
+    height: 1
+    length_cm: 27
+    hole_positions_cm: [2, 7, 20, 25]
+    confidence: inferred_from_measured_end_spacing
+    todo: confirm all hole centers directly
+
+hole_state_types:
+  empty:
+    description: no attachment/modifier
+  block:
+    description: routing/structural block connected at the hole
+  cover:
+    description: hole covered so the rail route passes over it
+  accelerator:
+    description: red diagonal accelerator fitted at the hole
+    parameters:
+      - orientation
+
+deferred:
+  - spiral_geometry
+  - curved_rails
+  - s_rails
+  - red_stateful_blocks
+  - orange_block
+  - other_natural_wood_routing_blocks
+  - seesaw
