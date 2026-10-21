@@ -4,6 +4,7 @@ Items here should be resolved by measurement, photographs, manuals, or repeatabl
 
 ## Current MVP priority
 
+- Confirm the red right-angle block's exact route semantics (existence and 90-degree output geometry are confirmed).
 - Confirm whether spiral height is exactly 3 discrete units.
 - Define the covered-slope accessory's exact routing effect and orientation.
 - Check whether the natural-wood routing block has any additional routes beyond FRONT/REAR -> BOTTOM.
