@@ -97,7 +97,7 @@ TOP -> FRONT or REAR
 
 The output is selected randomly between the two opposite horizontal exits.
 
-This should be modeled as a probabilistic branch, not as an alternating/stateful switch unless later physical testing shows otherwise. The exact probability distribution is not yet specified.
+This should be modeled as a probabilistic branch. The exact probability distribution is not yet specified.
 
 ## Orange routing block
 
@@ -155,6 +155,8 @@ Hole positions:
 2, 7, 25, 43, 48 cm
 ```
 
+Some rail variants additionally have a center groove/mount used by the seesaw. Do not assume every center-hole rail has this feature until checked physically.
+
 ### Short rail
 
 Measured length: **27 cm**
@@ -176,7 +178,7 @@ Current logical configurations include:
 - covered/pass-through
 - covered-slope
 
-Some holes can also accept special mechanisms such as a seesaw; that is deferred.
+Some rail variants also provide a dedicated center mount for a seesaw.
 
 ## Accessories
 
@@ -189,20 +191,49 @@ Some holes can also accept special mechanisms such as a seesaw; that is deferred
 
 - **Accelerator plate** — affects motion but not graph connectivity, so it can be ignored by the initial solver and retained only for viewer/construction-assist purposes.
 
+## Seesaw special part
+
+Implementation is **deferred for the MVP**, but its observed behavior is recorded so the model can accommodate it later.
+
+Mounting:
+
+- installed at the center of compatible rail variants
+- the compatible rail has a center hole plus a groove/mount for the seesaw
+
+Routing:
+
+```text
+TOP -> LEFT_END
+TOP -> RIGHT_END
+```
+
+Behavior:
+
+- stateful distributor
+- marbles dropped from above are sent toward one end of the rail or the other
+- the direction has hysteresis; the observed switching scale is approximately **4-5 marbles**
+- exact state-transition mechanics and exact threshold are intentionally left unspecified for now
+
+For initial reachability-only solving, this can eventually be approximated as a branch to either rail end. A later viewer/simulation layer can model the hysteretic switching state.
+
 ## Spiral
 
 Working height: **3 units**, currently tentative.
 
 The exact footprint, entry location, exit location, and support points remain to be measured.
 
-## Not yet specified
+## Deferred / out of initial scope
 
-The catalog still needs exact definitions for:
+The initial solver may ignore:
 
 - curved rails
 - S-shaped rails
+- seesaw state transitions
+- detailed seesaw geometry
+
+Still unresolved for the parts that remain in the MVP path:
+
 - spiral geometry
-- seesaw mechanism
 - covered-slope routing semantics
 - exact support/stacking rules
 - any unobserved ports/routes on the natural-wood block
