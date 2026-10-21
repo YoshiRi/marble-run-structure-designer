@@ -1,0 +1,21 @@
+schema_version: "0.1"
+
+presets:
+  current_core:
+    - { id: QD001, file: basic-qd001.yaml, name_ja: "ベーシックセット" }
+    - { id: QD003, file: funny-function-qd003.yaml, name_ja: "ファニーファンクションセット" }
+    - { id: QD005, file: twist-and-rail-qd005.yaml, name_ja: "ツイスト＆レールセット" }
+
+  expansion:
+    - { id: QD101, file: speedway-qd101.yaml, name_ja: "スピードウェイセット", status: listed_out_of_stock }
+
+  historical:
+    - { id: QDE6008AB05, file: historical/twist-qde6008ab05.yaml, name_ja: "旧ツイストセット" }
+
+excluded_from_solver_presets:
+  - id: QD201
+    name_ja: "ビー玉キャッチャー"
+    reason: output accessory only
+  - id: XEC2022-SET44
+    name_ja: "しかけたっぷりコースづくりセット"
+    reason: retail bundle; Quadrilla inventory is already represented by the included Funny Function preset
