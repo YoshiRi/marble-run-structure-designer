@@ -274,6 +274,33 @@
       }
     }
 
+    // Mirror of the Python stack-drop rule: a block's bottom outlet drops
+    // into the top of the part beneath it in the same stack, or through the
+    // lower rail hole into the top of the column under that hole.
+    const columnsByUpperHole = new Map();
+    for (const support of layout.supports || []) {
+      if (!support.stack_part_ids?.length) continue;
+      columnsByUpperHole.set(support.upper_rail_id + ":" + support.upper_hole_index, support);
+    }
+    const hasPort = (partId, port) => Boolean(partPorts.get(partId)?.has(port));
+    for (const support of layout.supports || []) {
+      const ids = support.stack_part_ids || [];
+      const stack = ids.filter(id => parts.has(id));
+      if (stack.length !== ids.length) continue;
+      for (let k = 1; k < stack.length; k++) {
+        if (hasPort(stack[k], "bottom") && hasPort(stack[k - 1], "top")) {
+          edge(stack[k] + ":bottom", stack[k - 1] + ":top");
+        }
+      }
+      if (!stack.length || support.lower_rail_id == null) continue;
+      const below = columnsByUpperHole.get(support.lower_rail_id + ":" + support.lower_hole_index);
+      if (!below || !parts.has(below.stack_part_ids.at(-1))) continue;
+      const belowTop = below.stack_part_ids.at(-1);
+      if (hasPort(stack[0], "bottom") && hasPort(belowTop, "top")) {
+        edge(stack[0] + ":bottom", belowTop + ":top");
+      }
+    }
+
     // Explicit links must mate actual aligned openings. No teleport edges.
     for (const link of layout.route_links || []) {
       if (!knownComponents.has(link.source.component_id)) {
