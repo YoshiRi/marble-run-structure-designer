@@ -12,7 +12,8 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - support links
 - actual graph reachability and shortest directed source-to-sink path highlighting
 - reachable branches, dead-end markers, and invalid/unsupported routing diagnostics
-- route source/sink selectors (defaults from optional layout `routing_query`)
+- marble input-hole selector (valid `block_connected` rail holes)
+- external exit list and topology-based exit probabilities
 - optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
 - ground support polygon
@@ -115,6 +116,12 @@ through solid wood. Cyan branches show other
 reachable graph edges, including possible random routes. Open holes interrupt
 rail traversal; covered holes preserve it; block-connected holes can drop into
 a supporting routing block. Unsupported covered-slope semantics are reported.
+
+The exit table lists reachable open rail holes, downstream rail ends, and
+unconnected block outlets. Deterministic paths show their topology-model
+probability; random branches are temporarily assumed equiprobable and displayed
+as estimates. Unsupported graph behavior, cycles, or unmodeled branches cause
+probabilities to be withheld rather than guessed.
 
 Side-entry notches that route downwards normally connect at the part's
 installation level. The **Allow rail groove one level above a side-drop inlet**

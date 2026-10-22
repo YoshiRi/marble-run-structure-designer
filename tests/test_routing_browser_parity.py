@@ -21,10 +21,15 @@ CATALOG_DATA = CATALOG.raw
 
 NODE_SCRIPT = r"""
 const fs = require("node:fs");
-const {buildGraph, trace} = require("./viewer/routing.js");
+const {buildGraph, trace, listInputHoles, analyzeOutcomes} = require("./viewer/routing.js");
 const {layout, catalog, source, sink} = JSON.parse(fs.readFileSync(0, "utf8"));
 const graph = buildGraph(layout, catalog);
-process.stdout.write(JSON.stringify({graph, result: trace(graph, source, sink)}));
+process.stdout.write(JSON.stringify({
+  graph,
+  result: trace(graph, source, sink),
+  inputHoles: listInputHoles(layout, catalog, graph),
+  outcomes: analyzeOutcomes(layout, catalog, graph, source),
+}));
 """
 
 
@@ -169,3 +174,16 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     elif case == "side_entry_plus_one_disallowed":
         assert not python_result.valid and not python_result.reachable
         assert any(reason.startswith("route_link_geometry_mismatch:") for reason in python_result.reasons)
+
+    if case == "red_random_branch":
+        assert browser["outcomes"]["complete"]
+        assert browser["outcomes"]["estimated"]
+        probabilities = {exit["node"]: exit["probability"] for exit in browser["outcomes"]["exits"]}
+        assert probabilities == {"split:front": 0.5, "split:rear": 0.5}
+    elif case == "aligned_rail_exit":
+        assert browser["outcomes"]["complete"]
+        assert browser["outcomes"]["exits"] == [{
+            "node": "exit:end_b", "kind": "rail_end",
+            "label": "exit · end B (rail exit)", "probability": 1,
+        }]
+        assert any(hole["key"] == "upper:hole:0" for hole in browser["inputHoles"])

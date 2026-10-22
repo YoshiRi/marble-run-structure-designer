@@ -741,48 +741,145 @@
     groups.route.length = 0;
   }
 
+  function setSelectOptions(select, options, preferred, emptyLabel) {
+    select.replaceChildren();
+    if (!options.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = emptyLabel;
+      select.appendChild(option);
+      select.value = "";
+      return;
+    }
+    for (const item of options) {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      select.appendChild(option);
+    }
+    select.value = options.some(item => item.value === preferred)
+      ? preferred : options[0].value;
+  }
+
   function populateRoutingControls() {
     const sourceSelect = document.getElementById("routeSource");
     const sinkSelect = document.getElementById("routeSink");
-    const nodes = routingGraph.nodes;
-    const sources = nodes.filter(key => routingGraph.edges[key].length);
-    const rails = [...(layout.rails || [])].sort((a, b) =>
-      Number(b.z_units) - Number(a.z_units));
-    const highest = rails[0];
-    const lowest = rails.at(-1);
-    const query = layout.routing_query || {};
-    const preferredSource = routingPortKey(query.source)
-      || (highest && highest.id + ":" +
-        (highest.flow_direction === "b_to_a" ? "end_b" : "end_a"));
-    const preferredSink = routingPortKey(query.sinks?.[0])
-      || (lowest && lowest.id + ":" +
-        (lowest.flow_direction === "b_to_a" ? "end_a" : "end_b"));
+    const inputHoles = MarbleRouting.listInputHoles(layout, catalog, routingGraph);
+    const querySource = routingPortKey(layout.routing_query?.source);
+    const sourceOptions = inputHoles.map(hole => ({ value: hole.key, label: hole.label }));
+    const preferredSource = sourceOptions.some(item => item.value === querySource)
+      ? querySource : sourceOptions[0]?.value;
+    setSelectOptions(sourceSelect, sourceOptions, preferredSource, "No valid input holes");
+    setSelectOptions(sinkSelect, [], "", "Select an input hole first");
+  }
 
-    function setOptions(select, options, preferred) {
-      select.replaceChildren();
-      const values = [...options];
-      if (preferred && !values.includes(preferred)) values.push(preferred);
-      for (const value of values) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-        select.appendChild(option);
+  function renderExitProbabilities(outcomes, selectedExit) {
+    const container = document.getElementById("exitProbabilities");
+    container.replaceChildren();
+    if (!outcomes || !outcomes.exits.length) {
+      const message = document.createElement("p");
+      message.className = "muted small-note";
+      message.textContent = outcomes?.complete === false && outcomes.reasons?.some(
+        reason => reason.startsWith("unknown_source:")
+      ) ? "No valid input hole is selected." : "No external exits are reachable from this input hole.";
+      container.appendChild(message);
+      if (outcomes?.reasons?.length) {
+        const details = document.createElement("p");
+        details.className = "muted small-note";
+        details.textContent = "Probability unavailable: " + outcomes.reasons.join(", ");
+        container.appendChild(details);
       }
-      if (preferred) select.value = preferred;
+      return;
     }
-    setOptions(sourceSelect, sources, preferredSource);
-    setOptions(sinkSelect, nodes, preferredSink);
+
+    const note = document.createElement("p");
+    note.className = "muted small-note";
+    if (!outcomes.complete) {
+      note.textContent = "Probability not calculated: the routing graph contains unresolved or unsupported behavior.";
+    } else if (outcomes.estimated) {
+      note.textContent = "Estimated only: each random branch is temporarily assumed equally likely. This is not a measured physical probability.";
+    } else {
+      note.textContent = "Deterministic result under the current routing model; this is not a physical-motion simulation.";
+    }
+    container.appendChild(note);
+
+    const table = document.createElement("table");
+    table.className = "exit-table";
+    const head = document.createElement("thead");
+    head.innerHTML = "<tr><th>Exit</th><th>Probability</th></tr>";
+    table.appendChild(head);
+    const body = document.createElement("tbody");
+    for (const exit of outcomes.exits) {
+      const row = document.createElement("tr");
+      if (exit.node === selectedExit) row.className = "selected-exit";
+      const nameCell = document.createElement("td");
+      const selectButton = document.createElement("button");
+      selectButton.type = "button";
+      selectButton.className = "exit-select";
+      selectButton.textContent = exit.label;
+      selectButton.addEventListener("click", () => {
+        document.getElementById("routeSink").value = exit.node;
+        updateRouting();
+      });
+      nameCell.appendChild(selectButton);
+      const probabilityCell = document.createElement("td");
+      if (exit.probability == null) {
+        probabilityCell.textContent = "Not calculated";
+      } else {
+        const percentage = exit.probability * 100;
+        const formatted = Math.abs(percentage - Math.round(percentage)) < 0.05
+          ? Math.round(percentage) + "%"
+          : percentage.toFixed(1) + "%";
+        probabilityCell.textContent = (outcomes.estimated ? "≈ " : "") + formatted;
+      }
+      row.append(nameCell, probabilityCell);
+      body.appendChild(row);
+    }
+    table.appendChild(body);
+    container.appendChild(table);
+    if (!outcomes.complete && outcomes.reasons?.length) {
+      const details = document.createElement("p");
+      details.className = "muted small-note";
+      details.textContent = "Reasons: " + outcomes.reasons.join(", ");
+      container.appendChild(details);
+    }
   }
 
   function updateRouting() {
     clearRoutingMeshes();
     const source = document.getElementById("routeSource").value;
-    const sink = document.getElementById("routeSink").value;
+    const sinkSelect = document.getElementById("routeSink");
     const status = document.getElementById("routeStatus");
-    if (!routingGraph || !source || !sink) {
-      status.textContent = "No routing source/sink available.";
+    if (!routingGraph || !source) {
+      setSelectOptions(sinkSelect, [], "", "No reachable exits");
+      renderExitProbabilities(null, "");
+      status.textContent = "No valid block-connected input hole. Set an input rail hole to block_connected and verify its support.";
       return;
     }
+
+    const outcomes = MarbleRouting.analyzeOutcomes(layout, catalog, routingGraph, source);
+    const querySink = routingPortKey(layout.routing_query?.sinks?.[0]);
+    const preferredSink = [sinkSelect.value, querySink].find(candidate =>
+      candidate && outcomes.exits.some(exit => exit.node === candidate));
+    setSelectOptions(
+      sinkSelect,
+      outcomes.exits.map(exit => ({ value: exit.node, label: exit.label })),
+      preferredSink,
+      "No reachable exits",
+    );
+    const sink = sinkSelect.value;
+    renderExitProbabilities(outcomes, sink);
+    if (!sink) {
+      const lines = [
+        "No external exit found from " + source,
+        "Graph status: " + (routingGraph.reasons.length ? "invalid / incomplete" : "no reachable terminal output"),
+      ];
+      if (routingGraph.reasons.length) lines.push("Reasons: " + routingGraph.reasons.join(", "));
+      status.textContent = lines.join("\n");
+      applyVisibility();
+      return;
+    }
+
     const trace = MarbleRouting.trace(routingGraph, source, sink);
     const pathPairs = new Set();
     for (let i = 1; i < trace.path.length; i++) {
@@ -801,8 +898,12 @@
     const lines = [
       trace.reachable ? "REACHABLE" : "UNREACHABLE",
       "Graph status: " + (trace.valid ? "valid" : "invalid / incomplete"),
+      "Input hole: " + source,
       "Reachable nodes: " + trace.reachableNodes.length,
-      "Dead ends: " + trace.deadEnds.length,
+      "External exits: " + outcomes.exits.length,
+      outcomes.complete
+        ? "Probability model: " + (outcomes.estimated ? "estimated (uniform random branches)" : "deterministic routing")
+        : "Probability model: unavailable (unresolved graph behavior)",
       "Block internals: only actual entry/exit ports are highlighted (channels unknown).",
     ];
     if (layout.routing_options?.allow_side_entry_plus_one) {

@@ -49,13 +49,20 @@
           <dl id="summary" class="summary"></dl>
         </section>
         <section>
-          <h2>Routing graph</h2>
+          <h2>Marble flow &amp; exit probabilities</h2>
           <div class="route-controls">
-            <label>Source <select id="routeSource" aria-label="Routing source"></select></label>
-            <label>Sink <select id="routeSink" aria-label="Routing destination"></select></label>
+            <label>Input hole (block-connected)
+              <select id="routeSource" aria-label="Marble input hole"></select>
+            </label>
+            <label>Highlight exit
+              <select id="routeSink" aria-label="Highlighted exit"></select>
+            </label>
+          </div>
+          <div id="exitProbabilities" class="exit-probabilities" aria-live="polite">
+            <p class="muted small-note">Loading exits…</p>
           </div>
           <label class="route-option"><input id="allowSideEntryPlusOne" type="checkbox"> Allow rail groove one level above a side-drop inlet</label>
-          <p class="muted small-note">Green: selected directed path along rail grooves. Blue: other reachable branches. Red: dead ends. Yellow: destination. By default, a rail groove must align with the side inlet's installation level. The option allows a +1-unit (1.5 cm) vertical offset for side-drop inlets only; XY alignment and facing direction are still checked.</p>
+          <p class="muted small-note">Choose a valid block-connected rail hole where the marble enters the routing block. The table lists reachable open rail holes, rail ends, and unconnected block outlets. Random branches are temporarily assumed equally likely for estimated probabilities; unresolved graph behavior is not assigned a guessed probability. Green: highlighted path; blue: other reachable branches.</p>
           <pre id="routeStatus" class="route-status" aria-live="polite">Loading routing graph…</pre>
         </section>
         <section>

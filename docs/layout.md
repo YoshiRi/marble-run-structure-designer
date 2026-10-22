@@ -97,7 +97,17 @@ Routing-block internal edges are loaded from `catalog/parts.yaml`.
 `validate_connectivity()` also returns `paths`, mapping each reached sink to
 its shortest directed sequence of graph-node keys. The browser Viewer traces
 the same port graph in `viewer/routing.js` and overlays the selected route
-and alternative reachable branches. It does not simulate ball dynamics.
+and alternative reachable branches. The Viewer can select a valid block-connected
+rail hole as the marble input and lists reachable external exits (open rail holes,
+rail ends, and unconnected block outlets).
+
+The Viewer also computes exit probabilities over the directed routing graph.
+Deterministic routes receive 100% under the current topology model. Routes marked
+`selection: random` are temporarily treated as equiprobable among their listed
+destinations, so those results are explicitly **estimates**, not measured physical
+probabilities. If the graph has unsupported behavior, an unmodeled branch, or a
+cycle, probabilities are left uncalculated rather than guessed. This remains a
+topological model, not a simulation of marble dynamics.
 
 `RouteLink` normally connects **catalogued openings at the same physical
 position** within 0.35 cm, with outward normals facing in opposite directions
