@@ -156,6 +156,31 @@ def build_routing_graph(
             if state == "block_connected" and (rail.id, index) not in valid_connected_holes:
                 reasons.append(f"block_connected_without_valid_support:{rail.id}:{index}")
 
+    # A marble leaving a block through its bottom drops straight down the
+    # support column: into the top of the part beneath it in the same stack,
+    # or, from the bottom of a stack standing on a lower rail, through that
+    # rail hole into the top of the column under it (physically confirmed).
+    columns_by_upper_hole = {
+        (support.upper_rail_id, support.upper_hole_index): support
+        for support in layout.supports
+        if support.stack_part_ids
+    }
+    for support in layout.supports:
+        stack = [part_id for part_id in support.stack_part_ids if part_id in parts]
+        if len(stack) != len(support.stack_part_ids):
+            continue
+        for lower_id, upper_id in zip(stack, stack[1:]):
+            if "bottom" in part_ports.get(upper_id, set()) and "top" in part_ports.get(lower_id, set()):
+                _add_edge(graph, f"{upper_id}:bottom", f"{lower_id}:top")
+        if not stack or support.lower_rail_id is None:
+            continue
+        below = columns_by_upper_hole.get((support.lower_rail_id, support.lower_hole_index))
+        if below is None or below.stack_part_ids[-1] not in parts:
+            continue
+        below_top = below.stack_part_ids[-1]
+        if "bottom" in part_ports.get(stack[0], set()) and "top" in part_ports.get(below_top, set()):
+            _add_edge(graph, f"{stack[0]}:bottom", f"{below_top}:top")
+
     # Explicit connections must mate actual catalogued openings at the same
     # physical position and opposite facing normals. No teleport edges.
     known_components = layout.component_ids()
