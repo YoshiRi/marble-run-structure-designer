@@ -188,6 +188,34 @@ structural_parts:
     role: foundation
     confidence: confirmed
 
+  # Flat boards with rail-style holes (user-reported). Holes presumably sit on
+  # the block grid; pitch, thickness and how they are used in a build are not
+  # measured yet, so no height is given and the solver ignores them.
+  plate_two_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 2
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_three_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 3
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_four_corner_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 4
+    hole_layout: four_corners
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+
 rails:
   straight_long:
     height: 1
@@ -273,6 +301,21 @@ curved_rails:
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
+  s_curve:
+    shape: compound_arc
+    height: 1
+    width_cm: 4.5
+    description: two short-curve arcs joined end to end, bending in opposite directions (user description)
+    segments:                  # in order from end A; turn is relative to the first segment
+      - { base: curved_short, turn: same }
+      - { base: curved_short, turn: opposite }
+    hole_circle_radius_cm: { value: 23.0, source: same_as_short_curve, confidence: estimated }
+    centerline_length_cm: 56.18  # derived: 2 x 28.09
+    hole_arc_positions_cm: [2.0, 54.18]   # assumed: end holes only, as on the short curve
+    solver_support: not_yet
+    confidence: estimated
+    todo: confirm hole positions (end holes only, or also at the joint?) and whether the two arcs are 70 deg each
+
 hole_state_types:
   open:
     description: hole is open and may permit a drop/connection depending on layout
@@ -328,6 +371,8 @@ special_parts:
       confidence: observed
     route_description: enters at the chute end, circles the funnel, drops through the center outlet
     placement_convention: x/y = funnel center (outlet hole), z_units = outlet mount level, rotation_deg = direction toward the chute
+    size_variants:
+      note: the historical Twist set lists one large and one small spiral, but the user's two pieces are the same size; treat all as this size for now
   seesaw:
     implementation_scope: deferred
     mount:

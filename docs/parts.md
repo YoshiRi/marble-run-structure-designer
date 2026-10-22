@@ -276,6 +276,9 @@ short straight rail's end holes, and the chute-end mount sits **3 units** above
 the funnel-center mount. The marble enters at the chute, circles the funnel and
 drops through the center outlet.
 
+The historical Twist set lists a large and a small spiral, but the user's two
+pieces are the same size, so all twists are treated as this size for now.
+
 The viewer draws it schematically (`special_parts.spiral`, placement: funnel
 center, outlet level, direction toward the chute). Funnel depth and the exact
 inlet position are not measured; the solver does not model it yet.
@@ -342,4 +345,18 @@ the circle's center.
 Not yet modeled: the solver, generator and viewer still handle straight rails
 only (`curved_rails:` in `catalog/parts.yaml`, `solver_support: not_yet`).
 Open questions are listed in `docs/open-questions.md`.
+
+## S-curve
+
+Two short-curve arcs joined end to end, bending in opposite directions (user
+description). Derived: 56.2 cm along the centerline; the ends are parallel,
+offset about 43.2 cm forward and 30.2 cm sideways. Assumed holes: one near each
+end, as on the short curve (`curved_rails.s_curve`). Viewer-only for now.
+
+## Hole plates
+
+Flat boards with rail-style holes, user-reported: two holes in a row, three
+holes in a row, and four holes at the corners (`structural_parts.plate_*`).
+Hole pitch, outline, thickness and typical use are not measured yet; owned
+counts are still to be found. The solver ignores them.
 
