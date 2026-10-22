@@ -56,6 +56,16 @@ Still intentionally unresolved:
 - whether the 4-5 marble value is fixed or only approximate
 - exact set of compatible rail variants
 
+## Curved rails
+
+- Confirm the end overhang beyond the end holes (assumed 2 cm, as on straight rails).
+- How two curves "overlap at holes": stacked one level apart (one curve's end
+  resting on the other's hole), or joined at the same level?
+- Support: does a curve stand on its two end holes (the arc's center of mass
+  lies off the line between them), or does it need a third support / the
+  middle hole?
+- Owned counts and which sets include short and long curves.
+
 ## Deferred geometry
 
 - curved rails

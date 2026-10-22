@@ -290,3 +290,38 @@ Still unresolved for the parts that remain in the MVP path:
 - covered-slope routing semantics
 - exact support/stacking rules
 - any unobserved ports/routes on the natural-wood block
+
+## Curved rails
+
+Same width (4.5 cm) and thickness (1 unit) as the straight rails. Geometry is
+**derived** from user observations, not yet measured.
+
+Observations:
+
+- Short curve: a hole at each end. Six short curves overlapped at their holes
+  close a circle, so the end holes are **60 deg** apart around the center. The
+  two end holes line up with the outer holes of a short straight rail
+  (hole 0 and hole 3, 23 cm apart).
+- Long curve: holes at both ends and in the middle; a short curve overlaps it
+  hole to hole. Three long curves overlapped close a circle, so its end holes
+  are **120 deg** apart, with the middle hole at 60 deg.
+
+Derivation:
+
+```text
+end-hole chord 23 cm, 60 deg apart  ->  hole-circle radius R = 23 / (2 sin 30 deg) = 23.0 cm
+end overhang 2 cm (as on straight rails) = 4.98 deg at R
+short curve: 60 + 2 x 4.98  = 70 deg of arc, 28.1 cm along the centerline
+long curve:  120 + 2 x 4.98 = 130 deg of arc, 52.2 cm along the centerline
+edges: inner radius 20.75 cm, outer 25.25 cm
+```
+
+The 70 deg and 130 deg totals match the user's visual estimates, which
+supports the 2 cm overhang assumption. Because every curve shares R = 23 cm
+and 60 deg hole spacing, curve holes always fall on a hexagonal pattern around
+the circle's center.
+
+Not yet modeled: the solver, generator and viewer still handle straight rails
+only (`curved_rails:` in `catalog/parts.yaml`, `solver_support: not_yet`).
+Open questions are listed in `docs/open-questions.md`.
+

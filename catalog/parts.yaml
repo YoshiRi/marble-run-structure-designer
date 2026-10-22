@@ -220,6 +220,52 @@ rails:
     confidence: inferred_from_measured_end_spacing
     todo: confirm all hole centers directly
 
+# Curved rails: same width and thickness as straight rails. Kept out of
+# `rails:` on purpose: the solver and viewer only model straight rails so far,
+# and must not treat these as straight. Geometry is derived from user
+# observations (see docs/parts.md, "Curved rails"), not yet measured.
+curved_rails:
+  curved_short:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_six_short_curves_overlapped_at_holes_close_a_circle_and_end_holes_match_short_straight_outer_holes
+      confidence: estimated
+      note: centerline radius through the hole centers; inner/outer edges at 20.75 / 25.25 cm
+    hole_angles_deg: [0, 60]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 69.96              # derived: 60 + 2 x overhang angle (4.98 deg)
+    centerline_length_cm: 28.09 # derived
+    hole_arc_positions_cm: [2.0, 26.09]
+    end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
+    solver_support: not_yet
+    confidence: estimated
+
+  curved_long:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_three_long_curves_overlapped_at_holes_close_a_circle_and_middle_hole_overlaps_a_short_curve
+      confidence: estimated
+    hole_angles_deg: [0, 60, 120]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 129.96             # derived
+    centerline_length_cm: 52.17 # derived
+    hole_arc_positions_cm: [2.0, 26.09, 50.17]
+    end_hole_chord_cm: 39.84    # derived; matches no straight-rail hole pair
+    solver_support: not_yet
+    confidence: estimated
+
 hole_state_types:
   open:
     description: hole is open and may permit a drop/connection depending on layout
