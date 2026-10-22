@@ -1,0 +1,38 @@
+name: viewer-pr-preview
+
+# Deploys each pull request's viewer to
+#   https://<owner>.github.io/<repo>/pr-preview/pr-<number>/
+# and comments the link on the PR. The preview is removed when the PR closes.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - "viewer/**"
+      - "catalog/**"
+      - "examples/**"
+      - "scripts/build_site.sh"
+      - ".github/workflows/pr-preview.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: preview-${{ github.ref }}
+
+jobs:
+  deploy-preview:
+    # Fork PRs get a read-only token and cannot push previews.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble static site
+        if: github.event.action != 'closed'
+        run: scripts/build_site.sh _site
+      - name: Deploy or remove preview
+        uses: rossjrw/pr-preview-action@v1.8.1
+        with:
+          source-dir: _site
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview

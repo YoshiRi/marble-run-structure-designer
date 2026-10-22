@@ -71,6 +71,13 @@ The repository includes a Python layout validator and a schematic browser viewer
 
 Run the static viewer locally with `python -m http.server 8000` from the repository root, then open `http://localhost:8000/viewer/`. See [viewer/README.md](viewer/README.md). The published site is hosted on GitHub Pages.
 
+Deployment uses the `gh-pages` branch:
+
+- pushes to `main` publish the site root (`.github/workflows/pages.yml`)
+- every pull request that touches the viewer, catalog or examples gets a preview at `https://yoshiri.github.io/marble-run-structure-designer/pr-preview/pr-<number>/`, linked in a PR comment and removed when the PR closes (`.github/workflows/pr-preview.yml`)
+
+Both build with `scripts/build_site.sh`, so a preview matches what `main` would publish. GitHub Pages must be set to **Deploy from a branch → `gh-pages` / root** (Settings → Pages).
+
 ## Licensing
 
 - Software: [Apache License 2.0](LICENSE)

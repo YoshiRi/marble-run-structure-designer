@@ -1,5 +1,9 @@
 name: viewer-static-site
 
+# Production deploy of the viewer to the gh-pages branch root.
+# PR previews live under pr-preview/ on the same branch (see pr-preview.yml),
+# so this deploy must neither delete that directory nor force-push.
+
 on:
   push:
     branches: [main]
@@ -7,47 +11,28 @@ on:
       - "viewer/**"
       - "catalog/**"
       - "examples/**"
+      - "scripts/build_site.sh"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: gh-pages-production
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check browser JavaScript and routing graph
-        run: |
-          node --check viewer/app.js
-          node --check viewer/routing.js
       - name: Assemble static site
-        run: |
-          mkdir -p _site
-          cp viewer/index.html _site/index.html
-          cp viewer/app.js _site/app.js
-          cp viewer/routing.js _site/routing.js
-          cp viewer/styles.css _site/styles.css
-          cp -r catalog _site/catalog
-          cp -r examples _site/examples
-      - uses: actions/upload-pages-artifact@v3
+        run: scripts/build_site.sh _site
+      - name: Deploy to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4.9.0
         with:
-          path: _site
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          folder: _site
+          branch: gh-pages
+          clean-exclude: pr-preview/
+          force: false
