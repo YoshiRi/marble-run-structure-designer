@@ -792,10 +792,46 @@
       ? preferred : options[0].value;
   }
 
+  // Valid input holes for the current graph; drawn as clickable drop markers.
+  let inputHoleCandidates = [];
+
+  function drawInputHoleMarkers(selectedKey) {
+    for (const hole of inputHoleCandidates) {
+      const base = routingNodePosition(hole.key);
+      if (!base) continue;
+      const selected = hole.key === selectedKey;
+      const color = selected ? "#22c55e" : "#2dd4bf";
+      // Downward cone above the hole: "drop the marble here".
+      const cone = BABYLON.MeshBuilder.CreateCylinder("input-hole-marker-" + hole.key, {
+        diameterTop: selected ? 1.9 : 1.5,
+        diameterBottom: 0,
+        height: selected ? 2.4 : 1.9,
+        tessellation: 20,
+      }, scene);
+      cone.position = base.add(new BABYLON.Vector3(0, selected ? 2.6 : 2.2, 0));
+      cone.material = material(selected ? "inputMarkerSelectedMat" : "inputMarkerMat",
+        color, selected ? 1 : 0.55);
+      cone.material.emissiveColor = BABYLON.Color3.FromHexString(color).scale(selected ? 0.6 : 0.35);
+      cone.metadata = { inputHoleKey: hole.key, info: { ...hole, kind: "input_hole_candidate" } };
+      groups.route.push(cone);
+    }
+  }
+
+  function selectInputHole(key) {
+    if (!inputHoleCandidates.some(hole => hole.key === key)) return false;
+    const sourceSelect = document.getElementById("routeSource");
+    if (sourceSelect.value !== key) {
+      sourceSelect.value = key;
+      updateRouting();
+    }
+    return true;
+  }
+
   function populateRoutingControls() {
     const sourceSelect = document.getElementById("routeSource");
     const sinkSelect = document.getElementById("routeSink");
     const inputHoles = MarbleRouting.listInputHoles(layout, catalog, routingGraph);
+    inputHoleCandidates = inputHoles;
     const querySource = routingPortKey(layout.routing_query?.source);
     const sourceOptions = inputHoles.map(hole => ({ value: hole.key, label: hole.label }));
     const preferredSource = sourceOptions.some(item => item.value === querySource)
@@ -881,6 +917,7 @@
     const source = document.getElementById("routeSource").value;
     const sinkSelect = document.getElementById("routeSink");
     const status = document.getElementById("routeStatus");
+    drawInputHoleMarkers(source);
     if (!routingGraph || !source) {
       setSelectOptions(sinkSelect, [], "", "No reachable exits");
       renderExitProbabilities(null, "");
@@ -1183,9 +1220,28 @@
   scene.onPointerObservable.add(pointerInfo => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
     const picked = pointerInfo.pickInfo?.pickedMesh;
+    // Clicking a drop marker, or the rim/cap of a valid input hole, selects
+    // that hole as the marble input.
+    const inputKey = picked?.metadata?.inputHoleKey
+      ?? (picked?.metadata?.info?.kind === "rail_hole" ? picked.metadata.info.id : null);
+    // Copy the info first: selecting re-renders the route and disposes the marker.
+    const pickedInfo = picked?.metadata?.info;
+    if (inputKey && selectInputHole(inputKey)) {
+      document.getElementById("selection").textContent =
+        JSON.stringify({ selected_input_hole: inputKey, ...pickedInfo }, null, 2);
+      return;
+    }
     if (!picked?.metadata?.selectable) return;
     document.getElementById("selection").textContent =
       JSON.stringify(picked.metadata.info, null, 2);
+  });
+
+  // Pointer cursor over clickable input-hole markers.
+  scene.onPointerObservable.add(pointerInfo => {
+    if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERMOVE) return;
+    const pick = scene.pick(scene.pointerX, scene.pointerY,
+      mesh => Boolean(mesh.metadata?.inputHoleKey) && mesh.isEnabled());
+    canvas.style.cursor = pick?.hit ? "pointer" : "";
   });
 
   window.addEventListener("resize", () => engine.resize());

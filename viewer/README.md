@@ -13,6 +13,8 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - actual graph reachability and shortest directed source-to-sink path highlighting
 - reachable branches, dead-end markers, and invalid/unsupported routing diagnostics
 - marble input-hole selector (valid `block_connected` rail holes)
+- click-to-select input holes in the 3D view: every valid candidate shows a
+  teal drop marker; clicking a marker or the hole itself selects it (green)
 - external exit list and topology-based exit probabilities
 - optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
