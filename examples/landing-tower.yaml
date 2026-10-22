@@ -1,0 +1,90 @@
+schema_version: "0.1"
+name: landing-tower
+description: >
+  Three center-hole long rails stacked on one line. Each routing block stands
+  on the rail below, holds up the rail above, catches the marble dropping
+  through the upper rail's hole and lands it on the rail it stands on.
+  Unused rail halves carry the upper support columns.
+
+# All rails run along +x from x=0; hole positions 2, 7, 25 (center), 43, 48.
+rails:
+  # Top: marble starts at end A, drops through the center hole into M.
+  - id: top
+    rail_type: straight_long_center
+    x_cm: 0
+    y_cm: 0
+    z_units: 15
+    yaw_deg: 0
+    flow_direction: a_to_b
+    hole_states: { 0: covered, 1: covered, 2: block_connected }
+
+  # Middle: M lands the marble just past the center; it rolls to hole 4
+  # and drops into N. Holes 0-1 are off the path and carry top's column.
+  - id: middle
+    rail_type: straight_long_center
+    x_cm: 0
+    y_cm: 0
+    z_units: 10
+    yaw_deg: 0
+    flow_direction: a_to_b
+    hole_states: { 3: covered, 4: block_connected }
+
+  # Bottom: N lands the marble just before hole 4 heading back (-x); it
+  # rolls to the center and drops into P. Holes 0-1 carry middle's column.
+  - id: bottom
+    rail_type: straight_long_center
+    x_cm: 0
+    y_cm: 0
+    z_units: 5
+    yaw_deg: 0
+    flow_direction: b_to_a
+    hole_states: { 3: covered, 2: block_connected }
+
+  # Exit: P's front outlet feeds this rail at its own level.
+  - id: exit
+    rail_type: straight_short
+    x_cm: 25
+    y_cm: 2.25
+    z_units: 1
+    yaw_deg: 90
+    flow_direction: a_to_b
+    hole_states: { 0: covered, 1: covered, 2: covered, 3: covered }
+
+parts:
+  # Ground columns under the bottom rail.
+  - { id: g0_foundation, part_type: wooden_foundation, x_cm: 2, y_cm: 0, z_units: 0 }
+  - { id: g0_filler, part_type: natural_drop, x_cm: 2, y_cm: 0, z_units: 1 }
+  - { id: gc_foundation, part_type: wooden_foundation, x_cm: 25, y_cm: 0, z_units: 0 }
+  - { id: P, part_type: blue, x_cm: 25, y_cm: 0, z_units: 1 }
+  # Standing on the bottom rail.
+  - { id: N, part_type: yellow, x_cm: 48, y_cm: 0, z_units: 6, rotation_deg: 90 }
+  - { id: middle_support, part_type: orange_vertical, x_cm: 7, y_cm: 0, z_units: 6 }
+  # Standing on the middle rail.
+  - { id: M, part_type: yellow, x_cm: 25, y_cm: 0, z_units: 11, rotation_deg: 270 }
+  - { id: top_support, part_type: natural_drop, x_cm: 7, y_cm: 0, z_units: 11 }
+  # Exit rail feet.
+  - { id: exit_f1, part_type: wooden_foundation, x_cm: 25, y_cm: 9.25, z_units: 0 }
+  - { id: exit_f3, part_type: wooden_foundation, x_cm: 25, y_cm: 27.25, z_units: 0 }
+
+supports:
+  - { name: bottom_end, upper_rail_id: bottom, upper_hole_index: 0, stack_part_ids: [g0_foundation, g0_filler] }
+  - { name: bottom_center, upper_rail_id: bottom, upper_hole_index: 2, stack_part_ids: [gc_foundation, P] }
+  - { name: middle_end, upper_rail_id: middle, upper_hole_index: 1, stack_part_ids: [middle_support],
+      lower_rail_id: bottom, lower_hole_index: 1 }
+  - { name: middle_drop, upper_rail_id: middle, upper_hole_index: 4, stack_part_ids: [N],
+      lower_rail_id: bottom, lower_hole_index: 4 }
+  - { name: top_end, upper_rail_id: top, upper_hole_index: 1, stack_part_ids: [top_support],
+      lower_rail_id: middle, lower_hole_index: 1 }
+  - { name: top_drop, upper_rail_id: top, upper_hole_index: 2, stack_part_ids: [M],
+      lower_rail_id: middle, lower_hole_index: 2 }
+  - { name: exit_near, upper_rail_id: exit, upper_hole_index: 1, stack_part_ids: [exit_f1] }
+  - { name: exit_far, upper_rail_id: exit, upper_hole_index: 3, stack_part_ids: [exit_f3] }
+
+route_links:
+  - source: { component_id: P, port: front }
+    target: { component_id: exit, port: end_a }
+
+routing_query:
+  source: { component_id: top, port: end_a }
+  sinks:
+    - { component_id: exit, port: end_b }
