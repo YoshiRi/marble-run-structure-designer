@@ -8,6 +8,7 @@
   let BLOCK_WIDTH_CM = 4.5;
   let BLOCK_DEPTH_CM = 4.5;
   let HOLE_DIAMETER_CM = 1.8;
+  let BLOCK_PORT_DIAMETER_CM = 1.8; // Provisional until block ports are measured.
   let CONNECTOR_PROTRUSION_CM = 1.0;
 
   const canvas = document.getElementById("renderCanvas");
@@ -97,6 +98,7 @@
     HEIGHT_SCALE_CM = geometryValue(geometry.height_unit, HEIGHT_SCALE_CM);
     RAIL_WIDTH_CM = geometryValue(geometry.rail_width_cm, RAIL_WIDTH_CM);
     HOLE_DIAMETER_CM = geometryValue(geometry.rail_hole_diameter_cm, HOLE_DIAMETER_CM);
+    BLOCK_PORT_DIAMETER_CM = geometryValue(geometry.block_port_diameter_cm, BLOCK_PORT_DIAMETER_CM);
     BLOCK_WIDTH_CM = geometryValue(geometry.standard_block_footprint?.width_cm, BLOCK_WIDTH_CM);
     BLOCK_DEPTH_CM = geometryValue(geometry.standard_block_footprint?.depth_cm, BLOCK_DEPTH_CM);
     CONNECTOR_PROTRUSION_CM = geometryValue(
@@ -306,6 +308,125 @@
     groups.route.push(routeLine);
   }
 
+  // Port directions are in the block's local coordinates. All face-center
+  // positions and diameters are schematic until physically measured.
+  function blockPortGeometry(port, heightCm) {
+    const halfW = BLOCK_WIDTH_CM / 2;
+    const halfD = BLOCK_DEPTH_CM / 2;
+    const halfH = heightCm / 2;
+    const faces = {
+      top:    { normal: [0, 1, 0],  halfExtent: halfH },
+      bottom: { normal: [0,-1, 0],  halfExtent: halfH },
+      front:  { normal: [0, 0, 1],  halfExtent: halfD },
+      rear:   { normal: [0, 0,-1],  halfExtent: halfD },
+      right:  { normal: [1, 0, 0],  halfExtent: halfW },
+      left:   { normal: [-1,0, 0],  halfExtent: halfW },
+    };
+    return faces[port] || null;
+  }
+
+  function orientPortCylinder(mesh, port) {
+    // Babylon cylinders/toruses start with their axis aligned to local Y.
+    if (port === "front" || port === "rear") mesh.rotation.x = Math.PI / 2;
+    if (port === "left" || port === "right") mesh.rotation.z = Math.PI / 2;
+  }
+
+  function blockPortPosition(face, insetCm) {
+    return new BABYLON.Vector3(
+      face.normal[0] * (face.halfExtent - insetCm),
+      face.normal[1] * (face.halfExtent - insetCm),
+      face.normal[2] * (face.halfExtent - insetCm)
+    );
+  }
+
+  function buildBlockMesh(part, heightCm, ports) {
+    // CSG subtracts short blind recesses. This does NOT model internal
+    // marble channels or claim that a real block's openings are centered.
+    const body = BABYLON.MeshBuilder.CreateBox("part-solid-" + part.id, {
+      width: BLOCK_WIDTH_CM,
+      height: heightCm,
+      depth: BLOCK_DEPTH_CM,
+    }, scene);
+    body.material = material("partMat", palette[part.part_type] || palette.default);
+
+    if (!ports.length || !BABYLON.CSG || typeof BABYLON.CSG.FromMesh !== "function") {
+      return { mesh: body, cutouts: false };
+    }
+    const depth = Math.min(0.8, heightCm * 0.4);
+    try {
+      let solid = BABYLON.CSG.FromMesh(body);
+      for (const port of ports) {
+        const face = blockPortGeometry(port, heightCm);
+        if (!face) continue;
+        const cutter = BABYLON.MeshBuilder.CreateCylinder("block-port-cutter", {
+          diameter: BLOCK_PORT_DIAMETER_CM,
+          height: depth,
+          tessellation: 32,
+        }, scene);
+        try {
+          cutter.position = blockPortPosition(face, depth / 2 - 0.06);
+          orientPortCylinder(cutter, port);
+          cutter.computeWorldMatrix(true);
+          solid = solid.subtract(BABYLON.CSG.FromMesh(cutter));
+        } finally {
+          cutter.dispose();
+        }
+      }
+      const mesh = solid.toMesh("part-" + part.id, body.material, scene);
+      body.dispose();
+      return { mesh, cutouts: true };
+    } catch (error) {
+      console.warn("Block port CSG unavailable; using face markers", error);
+      return { mesh: body, cutouts: false };
+    }
+  }
+
+  function renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts) {
+    const depth = Math.min(0.8, heightCm * 0.4);
+    for (const port of ports) {
+      const face = blockPortGeometry(port, heightCm);
+      if (!face) continue;
+      const info = {
+        id: part.id + ":port:" + port,
+        kind: "block_port",
+        part_id: part.id,
+        part_type: part.part_type,
+        port,
+        diameter_cm: BLOCK_PORT_DIAMETER_CM,
+        diameter_status: "provisional",
+        position_status: "assumed_face_center",
+        internal_channel_geometry: "not_modeled",
+      };
+
+      // The ring is outside the face and follows the block's yaw rotation.
+      const rim = BABYLON.MeshBuilder.CreateTorus("block-port-rim-" + part.id + "-" + port, {
+        diameter: BLOCK_PORT_DIAMETER_CM + 0.20,
+        thickness: 0.11,
+        tessellation: 32,
+      }, scene);
+      rim.parent = mesh;
+      rim.position = blockPortPosition(face, -0.035);
+      orientPortCylinder(rim, port);
+      rim.material = material("blockPortRimMat", "#1e293b");
+      rim.metadata = { selectable: true, info };
+      groups.holes.push(rim);
+
+      // A dark disk at the back of the CSG recess provides contrast. Without
+      // CSG it becomes a visible flat hole marker on the original box face.
+      const disk = BABYLON.MeshBuilder.CreateCylinder("block-port-inner-" + part.id + "-" + port, {
+        diameter: BLOCK_PORT_DIAMETER_CM * 0.91,
+        height: 0.035,
+        tessellation: 32,
+      }, scene);
+      disk.parent = mesh;
+      disk.position = blockPortPosition(face, cutouts ? depth - 0.10 : -0.055);
+      orientPortCylinder(disk, port);
+      disk.material = material("blockPortInnerMat", "#111827");
+      disk.metadata = { selectable: true, info };
+      groups.holes.push(disk);
+    }
+  }
+
   function renderPart(part) {
     const spec = catalog.routing_blocks?.[part.part_type]
       || catalog.structural_parts?.[part.part_type]
@@ -314,12 +435,8 @@
       || {};
     const heightUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
     const heightCm = Math.max(0.35, heightUnits * HEIGHT_SCALE_CM);
-    const mesh = BABYLON.MeshBuilder.CreateBox("part-" + part.id, {
-      width: BLOCK_WIDTH_CM,
-      height: heightCm,
-      depth: BLOCK_DEPTH_CM,
-    }, scene);
-    mesh.material = material("partMat", palette[part.part_type] || palette.default);
+    const ports = (spec.ports || []).filter(p => blockPortGeometry(p, heightCm));
+    const { mesh, cutouts } = buildBlockMesh(part, heightCm, ports);
     mesh.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
     mesh.position = world(part.x_cm, part.y_cm, Number(part.z_units) + heightUnits / 2);
     addSelectable(mesh, {
@@ -333,7 +450,12 @@
       effective_stacking_height_cm: heightCm,
       connector_protrusion_cm: heightUnits === 4 ? CONNECTOR_PROTRUSION_CM : null,
       connector_protrusion_rendered: false,
+      ports,
+      port_hole_diameter_cm: BLOCK_PORT_DIAMETER_CM,
+      port_geometry_status: "provisional_face_center_blind_recess",
+      port_holes_are_cutouts: cutouts,
     });
+    renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts);
   }
 
   function renderSupports() {
@@ -497,7 +619,8 @@
       ["Rail width", RAIL_WIDTH_CM + " cm (measured)"],
       ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (measured)"],
       ["Hole diameter", "≈" + HOLE_DIAMETER_CM + " cm (approx.)"],
-      ["Rail thickness", HEIGHT_SCALE_CM + " cm (provisional)"],
+      ["Rail thickness", HEIGHT_SCALE_CM + " cm (1u, user-confirmed)"],
+      ["Block port holes", "Ø" + BLOCK_PORT_DIAMETER_CM + " cm (provisional)"],
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
     document.getElementById("layoutMeta").textContent = layout.name || "unnamed layout";

@@ -7,6 +7,7 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - schematic 3D rails and blocks
 - arbitrary rail yaw
 - visible rail-hole cutouts (Babylon.js CSG, with surface-marker fallback) and color-coded hole states
+- schematic block port recesses for cataloged top/bottom/front/rear/left/right ports
 - support links
 - route direction / explicit route links
 - global center of mass
@@ -36,9 +37,13 @@ The center-hole rail includes a cataloged center position at 25 cm.
 **Derived and provisional dimensions:**
 
 - 1 height unit = **1.5 cm**, derived from the standard block's 6 cm / 4 units
-- rail thickness = **1.5 cm** in the viewer only because the working rail height
-  is 1 unit; the physical rail thickness is **not yet measured**
+- rail height is **1 unit**, explicitly confirmed by the user; this renders
+  as **1.5 cm** from the derived scale (not a separate caliper measurement)
 - thin/drop-block and foundation heights remain unverified in centimeters
+- block port diameter = **1.8 cm provisional**, borrowed from the approximate
+  rail-hole diameter; actual block port diameters have not been measured
+- block port placement = **center of each cataloged face, provisional**
+- block port CSG cavities = **shallow blind recesses**, not modeled internal channels
 
 These parameters are stored with provenance in `catalog/parts.yaml` under
 `geometry_cm`. The viewer reads them from the catalog, while the solver keeps
@@ -49,6 +54,13 @@ not a dimensionally verified CAD model.
 The colored rings distinguish open, covered, block-connected, and slope-covered
 rail holes. Covered holes are shown with caps. CSG creates real through-holes
 where available; otherwise the viewer uses dark surface markers as a fallback.
+
+Block openings follow each routing block's `ports` field. For example, a
+yellow block has top and front openings; blue has top, front, rear, and bottom.
+Block holes are rendered as shallow CSG recesses, not through-passages: actual
+internal routing and off-center port placement require additional measurements.
+The Holes toggle controls hole markers and outlines, not the underlying CSG
+cutout geometry.
 
 ## Local run
 

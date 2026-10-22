@@ -55,8 +55,13 @@ does **not** add 1 cm to the assembled stack height; one stacked standard block
 contributes 6 cm, not 7 cm.
 
 The rail width is **4.5 cm**. Rail holes are approximately **1.8 cm** in
-diameter. The rail's physical thickness is not yet measured; its current
-1-unit height maps to a provisional 1.5 cm in the viewer.
+diameter. The rail height is **1 unit** as confirmed by the user, which maps
+to **1.5 cm** under the derived scale; this is not a separate thickness
+measurement.
+
+The Viewer now displays openings on the faces named in each routing block's
+`ports` list. The openings are provisional **face-centered blind recesses**;
+their diameters, exact locations, and internal channel shapes remain unmeasured.
 
 ## Yellow routing block
 

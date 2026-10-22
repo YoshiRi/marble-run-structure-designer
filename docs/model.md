@@ -69,7 +69,7 @@ Current observations / assumptions:
 
 | Component | Height | Confidence |
 | --- | ---: | --- |
-| rail | 1 | working model |
+| rail | 1 | user-confirmed model height |
 | normal routing block | 4 | working model |
 | spiral | 3 | tentative; must be confirmed |
 | purple drop block | 1 | observed |
@@ -80,10 +80,12 @@ occupies **4 units = 6 cm** when assembled, giving a **derived scale of
 1 unit = 1.5 cm**. Its **1 cm connector protrusion** inserts into the mating
 piece and is not added to the effective stacked height.
 
-The rail and thin/foundation pieces are still modeled as 1 unit, but their
-physical thicknesses have **not** been directly measured. Therefore, treating
-each of these as exactly 1.5 cm is provisional, not an established measurement.
-The catalog records this distinction in `geometry_cm`.
+The rail height of **1 unit** has been explicitly confirmed by the user.
+Using the derived unit scale, the viewer renders the rail as **1.5 cm** thick;
+this is a confirmed model height rather than an independent caliper measurement.
+Thin/foundation pieces are also modeled as 1 unit, but their physical heights
+have not been directly verified. The catalog records this distinction in
+`geometry_cm`.
 
 ## Ports and routes
 
@@ -108,6 +110,11 @@ REAR -> BOTTOM
 ```
 
 This makes block rotation a simple transformation of the local port graph.
+
+The viewer depicts these cataloged ports as **schematic circular recesses**
+at the center of each named face. This is a visualization convention only:
+real opening diameter, off-center placement, and internal channel geometry
+remain unknown and must not be inferred from the rendered mesh.
 
 ## Rails
 

@@ -5,7 +5,7 @@ geometry_cm:
     value: 1.5
     source: derived_from_user_measurement_6_cm_per_4_units
     confidence: derived
-    note: discrete stacking scale; 1-unit rail and thin-part heights still require direct measurement
+    note: discrete stacking scale; rail height of 1 unit confirmed by user; thin/foundation dimensions remain provisional
   standard_block_footprint:
     width_cm: 4.5
     depth_cm: 4.5
@@ -29,6 +29,11 @@ geometry_cm:
     value: 1.8
     source: user_approximation
     confidence: approximate
+  block_port_diameter_cm:
+    value: 1.8
+    source: viewer_assumption_using_rail_hole_diameter
+    confidence: provisional
+    note: actual block opening diameters not measured; face-center placement also provisional
 
 mass_defaults:
   standard_routing_block_g:
@@ -38,7 +43,7 @@ mass_defaults:
     scope: unmeasured_height_4_routing_blocks
 
 height_units:
-  rail: 1
+  rail: 1 # user confirmed; 1.5 cm derived from 4-unit / 6 cm block scale
   standard_block: 4
   spiral:
     value: 3
