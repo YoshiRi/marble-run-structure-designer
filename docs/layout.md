@@ -46,6 +46,7 @@ The Assembly Validator checks:
 - stack parts are on the same support axis
 - the discrete Z stack closes exactly
 - a physical part is not reused in two support columns
+- no two rails/parts interpenetrate (bounding boxes may touch); see `collision.py`
 - foundations are only used at the bottom of ground support columns
 - every rail has a geometrically acceptable pair of support holes
 
@@ -93,6 +94,16 @@ Hole behavior in the MVP:
 - `covered_slope`: currently unresolved and therefore reported as unsupported
 
 Routing-block internal edges are loaded from `catalog/parts.yaml`.
+
+Bottom outlets drop straight down the support column (physically confirmed):
+
+- inside a support stack, a part's `bottom` feeds the `top` of the part directly
+  beneath it (e.g. orange vertical on a blue block: orange top -> bottom -> blue
+  top -> blue front)
+- the bottom part of a stack standing on a lower rail hole drops through that
+  hole into the `top` of the column standing under the same hole
+- the drop ends at a part without a `top` opening; a stack on the ground ends at
+  its foundation
 
 `validate_connectivity()` also returns `paths`, mapping each reached sink to
 its shortest directed sequence of graph-node keys. The browser Viewer traces

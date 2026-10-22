@@ -287,3 +287,26 @@ def test_centered_side_ports_drop_one_but_never_climb():
     assert validate_route_link_geometry(
         replace(layout, rails=(out_rail, replace(in_rail, z_units=2))), CATALOG, climb_in
     ) is None
+
+
+def test_bottom_outlets_drop_down_the_support_column():
+    layout = load_layout(ROOT / "tests" / "fixtures" / "stack-drop.yaml")
+    assert validate_assembly(layout, CATALOG).valid
+    result = validate_connectivity(
+        layout, CATALOG, PortRef("upper", "end_a"), (PortRef("blue_mid", "front"),)
+    )
+    assert result.valid, result.reasons
+    assert result.paths["blue_mid:front"] == (
+        "upper:end_a", "upper:hole:0", "orange_top:top", "orange_top:bottom",
+        "blue_mid:top", "blue_mid:front",
+    )
+    from quadrilla_solver.connectivity import build_routing_graph
+
+    edges = build_routing_graph(layout, CATALOG).edges
+    # Bottom of a stack on a lower rail drops through that hole into the
+    # column below it.
+    assert edges["blue_mid:bottom"] == ("yellow_base:top",)
+    # Inside a stack: green's side-drop outlet feeds cyan's top opening...
+    assert edges["green_top:bottom"] == ("cyan_mid:top",)
+    # ...but cyan has no bottom outlet, so nothing drops further from it.
+    assert "cyan_mid:bottom" not in edges

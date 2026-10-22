@@ -56,6 +56,8 @@ process.stdout.write(JSON.stringify({
         ("rotated_port", "upper:end_a", "exit:end_b"),
         ("side_exit_exact_level", "upper:end_a", "exit:end_b"),
         ("side_exit_drop_two", "upper:end_a", "exit:end_b"),
+        ("stack_drop", "upper:end_a", "blue_mid:front"),
+        ("stack_drop_from_rear", "blue_mid:rear", "yellow_base:front"),
     ],
 )
 def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
@@ -64,6 +66,8 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
         "wrong_port", "misaligned_support", "rotated_port",
         "side_exit_exact_level", "side_exit_drop_two",
     } else "two-level-supported.yaml")
+    if case.startswith("stack_drop"):
+        example = "../tests/fixtures/stack-drop.yaml"
     with (ROOT / "examples" / example).open() as f:
         layout_data = yaml.safe_load(f)
     layout_data = deepcopy(layout_data)
