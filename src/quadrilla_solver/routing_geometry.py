@@ -53,8 +53,8 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
     if height_units is None:
         return None
 
-    width = _dimension(catalog, "standard_block_footprint", 4.5)
-    depth = width
+    width = 4.5
+    depth = 4.5
     footprint = catalog.raw.get("geometry_cm", {}).get("standard_block_footprint", {})
     if isinstance(footprint, dict):
         width = float(footprint.get("width_cm", 4.5))
