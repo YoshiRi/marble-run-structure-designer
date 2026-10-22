@@ -529,5 +529,38 @@
     };
   }
 
-  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes };
+  // Roll one marble from `source`, choosing each random branch with the same
+  // transition weights analyzeOutcomes uses. `random` returns [0, 1).
+  // Stops at an exterior exit, an unmodeled branch, or a cycle guard.
+  function sampleRun(layout, catalog, graph, source, random = Math.random, maxSteps = 1000) {
+    if (!Object.prototype.hasOwnProperty.call(graph.edges, source)) {
+      return { path: [], exit: null, complete: false, reason: "unknown_source:" + source };
+    }
+    const path = [source];
+    let node = source;
+    for (let step = 0; step < maxSteps; step++) {
+      const targets = graph.edges[node] || [];
+      if (!targets.length) {
+        const exit = exteriorExitInfo(node, layout, catalog, graph);
+        return exit
+          ? { path, exit: exit.node, complete: true, reason: null }
+          : { path, exit: null, complete: false, reason: "unclassified_terminal:" + node };
+      }
+      const weights = transitionWeights(node, targets, layout, catalog);
+      if (!weights) {
+        return { path, exit: null, complete: false, reason: "unmodeled_branch:" + node };
+      }
+      let draw = random();
+      let next = weights.transitions[weights.transitions.length - 1].node;
+      for (const transition of weights.transitions) {
+        if (draw < transition.probability) { next = transition.node; break; }
+        draw -= transition.probability;
+      }
+      node = next;
+      path.push(node);
+    }
+    return { path, exit: null, complete: false, reason: "step_limit:" + node };
+  }
+
+  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun };
 });
