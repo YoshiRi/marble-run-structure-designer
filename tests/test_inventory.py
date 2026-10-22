@@ -17,7 +17,7 @@ CATALOG = load_catalog(ROOT / "catalog" / "parts.yaml")
 
 
 def _example():
-    return load_layout(ROOT / "examples" / "two-level-supported.yaml")
+    return load_layout(ROOT / "tests" / "fixtures" / "two-level-supported.yaml")
 
 
 def test_layout_usage_counts_parts_and_rails():

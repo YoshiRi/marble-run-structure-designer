@@ -70,8 +70,8 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     if case == "landing_tower":
         example = "landing-tower.yaml"
     if case.startswith("stack_drop"):
-        example = "../tests/fixtures/stack-drop.yaml"
-    with (ROOT / "examples" / example).open() as f:
+        example = "stack-drop.yaml"
+    with (ROOT / "tests" / "fixtures" / example).open() as f:
         layout_data = yaml.safe_load(f)
     layout_data = deepcopy(layout_data)
 

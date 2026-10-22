@@ -58,7 +58,11 @@ See [docs/model.md](docs/model.md) and [docs/parts.md](docs/parts.md) for the cu
 │   ├── parts.md
 │   └── project-goal.md
 ├── examples/
-│   └── four-level-zigzag.yaml
+│   └── generated/        # layouts produced by the generator (viewer samples)
+├── scripts/
+├── src/quadrilla_solver/
+├── tests/
+│   └── fixtures/         # hand-built layouts used by the tests
 ├── solver/
 ├── viewer/
 └── ui/

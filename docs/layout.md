@@ -113,7 +113,7 @@ the block face and continues to the next hole or end. This is how one block both
 holds up the rail above it and routes the marble onto the rail below it. An
 outlet facing against the rail's flow does not land on it. An explicit
 `route_link` from the same outlet takes precedence. See
-`examples/landing-tower.yaml`.
+`tests/fixtures/landing-tower.yaml`.
 
 `validate_connectivity()` also returns `paths`, mapping each reached sink to
 its shortest directed sequence of graph-node keys. The browser Viewer traces
@@ -161,15 +161,15 @@ These tests are based on provisional schematic opening positions from the
 catalog. They do not certify collision clearance, internal channels, or
 real-world marble motion.
 
-## Example
+## Test fixtures
 
-See:
+Hand-built layouts used by the tests:
 
 ```text
-examples/three-level-physically-connected.yaml
+tests/fixtures/three-level-physically-connected.yaml
 
 # Structural example that ends at an unmatched block outlet:
-examples/two-level-supported.yaml
+tests/fixtures/two-level-supported.yaml
 ```
 
 That example is a full golden test for:
