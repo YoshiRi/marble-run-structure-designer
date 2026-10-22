@@ -1,0 +1,40 @@
+schema_version: "0.2"
+
+# Counts are intentionally unknown.
+# The owned collection combines multiple sets and has missing pieces.
+# Populate this file from a manual count. Null means UNKNOWN, not unlimited.
+
+parts:
+  routing_blocks:
+    yellow: null
+    blue: null
+    green: null
+    cyan: null
+    natural_drop: null
+    red_random_split: null
+    red_right_angle: null
+    orange_vertical: null
+    purple_drop: null
+
+  structural_parts:
+    wooden_foundation: null
+
+  rails:
+    straight_long: null
+    straight_long_center: null
+    straight_short: null
+
+  special_parts:
+    seesaw: null
+
+  routing_accessories:
+    cover: null
+    covered_slope: null
+
+  non_routing_accessories:
+    accelerator_plate: null
+
+notes:
+  - "Do not infer owned counts from commercial set specifications."
+  - "Null is treated as unknown by InventoryValidator."
+  - "Add curved/spiral/special parts when their geometry/catalog entries are enabled."
