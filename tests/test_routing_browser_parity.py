@@ -32,18 +32,28 @@ process.stdout.write(JSON.stringify({graph, result: trace(graph, source, sink)})
 @pytest.mark.parametrize(
     "case,source,sink",
     [
-        ("golden", "upper:end_a", "lower:end_b"),
+        ("golden", "upper:end_a", "blue_column:front"),
         ("open_hole", "upper:end_a", "lower:end_b"),
         ("covered_slope", "upper:end_a", "lower:end_b"),
-        ("reversed", "upper:end_b", "lower:end_b"),
+        ("reversed", "upper:end_b", "green_column:front"),
         ("red_random_branch", "split:top", "split:rear"),
-        ("unknown_link", "upper:end_a", "lower:end_b"),
-        ("bad_support_port", "upper:end_a", "lower:end_b"),
-        ("bidirectional", "yellow:front", "blue:front"),
+        ("unknown_link", "upper:end_a", "blue_column:front"),
+        ("bad_support_port", "upper:end_a", "blue_column:front"),
+        ("bidirectional", "cyan0:right", "cyan1:left"),
+        ("aligned_rail_exit", "upper:end_a", "exit:end_b"),
+        ("misaligned_rail_exit", "upper:end_a", "exit:end_b"),
+        ("wrong_flow_direction", "upper:end_a", "exit:end_b"),
+        ("wrong_port", "upper:end_a", "exit:end_b"),
+        ("misaligned_support", "upper:end_a", "exit:end_b"),
+        ("rotated_port", "upper:end_a", "exit:end_b"),
     ],
 )
 def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
-    with (ROOT / "examples" / "two-level-supported.yaml").open() as f:
+    example = ("three-level-physically-connected.yaml" if case in {
+        "aligned_rail_exit", "misaligned_rail_exit", "wrong_flow_direction",
+        "wrong_port", "misaligned_support", "rotated_port",
+    } else "two-level-supported.yaml")
+    with (ROOT / "examples" / example).open() as f:
         layout_data = yaml.safe_load(f)
     layout_data = deepcopy(layout_data)
 
@@ -70,17 +80,28 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
         layout_data = {
             "name": "bidi",
             "parts": [
-                {"id": "yellow", "part_type": "yellow", "x_cm": 0,
+                {"id": "cyan0", "part_type": "cyan", "x_cm": 0,
                  "y_cm": 0, "z_units": 0},
-                {"id": "blue", "part_type": "blue", "x_cm": 10,
+                {"id": "cyan1", "part_type": "cyan", "x_cm": 4.5,
                  "y_cm": 0, "z_units": 0},
             ],
             "route_links": [{
-                "source": {"component_id": "blue", "port": "front"},
-                "target": {"component_id": "yellow", "port": "front"},
+                "source": {"component_id": "cyan0", "port": "right"},
+                "target": {"component_id": "cyan1", "port": "left"},
                 "bidirectional": True,
             }],
         }
+
+    if case == "misaligned_rail_exit":
+        next(r for r in layout_data["rails"] if r["id"] == "exit")["y_cm"] += 1
+    elif case == "wrong_flow_direction":
+        next(r for r in layout_data["rails"] if r["id"] == "exit")["flow_direction"] = "b_to_a"
+    elif case == "wrong_port":
+        layout_data["route_links"][0]["source"]["port"] = "top"
+    elif case == "misaligned_support":
+        next(p for p in layout_data["parts"] if p["id"] == "blue_column")["x_cm"] += 1
+    elif case == "rotated_port":
+        next(p for p in layout_data["parts"] if p["id"] == "blue_column")["rotation_deg"] = 90
 
     layout_file = tmp_path / "layout.yaml"
     layout_file.write_text(yaml.safe_dump(layout_data))

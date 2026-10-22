@@ -19,6 +19,12 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - load a local Layout YAML file
 - no build step
 
+The default `three-level-physically-connected.yaml` example includes a
+blue-block side outlet physically mated to the beginning of an exit rail.
+`two-level-supported.yaml` has no downstream connection from its blue
+block, so the trace ends at the real front opening rather than jumping to
+an unrelated lower rail.
+
 The viewer deliberately uses schematic boxes rather than realistic meshes. Detailed collision geometry is deferred.
 
 ## Dimension provenance

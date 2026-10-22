@@ -77,16 +77,12 @@ supports:
     lower_rail_id: lower
     lower_hole_index: 2
 
-route_links:
-  - source:
-      component_id: blue_column
-      port: front
-    target:
-      component_id: lower
-      port: end_a
+# No route link: the blue front exit has no mating rail in this 2-level
+# structural example. Do not invent a path into the lower rail.
+route_links: []
 
 # Optional shared query for the browser routing inspector.
 routing_query:
   source: { component_id: upper, port: end_a }
   sinks:
-    - { component_id: lower, port: end_b }
+    - { component_id: blue_column, port: front }

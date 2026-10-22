@@ -106,11 +106,11 @@ def test_connectivity_is_derived_from_same_layout():
         _example(),
         CATALOG,
         source=PortRef("upper", "end_a"),
-        sinks=(PortRef("lower", "end_b"),),
+        sinks=(PortRef("blue_column", "front"),),
     )
     assert result.valid, result.reasons
     assert result.reachable
-    assert "lower:end_b" in result.reached_sinks
+    assert "blue_column:front" in result.reached_sinks
     assert "blue_column:top" in result.reachable_nodes
     assert "blue_column:front" in result.reachable_nodes
 
@@ -132,7 +132,7 @@ def test_open_hole_breaks_rail_connectivity():
     result = validate_connectivity(
         broken,
         CATALOG,
-        source=PortRef("upper", "end_a"),
+        source=PortRef("lower", "end_a"),
         sinks=(PortRef("lower", "end_b"),),
     )
     assert not result.valid
@@ -145,7 +145,7 @@ def test_combined_layout_validation_passes_golden_example():
         _example(),
         CATALOG,
         source=PortRef("upper", "end_a"),
-        sinks=(PortRef("lower", "end_b"),),
+        sinks=(PortRef("blue_column", "front"),),
     )
     assert result.valid
     assert result.assembly.valid
@@ -162,19 +162,44 @@ def test_routing_solver_exposes_shortest_node_path():
         _example(),
         CATALOG,
         source=PortRef("upper", "end_a"),
-        sinks=(PortRef("lower", "end_b"),),
+        sinks=(PortRef("blue_column", "front"),),
     )
     assert result.valid
-    assert result.paths["lower:end_b"] == (
+    assert result.paths["blue_column:front"] == (
         "upper:end_a",
         "upper:hole:0",
         "blue_column:top",
         "blue_column:front",
-        "lower:end_a",
-        "lower:hole:0",
-        "lower:hole:1",
-        "lower:hole:2",
-        "lower:hole:3",
-        "lower:hole:4",
-        "lower:end_b",
+    )
+
+
+def test_unaligned_manual_link_is_rejected_not_rendered():
+    from quadrilla_solver.model import RouteLink
+    from quadrilla_solver.connectivity import build_routing_graph
+
+    layout = _example()
+    invalid = replace(layout, route_links=(
+        RouteLink(PortRef("blue_column", "front"), PortRef("lower", "end_a")),
+    ))
+    graph = build_routing_graph(invalid, CATALOG)
+    assert "lower:end_a" not in graph.edges["blue_column:front"]
+    assert "route_link_geometry_mismatch:blue_column:front:lower:end_a" in graph.reasons
+    result = validate_connectivity(
+        invalid, CATALOG, PortRef("upper", "end_a"), (PortRef("lower", "end_b"),)
+    )
+    assert not result.reachable
+    assert not result.valid
+
+
+def test_three_level_example_has_physically_aligned_full_route():
+    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    assembly = validate_assembly(layout, CATALOG)
+    assert assembly.valid, assembly.reasons
+    result = validate_connectivity(
+        layout, CATALOG, PortRef("upper", "end_a"), (PortRef("exit", "end_b"),)
+    )
+    assert result.valid, result.reasons
+    assert result.paths["exit:end_b"][:6] == (
+        "upper:end_a", "upper:hole:0", "blue_column:top",
+        "blue_column:front", "exit:end_a", "exit:hole:0",
     )
