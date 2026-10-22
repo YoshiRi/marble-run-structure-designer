@@ -33,8 +33,8 @@ process.stdout.write(JSON.stringify({graph, result: trace(graph, source, sink)})
     "case,source,sink",
     [
         ("golden", "upper:end_a", "blue_column:front"),
-        ("open_hole", "upper:end_a", "lower:end_b"),
-        ("covered_slope", "upper:end_a", "lower:end_b"),
+        ("open_hole", "lower:end_a", "lower:end_b"),
+        ("covered_slope", "lower:end_a", "lower:end_b"),
         ("reversed", "upper:end_b", "green_column:front"),
         ("red_random_branch", "split:top", "split:rear"),
         ("unknown_link", "upper:end_a", "blue_column:front"),

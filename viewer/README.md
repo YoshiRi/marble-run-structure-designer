@@ -100,7 +100,13 @@ For the GitHub Pages artifact, `viewer/index.html` is copied to the site root to
 The viewer is fully static. `viewer/routing.js` is a dependency-free port of
 `src/quadrilla_solver/connectivity.py` and traces the directed port graph.
 The green path is the **shortest topological path** to the selected sink, not a
-physical marble trajectory or travel-time estimate. Cyan branches show other
+physical marble trajectory or travel-time estimate. Overlay segments on rails
+follow their center grooves; a vertical drop is shown only through a real
+block-connected hole. Cross-component links are drawn only when actual
+catalogued openings are aligned and face each other. **Inside blocks, only
+the existing entry/exit ports and the block outline are highlighted**:
+internal channel geometry is not known, so no fabricated 3D arc is drawn
+through solid wood. Cyan branches show other
 reachable graph edges, including possible random routes. Open holes interrupt
 rail traversal; covered holes preserve it; block-connected holes can drop into
 a supporting routing block. Unsupported covered-slope semantics are reported.
@@ -112,7 +118,7 @@ initial source and destination:
 routing_query:
   source: { component_id: upper, port: end_a }
   sinks:
-    - { component_id: lower, port: end_b }
+    - { component_id: exit, port: end_b }
 ```
 
 The dropdowns can select other graph nodes without editing the YAML.

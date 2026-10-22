@@ -99,13 +99,28 @@ its shortest directed sequence of graph-node keys. The browser Viewer traces
 the same port graph in `viewer/routing.js` and overlays the selected route
 and alternative reachable branches. It does not simulate ball dynamics.
 
-`RouteLink` explicitly connects transitions whose exact physical port offset is not yet modeled, such as a horizontal block exit into another rail.
+`RouteLink` may connect only **catalogued, physically mating openings**.
+For example, a block side outlet may connect to the upstream end of a rail
+only if their surface positions agree within 0.35 cm, their outward normals
+face in opposite directions, and the source/target roles agree with the
+directed internal routes and rail flow direction. Misaligned links are
+**rejected** with a `route_link_geometry_mismatch` diagnostic, not drawn as
+teleporting lines. Rail holes cannot be used as arbitrary explicit link
+endpoints. A `block_connected` hole feeds a top port only when the
+support-column block top matches the hole's XY and the rail underside height.
+
+These tests are based on provisional schematic opening positions from the
+catalog. They do not certify collision clearance, internal channels, or
+real-world marble motion.
 
 ## Example
 
 See:
 
 ```text
+examples/three-level-physically-connected.yaml
+
+# Structural example that ends at an unmatched block outlet:
 examples/two-level-supported.yaml
 ```
 
@@ -124,7 +139,7 @@ A layout may specify a default source and sink for the browser routing inspector
 routing_query:
   source: { component_id: upper, port: end_a }
   sinks:
-    - { component_id: lower, port: end_b }
+    - { component_id: exit, port: end_b }
 ```
 
 The Python CLI still accepts explicit `--source` and `--sink` arguments;

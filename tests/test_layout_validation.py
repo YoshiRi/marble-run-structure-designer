@@ -203,3 +203,30 @@ def test_three_level_example_has_physically_aligned_full_route():
         "upper:end_a", "upper:hole:0", "blue_column:top",
         "blue_column:front", "exit:end_a", "exit:hole:0",
     )
+
+
+def test_route_link_ports_match_catalogued_visible_openings():
+    from quadrilla_solver.routing_geometry import port_pose, validate_route_link_geometry
+
+    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    link = layout.route_links[0]
+    source = port_pose(layout, CATALOG, link.source)
+    target = port_pose(layout, CATALOG, link.target)
+    assert source is not None and target is not None
+    assert source.position_cm == pytest.approx(target.position_cm, abs=1e-6)
+    assert sum(x * y for x, y in zip(source.outward, target.outward)) == pytest.approx(-1)
+    assert validate_route_link_geometry(layout, CATALOG, link) is None
+
+    # An arbitrary rail hole is not a surface connection for RouteLink.
+    assert port_pose(layout, CATALOG, PortRef("exit", "hole:1")) is None
+    # Nor may a block use a port not declared by the part catalog.
+    assert port_pose(layout, CATALOG, PortRef("blue_column", "left")) is None
+
+
+def test_three_level_complete_layout_stability():
+    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    result = validate_layout(
+        layout, CATALOG, source=PortRef("upper", "end_a"),
+        sinks=(PortRef("exit", "end_b"),),
+    )
+    assert result.valid, result
