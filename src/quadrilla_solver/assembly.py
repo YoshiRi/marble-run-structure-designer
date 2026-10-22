@@ -5,6 +5,7 @@ from itertools import combinations
 from math import hypot
 
 from .catalog import PartCatalog
+from .collision import solid_collisions
 from .geometry import valid_support_pairs
 from .model import Layout, rail_hole_world
 
@@ -198,7 +199,8 @@ def validate_assembly(
         if part.part_type == "wooden_foundation" and part.id not in foundation_usage:
             reasons.append(f"unused_or_elevated_foundation:{part.id}")
 
-    warnings.append("solid_collision_check_not_implemented")
+    # Coarse bounding-box check: bodies may touch but not interpenetrate.
+    reasons.extend(solid_collisions(layout, catalog))
 
     return AssemblyResult(
         valid=not reasons,
