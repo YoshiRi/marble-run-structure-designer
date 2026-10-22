@@ -1,0 +1,50 @@
+schema_version: "0.1"
+name: four-level-zigzag
+status: draft_schematic
+
+purpose:
+  - first real-world golden test
+  - validate multi-level rail placement
+  - validate yellow blocks as level turnarounds
+  - validate alternating rail direction
+
+# This example intentionally records only behavior confirmed from the
+# photographed build. Exact hole indices, XY coordinates, and all support
+# block orientations still need to be transcribed from the physical example.
+
+levels:
+  - id: R3
+    order_from_bottom: 3
+    route_direction: left_to_right
+    transition_to_next_level:
+      type: yellow_top_to_side
+      side: right
+
+  - id: R2
+    order_from_bottom: 2
+    route_direction: right_to_left
+    transition_to_next_level:
+      type: yellow_top_to_side
+      side: left
+
+  - id: R1
+    order_from_bottom: 1
+    route_direction: left_to_right
+    transition_to_next_level:
+      type: yellow_top_to_side
+      side: right
+
+  - id: R0
+    order_from_bottom: 0
+    route_direction: right_to_left
+
+expected:
+  valid_after_full_transcription: true
+  route_pattern: zigzag
+  physics_required: false
+
+todo:
+  - transcribe exact rail variants
+  - transcribe exact hole indices
+  - transcribe every support block type and rotation
+  - define start and terminal route ports
