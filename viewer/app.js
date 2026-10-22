@@ -171,64 +171,17 @@
     return null;
   }
 
-  // Straight rails come from catalog.rails. Curved rails (catalog.curved_rails)
-  // are viewer-only for now: they are presented with the same fields, measured
-  // along the centerline arc, plus shape/radius.
+  // Rail geometry is shared with the routing engine (routing.js), so the 3D
+  // view and the routing graph agree on curved rails too.
   function railSpec(type) {
-    const spec = catalog.rails?.[type];
-    if (spec) return spec;
-    const curved = catalog.curved_rails?.[type];
-    if (curved) {
-      const radius = geometryValue(curved.hole_circle_radius_cm, 23);
-      // Arc segments along the rail: {length, radius, sign: +1 same turn, -1 opposite}.
-      const segments = curved.shape === "compound_arc"
-        ? (curved.segments || []).map(seg => ({
-            length: Number(seg.length_cm),
-            radius,
-            sign: seg.turn === "opposite" ? -1 : 1,
-          }))
-        : [{ length: Number(curved.centerline_length_cm), radius, sign: 1 }];
-      return {
-        ...curved,
-        shape: "arc",
-        segments,
-        length_cm: Number(curved.centerline_length_cm),
-        hole_positions_cm: curved.hole_arc_positions_cm || [],
-      };
-    }
-    throw new Error("Unknown rail type: " + type);
+    const spec = MarbleRouting.railGeometry(catalog, type);
+    if (!spec) throw new Error("Unknown rail type: " + type);
+    return spec;
   }
 
-  // Point on the rail centerline at distance localX from end A. For a curved
-  // rail, x_cm/y_cm is end A, yaw_deg the travel direction there, and
-  // turn: left|right (default left) the side the arc bends toward.
   function railPoint(rail, localX) {
-    const yaw = (Number(rail.yaw_deg || 0) * Math.PI) / 180;
-    const spec = railSpec(rail.rail_type);
-    if (spec.shape === "arc") {
-      // Walk the arc segments from end A; each bends left (+) or right (-).
-      const railSign = rail.turn === "right" ? -1 : 1;
-      let x = Number(rail.x_cm), y = Number(rail.y_cm), heading = yaw;
-      let remaining = Math.max(0, Number(localX));
-      for (let i = 0; i < spec.segments.length; i++) {
-        const seg = spec.segments[i];
-        const last = i === spec.segments.length - 1;
-        const step = last ? remaining : Math.min(remaining, seg.length);
-        const sign = railSign * seg.sign;
-        const cx = x - sign * seg.radius * Math.sin(heading);
-        const cy = y + sign * seg.radius * Math.cos(heading);
-        heading += sign * step / seg.radius;
-        x = cx + sign * seg.radius * Math.sin(heading);
-        y = cy - sign * seg.radius * Math.cos(heading);
-        remaining -= step;
-        if (remaining <= 1e-9) break;
-      }
-      return { x, y };
-    }
-    return {
-      x: Number(rail.x_cm) + Number(localX) * Math.cos(yaw),
-      y: Number(rail.y_cm) + Number(localX) * Math.sin(yaw),
-    };
+    const [x, y] = MarbleRouting.railPose(catalog, rail, Number(localX));
+    return { x, y };
   }
 
   function buildCurvedRailMesh(rail, spec) {
@@ -872,10 +825,43 @@
     );
   }
 
+  // Position along a rail (cm from end A) for a rail node key, or null.
+  function railNodeStation(key) {
+    const colon = key.indexOf(":");
+    const rail = (layout.rails || []).find(r => r.id === key.slice(0, colon));
+    if (!rail) return null;
+    const spec = railSpec(rail.rail_type);
+    const port = key.slice(colon + 1);
+    if (port === "end_a") return { rail, spec, s: 0 };
+    if (port === "end_b") return { rail, spec, s: Number(spec.length_cm) };
+    if (port.startsWith("hole:")) {
+      const x = spec.hole_positions_cm?.[Number(port.slice(5))];
+      return x == null ? null : { rail, spec, s: Number(x) };
+    }
+    return null;
+  }
+
+  // Intermediate points that keep a path on a curved rail's arc between two
+  // nodes of the same rail (empty for straight rails).
+  function arcPointsBetween(from, to, lift) {
+    const a = railNodeStation(from), b = railNodeStation(to);
+    if (!a || !b || a.rail !== b.rail || a.spec.shape !== "arc") return [];
+    const steps = Math.max(2, Math.ceil(Math.abs(b.s - a.s) / 1.5));
+    const top = Number(a.rail.z_units) + Number(a.spec.height || 1);
+    const out = [];
+    for (let i = 1; i < steps; i++) {
+      const p = railPoint(a.rail, a.s + (b.s - a.s) * i / steps);
+      out.push(world(p.x, p.y, top).add(new BABYLON.Vector3(0, lift, 0)));
+    }
+    return out;
+  }
+
   function routingEdgePoints(from, to) {
     const a = routingNodePosition(from);
     const b = routingNodePosition(to);
     if (!a || !b) return null;
+    const between = arcPointsBetween(from, to, 0.12);  // same groove offset as hole markers
+    if (between.length) return [a, ...between, b];
     const fromId = from.slice(0, from.indexOf(":"));
     const toId = to.slice(0, to.indexOf(":"));
     if (fromId === toId && (layout.parts || []).some(p => p.id === fromId)) {
@@ -1276,12 +1262,19 @@
   function marblePathPoints(run) {
     const radius = MARBLE_DIAMETER_CM / 2;
     const points = [];
+    let previousNode = null;
     for (const node of run.path) {
       const pos = routingNodePosition(node);
       if (!pos) continue;
+      if (previousNode) {
+        // Follow the arc between two holes of the same curved rail.
+        const lift = radius + 0.12;
+        for (const q of arcPointsBetween(previousNode, node, lift)) points.push(q);
+      }
       const lifted = pos.add(new BABYLON.Vector3(0, radius, 0));
       const prev = points[points.length - 1];
       if (!prev || BABYLON.Vector3.DistanceSquared(prev, lifted) > 1e-4) points.push(lifted);
+      previousNode = node;
     }
     if (!points.length) return points;
     // Start a little above the input hole so the drop-in is visible.

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
-from math import cos, radians, sin
+from math import atan2, cos, hypot, radians, sin
 from typing import Iterable
 
 from .catalog import PartCatalog
-from .model import Layout, PlacedRail
+from .model import Layout, PlacedRail, rail_pose
 
 
 @dataclass(frozen=True)
@@ -57,22 +57,60 @@ def _part_body_height_cm(catalog: PartCatalog, part_type: str, unit_cm: float) -
     return None if height is None else height * unit_cm
 
 
-def rail_solid(rail: PlacedRail, catalog: PartCatalog) -> Solid | None:
+def _strip_solids(rail: PlacedRail, catalog: PartCatalog, start: float, end: float,
+                  half_width: float, z_min: float, z_max: float, solid_id: str) -> list[Solid]:
+    """Boxes covering the rail centerline between start and end (cm along it).
+
+    Straight rails give one box; curved rails a chain of short chords, each
+    widened by its sagitta so the chain covers the arc.
+    """
+    spec = catalog.rails[rail.rail_type]
+    if end - start <= 0:
+        return []
+    pieces = 1 if spec.shape != "arc" else max(1, int((end - start) / 3.0 + 0.999))
+    solids = []
+    step = (end - start) / pieces
+    for i in range(pieces):
+        a = rail_pose(rail, spec, start + i * step)
+        b = rail_pose(rail, spec, start + (i + 1) * step)
+        chord = hypot(b[0] - a[0], b[1] - a[1])
+        sagitta = 0.0
+        if spec.shape == "arc" and spec.radius_cm:
+            sagitta = spec.radius_cm - (spec.radius_cm ** 2 - (chord / 2) ** 2) ** 0.5
+        solids.append(Solid(
+            solid_id,
+            ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2),
+            (chord / 2.0, half_width + sagitta),
+            atan2(b[1] - a[1], b[0] - a[0]),
+            z_min, z_max,
+        ))
+    return solids
+
+
+def rail_solids(rail: PlacedRail, catalog: PartCatalog) -> list[Solid]:
     spec = catalog.rails.get(rail.rail_type)
     if spec is None:
-        return None
+        return []
     unit = _geometry(catalog, "height_unit", 1.5)
     width = _geometry(catalog, "rail_width_cm", 4.5)
-    theta = radians(rail.yaw_deg)
-    half = spec.length_cm / 2.0
-    return Solid(
-        rail.id,
-        (rail.x_cm + half * cos(theta), rail.y_cm + half * sin(theta)),
-        (half, width / 2.0),
-        theta,
-        rail.z_units * unit,
-        (rail.z_units + spec.height_units) * unit,
-    )
+    return _strip_solids(rail, catalog, 0.0, spec.length_cm, width / 2.0,
+                         rail.z_units * unit, (rail.z_units + spec.height_units) * unit, rail.id)
+
+
+def rail_solid(rail: PlacedRail, catalog: PartCatalog) -> Solid | None:
+    """Single bounding solid of a straight rail (first piece of a curve)."""
+    solids = rail_solids(rail, catalog)
+    return solids[0] if solids else None
+
+
+def marble_corridor(rail: PlacedRail, catalog: PartCatalog, start: float, end: float,
+                    marble_diameter_cm: float = 1.6) -> list[Solid]:
+    """Space a marble needs above the groove between start and end."""
+    spec = catalog.rails[rail.rail_type]
+    unit = _geometry(catalog, "height_unit", 1.5)
+    top = (rail.z_units + spec.height_units) * unit
+    return _strip_solids(rail, catalog, start, end, marble_diameter_cm / 2.0,
+                         top, top + marble_diameter_cm, f"{rail.id}#marble")
 
 
 def component_solids(layout: Layout, catalog: PartCatalog) -> list[Solid]:
@@ -80,9 +118,7 @@ def component_solids(layout: Layout, catalog: PartCatalog) -> list[Solid]:
     width, depth = _block_footprint(catalog)
     solids: list[Solid] = []
     for rail in layout.rails:
-        solid = rail_solid(rail, catalog)
-        if solid is not None:
-            solids.append(solid)
+        solids.extend(rail_solids(rail, catalog))
     for part in layout.parts:
         height = _part_body_height_cm(catalog, part.part_type, unit)
         if height is None:
@@ -135,10 +171,12 @@ def solid_collisions(
     """Pairs of rails/parts whose bodies interpenetrate."""
     reasons = []
     for a, b in combinations(component_solids(layout, catalog), 2):
+        if a.id == b.id:
+            continue  # pieces of the same curved rail
         if penetration_cm(a, b) > tolerance_cm:
             first, second = sorted((a.id, b.id))
             reasons.append(f"solid_collision:{first}:{second}")
-    return tuple(sorted(reasons))
+    return tuple(sorted(set(reasons)))
 
 
 def _rail_node_local_x(node_port: str, spec) -> float | None:
@@ -167,7 +205,6 @@ def marble_clearance_conflicts(
     between the first and last reached point must be free. A block standing
     on a hole the marble rolls over, for example, blocks the path.
     """
-    unit = _geometry(catalog, "height_unit", 1.5)
     reached: dict[str, list[float]] = {}
     rails = layout.rail_map()
     for node in reachable_nodes:
@@ -188,22 +225,10 @@ def marble_clearance_conflicts(
         start, end = min(xs), max(xs)
         if end - start <= 0:
             continue
-        rail = rails[rail_id]
-        spec = catalog.rails[rail.rail_type]
-        theta = radians(rail.yaw_deg)
-        mid = (start + end) / 2.0
-        top = (rail.z_units + spec.height_units) * unit
-        corridor = Solid(
-            f"{rail_id}#marble",
-            (rail.x_cm + mid * cos(theta), rail.y_cm + mid * sin(theta)),
-            ((end - start) / 2.0, marble_diameter_cm / 2.0),
-            theta,
-            top,
-            top + marble_diameter_cm,
-        )
+        corridor = marble_corridor(rails[rail_id], catalog, start, end, marble_diameter_cm)
         for solid in solids:
             if solid.id == rail_id:
                 continue
-            if penetration_cm(corridor, solid) > tolerance_cm:
+            if any(penetration_cm(piece, solid) > tolerance_cm for piece in corridor):
                 reasons.append(f"marble_path_blocked:{rail_id}:{solid.id}")
-    return tuple(reasons)
+    return tuple(dict.fromkeys(reasons))

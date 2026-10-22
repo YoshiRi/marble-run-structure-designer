@@ -9,11 +9,23 @@ import yaml
 
 @dataclass(frozen=True)
 class RailSpec:
+    """A rail measured along its centerline.
+
+    Straight rails have shape "straight". Curved rails ("arc") follow
+    `segments`: (length_cm, turn sign) pieces of a circle of `radius_cm`,
+    sign +1 bending toward the placement's `turn`, -1 the other way.
+    `holes_cm` are positions along the centerline from end A.
+    """
+
     name: str
     length_cm: float
     holes_cm: tuple[float, ...]
     height_units: int = 1
     mass_g: float | None = None
+    shape: str = "straight"
+    radius_cm: float | None = None
+    segments: tuple[tuple[float, int], ...] = ()
+    needs_load_above: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,11 +107,12 @@ class PartCatalog:
         return None
 
     def allowed_rotations(self, part_type: str) -> tuple[int, ...] | None:
+        """Allowed rotations, or None when any angle is allowed."""
         spec = self.part_spec(part_type)
         if spec is None:
             return None
         rotations = spec.get("rotations_deg")
-        if rotations is None:
+        if rotations is None or rotations == "any":
             return None
         return tuple(int(v) % 360 for v in rotations)
 
@@ -154,6 +167,30 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
     data = _load_yaml(Path(parts_path))
     rails = data.get("rails", {})
     result: dict[str, RailSpec] = {}
+    for name, spec in (data.get("curved_rails") or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        radius = spec.get("hole_circle_radius_cm")
+        radius = float(radius.get("value") if isinstance(radius, dict) else radius)
+        length = float(spec["centerline_length_cm"])
+        if spec.get("segments"):
+            segments = tuple(
+                (float(seg["length_cm"]), -1 if seg.get("turn") == "opposite" else 1)
+                for seg in spec["segments"]
+            )
+        else:
+            segments = ((length, 1),)
+        result[name] = RailSpec(
+            name=name,
+            length_cm=length,
+            holes_cm=tuple(float(x) for x in spec["hole_arc_positions_cm"]),
+            height_units=int(spec.get("height", 1)),
+            mass_g=_mass_value(spec),
+            shape="arc",
+            radius_cm=radius,
+            segments=segments,
+            needs_load_above=spec.get("stability") == "needs_load_above",
+        )
     for name, spec in rails.items():
         if not isinstance(spec, dict):
             continue

@@ -6,7 +6,7 @@ from math import cos, hypot, radians, sin
 from typing import Mapping, Sequence
 
 from .catalog import PartCatalog
-from .model import Layout, PortRef, rail_hole_world
+from .model import Layout, PortRef, rail_hole_world, rail_pose
 from .routing_geometry import port_pose, validate_route_link_geometry
 
 
@@ -242,7 +242,11 @@ def _landing_edges(layout, catalog, support, explicit_sources):
         return []
     unit = catalog.raw.get("geometry_cm", {}).get("height_unit", {})
     unit = float(unit.get("value", 1.5)) if isinstance(unit, Mapping) else float(unit or 1.5)
-    theta = radians(rail.yaw_deg)
+    hole = support.lower_hole_index
+    if hole is None or not 0 <= hole < len(spec.holes_cm):
+        return []
+    # Direction of the rail where the block stands (tangent on a curve).
+    _, _, theta = rail_pose(rail, spec, spec.holes_cm[hole])
     axis = (cos(theta), sin(theta))
     rail_top_cm = (rail.z_units + spec.height_units) * unit
     outputs = {target for _, target in catalog.internal_routes(part.part_type)}
@@ -256,8 +260,10 @@ def _landing_edges(layout, catalog, support, explicit_sources):
         along = pose.outward[0] * axis[0] + pose.outward[1] * axis[1]
         if abs(along) < 0.95 or abs(pose.position_cm[2] - (rail_top_cm + unit)) > 0.05:
             continue
-        landing = ((pose.position_cm[0] - rail.x_cm) * axis[0]
-                   + (pose.position_cm[1] - rail.y_cm) * axis[1])
+        # The marble lands just past the block face, half a block from the hole.
+        half_block = abs((pose.position_cm[0] - part.x_cm) * axis[0]
+                         + (pose.position_cm[1] - part.y_cm) * axis[1])
+        landing = spec.holes_cm[hole] + (half_block if along > 0 else -half_block)
         stations = [("end_a", 0.0)] + [
             (f"hole:{i}", x) for i, x in enumerate(spec.holes_cm)
         ] + [("end_b", spec.length_cm)]
