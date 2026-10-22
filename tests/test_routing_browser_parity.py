@@ -54,12 +54,15 @@ process.stdout.write(JSON.stringify({
         ("wrong_port", "upper:end_a", "exit:end_b"),
         ("misaligned_support", "upper:end_a", "exit:end_b"),
         ("rotated_port", "upper:end_a", "exit:end_b"),
+        ("side_exit_exact_level", "upper:end_a", "exit:end_b"),
+        ("side_exit_drop_two", "upper:end_a", "exit:end_b"),
     ],
 )
 def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     example = ("three-level-physically-connected.yaml" if case in {
         "aligned_rail_exit", "misaligned_rail_exit", "wrong_flow_direction",
         "wrong_port", "misaligned_support", "rotated_port",
+        "side_exit_exact_level", "side_exit_drop_two",
     } else "two-level-supported.yaml")
     with (ROOT / "examples" / example).open() as f:
         layout_data = yaml.safe_load(f)
@@ -135,6 +138,12 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
         next(p for p in layout_data["parts"] if p["id"] == "blue_column")["x_cm"] += 1
     elif case == "rotated_port":
         next(p for p in layout_data["parts"] if p["id"] == "blue_column")["rotation_deg"] = 90
+    elif case == "side_exit_exact_level":
+        # Groove exactly at the hole floor (installation level + 1).
+        next(r for r in layout_data["rails"] if r["id"] == "exit")["z_units"] = 2
+    elif case == "side_exit_drop_two":
+        # Two units below the hole floor: not a physical connection.
+        next(r for r in layout_data["rails"] if r["id"] == "exit")["z_units"] = 0
 
     layout_file = tmp_path / "layout.yaml"
     layout_file.write_text(yaml.safe_dump(layout_data))
@@ -171,6 +180,11 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
 
     if case in {"side_entry_aligned", "side_entry_plus_one_allowed"}:
         assert python_result.valid and python_result.reachable, python_result.reasons
+    elif case in {"aligned_rail_exit", "side_exit_exact_level"}:
+        assert python_result.valid and python_result.reachable, python_result.reasons
+    elif case == "side_exit_drop_two":
+        assert not python_result.reachable
+        assert any(reason.startswith("route_link_geometry_mismatch:") for reason in python_result.reasons)
     elif case == "side_entry_plus_one_disallowed":
         assert not python_result.valid and not python_result.reachable
         assert any(reason.startswith("route_link_geometry_mismatch:") for reason in python_result.reasons)

@@ -117,6 +117,15 @@ not drawn as teleporting lines. Rail holes cannot be used as arbitrary explicit
 link endpoints. A `block_connected` hole feeds a top port only when the
 support-column block top matches the hole's XY and the rail underside height.
 
+Centered side holes (for example the blue/green/yellow `front` outlet and the
+cyan `left`/`right` pass-through) open with their floor **one height unit above
+the block's installation level**, which is exactly the groove height of a rail
+laid at that same level. Such a rail mates the hole directly. A centered
+**outlet** may also feed a rail whose groove is at the installation level
+itself, one unit lower: the marble drops straight out of the hole (physically
+confirmed, always allowed). A marble never climbs, so a rail one unit below a
+centered **inlet** does not connect.
+
 Side-entry notches that feed a downward route (blue rear, green left, and
 natural-drop front/rear) have a specific optional allowance. By default, the
 rail groove must meet the notch at the part's installation level. Set

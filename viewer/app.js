@@ -392,6 +392,10 @@
       // A full horizontal cylindrical cutter intersects the block only
       // above its bottom plane, producing a semicircular arch at the base.
       p.y = -heightCm / 2 + 0.005;
+    } else if (["front", "rear", "left", "right"].includes(port)) {
+      // Centered side holes open with their floor one height unit above the
+      // installation level (the groove height of a rail at that level).
+      p.y = -heightCm / 2 + Math.min(HEIGHT_SCALE_CM, heightCm) + BLOCK_PORT_DIAMETER_CM / 2;
     }
     return p;
   }

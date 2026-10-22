@@ -6,37 +6,24 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_default_viewer_sample_has_ground_level_purple_support_stacks():
-    catalog = yaml.safe_load((ROOT / "catalog" / "parts.yaml").read_text())
+def test_default_viewer_sample_exit_rail_needs_no_purple_pedestal():
+    """The blue outlet drops one unit onto a rail at its installation level,
+    so the exit rail rests on single ground foundations."""
     layout = yaml.safe_load(
         (ROOT / "examples" / "three-level-physically-connected.yaml").read_text()
     )
+    parts = {part["id"]: part for part in layout["parts"]}
+    assert not [p for p in parts.values() if p["part_type"] == "purple_drop"]
 
-    purple_spec = catalog["routing_blocks"]["purple_drop"]
-    assert purple_spec["height"] == 1
-    assert purple_spec["body_height_cm"]["value"] == 1.5
+    exit_rail = next(rail for rail in layout["rails"] if rail["id"] == "exit")
+    blue = parts["blue_column"]
+    # Rail groove (z + 1u) equals the blue block's installation level.
+    assert exit_rail["z_units"] + 1 == blue["z_units"]
 
-    parts = layout["parts"]
-    purple_parts = [part for part in parts if part["part_type"] == "purple_drop"]
-    assert len(purple_parts) == 4
-
-    for y_cm in (9.25, 27.25):
-        column = [part for part in parts if part["y_cm"] == y_cm]
-        foundations = [
-            part for part in column
-            if part["part_type"] == "wooden_foundation"
-        ]
-        purples = sorted(
-            (
-                part for part in column
-                if part["part_type"] == "purple_drop"
-            ),
-            key=lambda part: part["z_units"],
-        )
-        assert len(foundations) == 1
-        assert foundations[0]["z_units"] == 0
-        assert [part["z_units"] for part in purples] == [1, 2]
-        assert all(
-            abs(part["x_cm"] - foundations[0]["x_cm"]) < 0.01
-            for part in purples
-        )
+    exit_supports = [s for s in layout["supports"] if s["upper_rail_id"] == "exit"]
+    assert len(exit_supports) == 2
+    for support in exit_supports:
+        (stack_id,) = support["stack_part_ids"]
+        foundation = parts[stack_id]
+        assert foundation["part_type"] == "wooden_foundation"
+        assert foundation["z_units"] == 0

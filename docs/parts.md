@@ -64,7 +64,10 @@ center** (user measurement). Groove depth and cross-section remain unknown;
 the viewer currently renders a provisional 0.3 cm deep rectangular groove.
 
 The Viewer now displays openings on the faces named in each routing block's
-`ports` list. Side exits are **centered circular openings**, while side inlets
+`ports` list. Side exits are **horizontally centered circular openings** whose
+floor is **one height unit above the installation level** (user-confirmed), so a
+rail laid at the block's own level meets them; an outlet can also drop one unit
+onto a rail whose groove is at the installation level. Side inlets
 leading to downward routes are **semicircular openings at the bottom edge**.
 For the current catalog this applies to blue rear, green left, and natural-drop
 front/rear ports. Port diameters and internal channel shapes remain unmeasured;

@@ -24,7 +24,9 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - no build step
 
 The default `three-level-physically-connected.yaml` example includes a
-blue-block side outlet physically mated to the beginning of an exit rail.
+blue-block front outlet dropping one unit onto an exit rail that rests on plain
+ground foundations (no pedestal blocks needed). Centered side holes are drawn
+with their floor at installation level +1, where they physically open.
 `two-level-supported.yaml` has no downstream connection from its blue
 block, so the trace ends at the real front opening rather than jumping to
 an unrelated lower rail.
