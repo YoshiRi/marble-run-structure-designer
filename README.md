@@ -1,10 +1,10 @@
-# Quadrilla Designer
+# Marble Run Structure Designer
 
-An independent, unofficial design-assistance project for studying and building compatible Hape/BorneLund Quadrilla marble-run structures.
+An independent, unofficial design and validation tool for modular marble-run structures, currently modeling compatibility with Hape Quadrilla parts distributed by Hape/BorneLund.
 
 This project is not affiliated with, sponsored by, or endorsed by Hape, BorneLund, or any other manufacturer, distributor, or rights holder referenced by the project. Product and company names are used descriptively; see [TRADEMARKS.md](TRADEMARKS.md).
 
-The project focuses on **automatic layout generation**, a **layout/routing viewer**, and a **construction-assist UI**. It intentionally models Quadrilla as a discrete routing/construction system rather than as a full rigid-body physics simulation.
+The project focuses on **automatic layout generation**, a **layout/routing viewer**, and a **construction-assist UI**. It models modular marble runs as discrete routing/construction systems rather than full rigid-body physics simulations.
 
 ## Project goals
 
@@ -23,7 +23,7 @@ The project focuses on **automatic layout generation**, a **layout/routing viewe
 
 ## Core modeling idea
 
-Quadrilla is represented as a **2.5D discrete construction system**:
+The supported marble-run construction system is represented as a **2.5D discrete model**:
 
 - planar placement in \(x, y\)
 - discrete height \(z\)
@@ -64,8 +64,12 @@ See [docs/model.md](docs/model.md) and [docs/parts.md](docs/parts.md) for the cu
 └── ui/
 ```
 
-The repository is currently in the **specification / catalog-building phase**. Part definitions are being separated into confirmed observations and tentative assumptions so the solver can be built on explicit data rather than implicit knowledge.
+The repository includes a Python layout validator and a schematic browser viewer. The generator, construction-assist UI, and full browser-side solver are planned. Part definitions distinguish measured observations from provisional assumptions.
 
+
+## Viewer
+
+Run the static viewer locally with `python -m http.server 8000` from the repository root, then open `http://localhost:8000/viewer/`. See [viewer/README.md](viewer/README.md). The published site is hosted on GitHub Pages.
 
 ## Licensing
 
