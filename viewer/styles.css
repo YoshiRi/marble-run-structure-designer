@@ -81,6 +81,10 @@ button, select, input { font: inherit; }
   border-radius: 8px;
   background: Canvas;
 }
+.small-note { font-size: 12px; line-height: 1.5; margin: 0 0 8px; }
+.hole-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; }
+.hole-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.swatch { width: 11px; height: 11px; display: inline-block; border-radius: 50%; border: 1px solid #64748b; }
 .muted { color: var(--muted); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; }
 
