@@ -47,7 +47,16 @@ Until additional measurements are available, every **unmeasured standard-height 
 
 ## Standard block height
 
-Working height: **4 units**.
+Working height: **4 units = 6 cm effective stacked height** (user measurement).
+
+The standard routing block has a **4.5 × 4.5 cm** footprint and a **1 cm
+connector protrusion** that inserts into the mating piece. The protrusion
+does **not** add 1 cm to the assembled stack height; one stacked standard block
+contributes 6 cm, not 7 cm.
+
+The rail width is **4.5 cm**. Rail holes are approximately **1.8 cm** in
+diameter. The rail's physical thickness is not yet measured; its current
+1-unit height maps to a provisional 1.5 cm in the viewer.
 
 ## Yellow routing block
 

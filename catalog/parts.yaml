@@ -1,5 +1,35 @@
 schema_version: "0.7"
 
+geometry_cm:
+  height_unit:
+    value: 1.5
+    source: derived_from_user_measurement_6_cm_per_4_units
+    confidence: derived
+    note: discrete stacking scale; 1-unit rail and thin-part heights still require direct measurement
+  standard_block_footprint:
+    width_cm: 4.5
+    depth_cm: 4.5
+    source: user_measurement
+    confidence: measured
+  standard_block_stacking_height_cm:
+    value: 6.0
+    source: user_measurement
+    confidence: measured
+    note: effective height per standard block in an assembled stack
+  standard_block_connector_protrusion_cm:
+    value: 1.0
+    source: user_measurement
+    confidence: measured
+    note: inserted into mating piece; not added to effective stacked height
+  rail_width_cm:
+    value: 4.5
+    source: user_measurement
+    confidence: measured
+  rail_hole_diameter_cm:
+    value: 1.8
+    source: user_approximation
+    confidence: approximate
+
 mass_defaults:
   standard_routing_block_g:
     value: 55

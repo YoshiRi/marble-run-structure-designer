@@ -24,16 +24,27 @@ Long-rail length (50 cm) and hole positions (2, 7, 43, 48 cm) are measured.
 Short-rail length (27 cm) is measured; some short-rail hole positions are inferred.
 The center-hole rail includes a cataloged center position at 25 cm.
 
-**Provisional rendering dimensions (not physical measurements):**
+**Measured or reported physical dimensions:**
 
-- 1 height unit = 3 cm
-- rail width = 3 cm
-- block footprint = 5 × 5 cm
-- hole diameter = 1.5 cm
+- standard routing-block footprint: **4.5 × 4.5 cm**
+- standard routing-block effective stacked height: **6 cm** (4 height units)
+- rail width: **4.5 cm**
+- standard block connector protrusion: **1 cm**, inserted into the mating part;
+  it does **not** increase the assembled stack height
+- rail-hole diameter: **approximately 1.8 cm** (not a precision measurement)
 
-The solver stores vertical positions in abstract height units. Do not treat the
-viewer as a dimensional CAD model until these dimensions are measured and
-recorded with provenance.
+**Derived and provisional dimensions:**
+
+- 1 height unit = **1.5 cm**, derived from the standard block's 6 cm / 4 units
+- rail thickness = **1.5 cm** in the viewer only because the working rail height
+  is 1 unit; the physical rail thickness is **not yet measured**
+- thin/drop-block and foundation heights remain unverified in centimeters
+
+These parameters are stored with provenance in `catalog/parts.yaml` under
+`geometry_cm`. The viewer reads them from the catalog, while the solver keeps
+its discrete height units. Protrusions are currently omitted from meshes because
+the viewer depicts assembled, engaged blocks. This is still schematic geometry,
+not a dimensionally verified CAD model.
 
 The colored rings distinguish open, covered, block-connected, and slope-covered
 rail holes. Covered holes are shown with caps. CSG creates real through-holes

@@ -2,11 +2,13 @@
   "use strict";
 
   const DATA_ROOT = window.location.pathname.includes("/viewer/") ? "../" : "./";
-  const HEIGHT_SCALE_CM = 3.0;
-  const RAIL_WIDTH_CM = 3.0;
-  const BLOCK_WIDTH_CM = 5.0;
-  const BLOCK_DEPTH_CM = 5.0;
-  const HOLE_DIAMETER_CM = 1.5;
+  // Defaults mirror catalog/parts.yaml; loaded catalog geometry is authoritative.
+  let HEIGHT_SCALE_CM = 1.5;
+  let RAIL_WIDTH_CM = 4.5;
+  let BLOCK_WIDTH_CM = 4.5;
+  let BLOCK_DEPTH_CM = 4.5;
+  let HOLE_DIAMETER_CM = 1.8;
+  let CONNECTOR_PROTRUSION_CM = 1.0;
 
   const canvas = document.getElementById("renderCanvas");
   const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -83,6 +85,23 @@
     mat.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08);
     mat.alpha = alpha;
     return mat;
+  }
+
+  function geometryValue(raw, fallback) {
+    const value = Number(raw && typeof raw === "object" ? raw.value : raw);
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  }
+
+  function applyCatalogGeometry() {
+    const geometry = catalog.geometry_cm || {};
+    HEIGHT_SCALE_CM = geometryValue(geometry.height_unit, HEIGHT_SCALE_CM);
+    RAIL_WIDTH_CM = geometryValue(geometry.rail_width_cm, RAIL_WIDTH_CM);
+    HOLE_DIAMETER_CM = geometryValue(geometry.rail_hole_diameter_cm, HOLE_DIAMETER_CM);
+    BLOCK_WIDTH_CM = geometryValue(geometry.standard_block_footprint?.width_cm, BLOCK_WIDTH_CM);
+    BLOCK_DEPTH_CM = geometryValue(geometry.standard_block_footprint?.depth_cm, BLOCK_DEPTH_CM);
+    CONNECTOR_PROTRUSION_CM = geometryValue(
+      geometry.standard_block_connector_protrusion_cm, CONNECTOR_PROTRUSION_CM
+    );
   }
 
   function massValue(spec) {
@@ -232,7 +251,7 @@
         local_x_cm: Number(localX),
         state,
         diameter_cm: HOLE_DIAMETER_CM,
-        diameter_status: "assumed",
+        diameter_status: "approximate",
       };
 
       // A narrow ring remains visible even for genuinely open CSG holes.
@@ -310,6 +329,10 @@
       mass_g: blockMass(part.part_type),
       z_units: part.z_units,
       rotation_deg: part.rotation_deg || 0,
+      body_height_cm: heightCm,
+      effective_stacking_height_cm: heightCm,
+      connector_protrusion_cm: heightUnits === 4 ? CONNECTOR_PROTRUSION_CM : null,
+      connector_protrusion_rendered: false,
     });
   }
 
@@ -468,10 +491,13 @@
       ["Parts", (layout.parts || []).length],
       ["Support links", (layout.supports || []).length],
       ["Route links", (layout.route_links || []).length],
-      ["Height scale", HEIGHT_SCALE_CM + " cm/u (assumed)"],
-      ["Rail width", RAIL_WIDTH_CM + " cm (assumed)"],
-      ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (assumed)"],
-      ["Hole diameter", HOLE_DIAMETER_CM + " cm (assumed)"],
+      ["Height scale", HEIGHT_SCALE_CM + " cm/u (derived from 6 cm / 4u)"],
+      ["Standard block", (4 * HEIGHT_SCALE_CM) + " cm stacked (measured)"],
+      ["Connector peg", CONNECTOR_PROTRUSION_CM + " cm (inserted; not added)"],
+      ["Rail width", RAIL_WIDTH_CM + " cm (measured)"],
+      ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (measured)"],
+      ["Hole diameter", "≈" + HOLE_DIAMETER_CM + " cm (approx.)"],
+      ["Rail thickness", HEIGHT_SCALE_CM + " cm (provisional)"],
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
     document.getElementById("layoutMeta").textContent = layout.name || "unnamed layout";
@@ -535,6 +561,7 @@
   async function initialize() {
     try {
       catalog = await loadCatalog();
+      applyCatalogGeometry();
       await loadExample(document.getElementById("exampleSelect").value);
     } catch (error) {
       document.getElementById("layoutMeta").textContent = String(error);

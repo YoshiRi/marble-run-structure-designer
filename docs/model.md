@@ -75,7 +75,15 @@ Current observations / assumptions:
 | purple drop block | 1 | observed |
 | wooden foundation block | 1 | observed |
 
-The unit is abstract and does not currently represent centimeters.
+The discrete model retains integer height units. A measured standard block
+occupies **4 units = 6 cm** when assembled, giving a **derived scale of
+1 unit = 1.5 cm**. Its **1 cm connector protrusion** inserts into the mating
+piece and is not added to the effective stacked height.
+
+The rail and thin/foundation pieces are still modeled as 1 unit, but their
+physical thicknesses have **not** been directly measured. Therefore, treating
+each of these as exactly 1.5 cm is provisional, not an established measurement.
+The catalog records this distinction in `geometry_cm`.
 
 ## Ports and routes
 
