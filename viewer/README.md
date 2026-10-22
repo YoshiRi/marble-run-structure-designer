@@ -7,7 +7,8 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - schematic 3D rails and blocks
 - arbitrary rail yaw
 - visible rail-hole cutouts (Babylon.js CSG, with surface-marker fallback) and color-coded hole states
-- schematic block port recesses for cataloged top/bottom/front/rear/left/right ports
+- block side exits as centered circular recesses; side-to-bottom inlets as
+  bottom-edge semicircular notches (catalog-driven)
 - support links
 - route direction / explicit route links
 - global center of mass
@@ -30,6 +31,7 @@ The center-hole rail includes a cataloged center position at 25 cm.
 - standard routing-block footprint: **4.5 × 4.5 cm**
 - standard routing-block effective stacked height: **6 cm** (4 height units)
 - rail width: **4.5 cm**
+- straight rail center groove width: **1.0 cm**, longitudinal along the rail
 - standard block connector protrusion: **1 cm**, inserted into the mating part;
   it does **not** increase the assembled stack height
 - rail-hole diameter: **approximately 1.8 cm** (not a precision measurement)
@@ -42,7 +44,12 @@ The center-hole rail includes a cataloged center position at 25 cm.
 - thin/drop-block and foundation heights remain unverified in centimeters
 - block port diameter = **1.8 cm provisional**, borrowed from the approximate
   rail-hole diameter; actual block port diameters have not been measured
-- block port placement = **center of each cataloged face, provisional**
+- block side exit placement = **face center**, as specified by the user
+- block side inlets leading to a downward drop = **bottom-edge semicircular notches**,
+  as specified by the user; catalog `port_visualization.side_entry_notches` lists
+  which ports use this shape
+- rail groove depth = **0.3 cm provisional**; its profile is rendered as a
+  rectangular recess, pending measurements of depth and cross-section
 - block port CSG cavities = **shallow blind recesses**, not modeled internal channels
 
 These parameters are stored with provenance in `catalog/parts.yaml` under
@@ -57,8 +64,10 @@ where available; otherwise the viewer uses dark surface markers as a fallback.
 
 Block openings follow each routing block's `ports` field. For example, a
 yellow block has top and front openings; blue has top, front, rear, and bottom.
-Block holes are rendered as shallow CSG recesses, not through-passages: actual
-internal routing and off-center port placement require additional measurements.
+The blue block's rear inlet is a bottom-edge semicircle; its front outlet is
+centered. Green has a left-side bottom-edge inlet; natural-wood drop has front
+and rear bottom-edge inlets. Block holes are rendered as shallow CSG recesses,
+not through-passages: actual internal routing geometry remains unmeasured.
 The Holes toggle controls hole markers and outlines, not the underlying CSG
 cutout geometry.
 

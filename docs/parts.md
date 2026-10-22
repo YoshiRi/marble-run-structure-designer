@@ -57,11 +57,16 @@ contributes 6 cm, not 7 cm.
 The rail width is **4.5 cm**. Rail holes are approximately **1.8 cm** in
 diameter. The rail height is **1 unit** as confirmed by the user, which maps
 to **1.5 cm** under the derived scale; this is not a separate thickness
-measurement.
+measurement. Straight rails have a **1 cm wide longitudinal groove in the
+center** (user measurement). Groove depth and cross-section remain unknown;
+the viewer currently renders a provisional 0.3 cm deep rectangular groove.
 
 The Viewer now displays openings on the faces named in each routing block's
-`ports` list. The openings are provisional **face-centered blind recesses**;
-their diameters, exact locations, and internal channel shapes remain unmeasured.
+`ports` list. Side exits are **centered circular openings**, while side inlets
+leading to downward routes are **semicircular openings at the bottom edge**.
+For the current catalog this applies to blue rear, green left, and natural-drop
+front/rear ports. Port diameters and internal channel shapes remain unmeasured;
+the viewer shows shallow recesses rather than complete channels.
 
 ## Yellow routing block
 

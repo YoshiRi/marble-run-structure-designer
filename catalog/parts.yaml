@@ -25,6 +25,16 @@ geometry_cm:
     value: 4.5
     source: user_measurement
     confidence: measured
+  rail_groove_width_cm:
+    value: 1.0
+    source: user_measurement
+    confidence: measured
+    note: centered longitudinal channel on the top of straight rails
+  rail_groove_depth_cm:
+    value: 0.3
+    source: viewer_visualization_assumption
+    confidence: provisional
+    note: groove depth and cross-section profile still need measurement
   rail_hole_diameter_cm:
     value: 1.8
     source: user_approximation
@@ -56,6 +66,7 @@ routing_blocks:
     height: 4
     rotations_deg: [0, 90, 180, 270]
     ports: [top, front]
+    port_visualization: { side_entry_notches: [] }
     routes:
       - { from: top, to: front }
     confidence: confirmed
@@ -68,6 +79,7 @@ routing_blocks:
       confidence: measured
     rotations_deg: [0, 90, 180, 270]
     ports: [top, front, rear, bottom]
+    port_visualization: { side_entry_notches: [rear] }
     routes:
       - { from: top, to: front }
       - { from: rear, to: bottom }
@@ -77,6 +89,7 @@ routing_blocks:
     height: 4
     rotations_deg: [0, 90, 180, 270]
     ports: [top, front, left, bottom]
+    port_visualization: { side_entry_notches: [left] }
     routes:
       - { from: top, to: front }
       - { from: left, to: bottom }
@@ -97,6 +110,7 @@ routing_blocks:
     height: 4
     rotations_deg: [0, 90, 180, 270]
     ports: [front, rear, bottom]
+    port_visualization: { side_entry_notches: [front, rear] }
     routes:
       - { from: front, to: bottom }
       - { from: rear, to: bottom }

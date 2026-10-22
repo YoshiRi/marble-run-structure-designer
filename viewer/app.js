@@ -5,6 +5,8 @@
   // Defaults mirror catalog/parts.yaml; loaded catalog geometry is authoritative.
   let HEIGHT_SCALE_CM = 1.5;
   let RAIL_WIDTH_CM = 4.5;
+  let RAIL_GROOVE_WIDTH_CM = 1.0;
+  let RAIL_GROOVE_DEPTH_CM = 0.3; // Provisional until physically measured.
   let BLOCK_WIDTH_CM = 4.5;
   let BLOCK_DEPTH_CM = 4.5;
   let HOLE_DIAMETER_CM = 1.8;
@@ -97,6 +99,8 @@
     const geometry = catalog.geometry_cm || {};
     HEIGHT_SCALE_CM = geometryValue(geometry.height_unit, HEIGHT_SCALE_CM);
     RAIL_WIDTH_CM = geometryValue(geometry.rail_width_cm, RAIL_WIDTH_CM);
+    RAIL_GROOVE_WIDTH_CM = geometryValue(geometry.rail_groove_width_cm, RAIL_GROOVE_WIDTH_CM);
+    RAIL_GROOVE_DEPTH_CM = geometryValue(geometry.rail_groove_depth_cm, RAIL_GROOVE_DEPTH_CM);
     HOLE_DIAMETER_CM = geometryValue(geometry.rail_hole_diameter_cm, HOLE_DIAMETER_CM);
     BLOCK_PORT_DIAMETER_CM = geometryValue(geometry.block_port_diameter_cm, BLOCK_PORT_DIAMETER_CM);
     BLOCK_WIDTH_CM = geometryValue(geometry.standard_block_footprint?.width_cm, BLOCK_WIDTH_CM);
@@ -184,13 +188,29 @@
     box.position = world(center.x, center.y, Number(rail.z_units) + heightUnits / 2);
     box.computeWorldMatrix(true);
 
-    // CSG makes actual vertical through-holes, rather than drawing black plugs.
-    // Retain a surface-marker fallback for browser/Babylon builds without CSG.
+    // Cut a centered longitudinal channel and vertical through-holes.
+    // Channel width is measured; the rectangular 0.3 cm depth is provisional.
+    // Without CSG, a visible top strip indicates the channel location.
     if (!BABYLON.CSG || typeof BABYLON.CSG.FromMesh !== "function") {
-      return { mesh: box, cutouts: false };
+      return { mesh: box, cutouts: false, grooveCutout: false };
     }
     try {
       let solid = BABYLON.CSG.FromMesh(box);
+      const grooveDepth = Math.min(RAIL_GROOVE_DEPTH_CM, railHeight * 0.8);
+      const groove = BABYLON.MeshBuilder.CreateBox("rail-groove-cutter", {
+        width: length + 0.25,
+        height: grooveDepth + 0.12,
+        depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
+      }, scene);
+      try {
+        groove.rotation.y = box.rotation.y;
+        groove.position = world(center.x, center.y, Number(rail.z_units) + heightUnits);
+        groove.position.y -= grooveDepth / 2 - 0.06;
+        groove.computeWorldMatrix(true);
+        solid = solid.subtract(BABYLON.CSG.FromMesh(groove));
+      } finally {
+        groove.dispose();
+      }
       for (const localX of spec.hole_positions_cm || []) {
         const p = railPoint(rail, Number(localX));
         const cutter = BABYLON.MeshBuilder.CreateCylinder("hole-cutter", {
@@ -208,10 +228,10 @@
       }
       const cutMesh = solid.toMesh("rail-" + rail.id, box.material, scene);
       box.dispose();
-      return { mesh: cutMesh, cutouts: true };
+      return { mesh: cutMesh, cutouts: true, grooveCutout: true };
     } catch (error) {
       console.warn("CSG rail cutouts unavailable; using visible surface markers", error);
-      return { mesh: box, cutouts: false };
+      return { mesh: box, cutouts: false, grooveCutout: false };
     }
   }
 
@@ -220,7 +240,18 @@
     const length = Number(spec.length_cm);
     const heightUnits = Number(spec.height || 1);
     const railHeight = heightUnits * HEIGHT_SCALE_CM;
-    const { mesh: railMesh, cutouts } = buildRailMesh(rail, spec);
+    const { mesh: railMesh, cutouts, grooveCutout } = buildRailMesh(rail, spec);
+    if (!grooveCutout) {
+      const centerline = BABYLON.MeshBuilder.CreateBox("rail-groove-marker-" + rail.id, {
+        width: length,
+        height: 0.025,
+        depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
+      }, scene);
+      centerline.parent = railMesh;
+      centerline.position.y = railHeight / 2 + 0.018;
+      centerline.material = material("grooveFallbackMat", "#8b6c45");
+      centerline.isPickable = false;
+    }
     addSelectable(railMesh, {
       id: rail.id,
       kind: "rail",
@@ -233,6 +264,10 @@
       hole_states: rail.hole_states || {},
       hole_positions_cm: spec.hole_positions_cm || [],
       holes_are_cutouts: cutouts,
+      center_groove_width_cm: RAIL_GROOVE_WIDTH_CM,
+      center_groove_depth_cm: RAIL_GROOVE_DEPTH_CM,
+      center_groove_depth_status: "provisional",
+      center_groove_is_cutout: grooveCutout,
     });
 
     const holeColors = {
@@ -308,8 +343,9 @@
     groups.route.push(routeLine);
   }
 
-  // Port directions are in the block's local coordinates. All face-center
-  // positions and diameters are schematic until physically measured.
+  // Port directions are in the block's local coordinates. Exit holes are
+  // centered; side inlets dropping downward use bottom-edge semicircular notches.
+  // Hole diameters and actual internal channels remain provisional.
   function blockPortGeometry(port, heightCm) {
     const halfW = BLOCK_WIDTH_CM / 2;
     const halfD = BLOCK_DEPTH_CM / 2;
@@ -339,7 +375,22 @@
     );
   }
 
-  function buildBlockMesh(part, heightCm, ports) {
+  function isSideEntryNotch(port, sideEntryNotches) {
+    return ["front", "rear", "left", "right"].includes(port)
+      && sideEntryNotches.has(port);
+  }
+
+  function blockPortCenter(face, port, heightCm, sideEntryNotches) {
+    const p = blockPortPosition(face, 0);
+    if (isSideEntryNotch(port, sideEntryNotches)) {
+      // A full horizontal cylindrical cutter intersects the block only
+      // above its bottom plane, producing a semicircular arch at the base.
+      p.y = -heightCm / 2 + 0.005;
+    }
+    return p;
+  }
+
+  function buildBlockMesh(part, heightCm, ports, sideEntryNotches) {
     // CSG subtracts short blind recesses. This does NOT model internal
     // marble channels or claim that a real block's openings are centered.
     const body = BABYLON.MeshBuilder.CreateBox("part-solid-" + part.id, {
@@ -365,6 +416,9 @@
         }, scene);
         try {
           cutter.position = blockPortPosition(face, depth / 2 - 0.06);
+          if (isSideEntryNotch(port, sideEntryNotches)) {
+            cutter.position.y = -heightCm / 2 + 0.005;
+          }
           orientPortCylinder(cutter, port);
           cutter.computeWorldMatrix(true);
           solid = solid.subtract(BABYLON.CSG.FromMesh(cutter));
@@ -381,24 +435,78 @@
     }
   }
 
-  function renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts) {
+  function renderSemicirclePortMarker(part, mesh, port, face, heightCm, depth, cutouts, info) {
+    const radius = BLOCK_PORT_DIAMETER_CM / 2;
+    const sideAxis = (port === "front" || port === "rear")
+      ? new BABYLON.Vector3(1, 0, 0)
+      : new BABYLON.Vector3(0, 0, 1);
+    const outward = new BABYLON.Vector3(...face.normal);
+    const bottomCenter = blockPortCenter(face, port, heightCm, new Set([port]));
+    const pointAt = (angle, inset) => {
+      const base = bottomCenter.subtract(outward.scale(inset));
+      return base.add(sideAxis.scale(radius * Math.cos(angle)))
+        .add(new BABYLON.Vector3(0, radius * Math.sin(angle), 0));
+    };
+    const count = 32;
+    const center = bottomCenter.subtract(outward.scale(cutouts ? depth - 0.10 : -0.055));
+    const positions = [center.x, center.y, center.z];
+    for (let i = 0; i <= count; i++) {
+      const p = pointAt(Math.PI * i / count, cutouts ? depth - 0.10 : -0.055);
+      positions.push(p.x, p.y, p.z);
+    }
+    const indices = [];
+    for (let i = 1; i <= count; i++) indices.push(0, i, i + 1);
+    const normals = [];
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+    const disk = new BABYLON.Mesh("block-notch-inner-" + part.id + "-" + port, scene);
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = positions;
+    vertexData.indices = indices;
+    vertexData.normals = normals;
+    vertexData.applyToMesh(disk);
+    disk.parent = mesh;
+    disk.material = material("blockNotchInnerMat", "#111827");
+    disk.material.backFaceCulling = false;
+    disk.metadata = { selectable: true, info };
+    groups.holes.push(disk);
+
+    const arc = [];
+    for (let i = 0; i <= count; i++) {
+      arc.push(pointAt(Math.PI * i / count, -0.06));
+    }
+    const outline = BABYLON.MeshBuilder.CreateLines("block-notch-rim-" + part.id + "-" + port, {
+      points: arc,
+    }, scene);
+    outline.parent = mesh;
+    outline.color = BABYLON.Color3.FromHexString("#1e293b");
+    outline.metadata = { selectable: true, info };
+    groups.holes.push(outline);
+  }
+
+  function renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts, sideEntryNotches) {
     const depth = Math.min(0.8, heightCm * 0.4);
     for (const port of ports) {
       const face = blockPortGeometry(port, heightCm);
       if (!face) continue;
+      const notch = isSideEntryNotch(port, sideEntryNotches);
       const info = {
         id: part.id + ":port:" + port,
         kind: "block_port",
         part_id: part.id,
         part_type: part.part_type,
         port,
+        opening_shape: notch ? "bottom_semicircle" : "centered_circle",
         diameter_cm: BLOCK_PORT_DIAMETER_CM,
         diameter_status: "provisional",
-        position_status: "assumed_face_center",
+        position_status: notch ? "bottom_edge" : "face_center",
         internal_channel_geometry: "not_modeled",
       };
 
-      // The ring is outside the face and follows the block's yaw rotation.
+      if (notch) {
+        renderSemicirclePortMarker(part, mesh, port, face, heightCm, depth, cutouts, info);
+        continue;
+      }
+
       const rim = BABYLON.MeshBuilder.CreateTorus("block-port-rim-" + part.id + "-" + port, {
         diameter: BLOCK_PORT_DIAMETER_CM + 0.20,
         thickness: 0.11,
@@ -411,8 +519,6 @@
       rim.metadata = { selectable: true, info };
       groups.holes.push(rim);
 
-      // A dark disk at the back of the CSG recess provides contrast. Without
-      // CSG it becomes a visible flat hole marker on the original box face.
       const disk = BABYLON.MeshBuilder.CreateCylinder("block-port-inner-" + part.id + "-" + port, {
         diameter: BLOCK_PORT_DIAMETER_CM * 0.91,
         height: 0.035,
@@ -436,7 +542,8 @@
     const heightUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
     const heightCm = Math.max(0.35, heightUnits * HEIGHT_SCALE_CM);
     const ports = (spec.ports || []).filter(p => blockPortGeometry(p, heightCm));
-    const { mesh, cutouts } = buildBlockMesh(part, heightCm, ports);
+    const sideEntryNotches = new Set(spec.port_visualization?.side_entry_notches || []);
+    const { mesh, cutouts } = buildBlockMesh(part, heightCm, ports, sideEntryNotches);
     mesh.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
     mesh.position = world(part.x_cm, part.y_cm, Number(part.z_units) + heightUnits / 2);
     addSelectable(mesh, {
@@ -452,10 +559,11 @@
       connector_protrusion_rendered: false,
       ports,
       port_hole_diameter_cm: BLOCK_PORT_DIAMETER_CM,
-      port_geometry_status: "provisional_face_center_blind_recess",
+      port_geometry_status: "centered_side_exits_and_bottom_semicircle_side_inlets",
+      side_entry_notches: [...sideEntryNotches],
       port_holes_are_cutouts: cutouts,
     });
-    renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts);
+    renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts, sideEntryNotches);
   }
 
   function renderSupports() {
@@ -620,6 +728,8 @@
       ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (measured)"],
       ["Hole diameter", "≈" + HOLE_DIAMETER_CM + " cm (approx.)"],
       ["Rail thickness", HEIGHT_SCALE_CM + " cm (1u, user-confirmed)"],
+      ["Rail groove width", RAIL_GROOVE_WIDTH_CM + " cm (measured)"],
+      ["Rail groove depth", RAIL_GROOVE_DEPTH_CM + " cm (provisional)"],
       ["Block port holes", "Ø" + BLOCK_PORT_DIAMETER_CM + " cm (provisional)"],
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");

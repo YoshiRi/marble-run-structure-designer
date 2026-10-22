@@ -111,10 +111,11 @@ REAR -> BOTTOM
 
 This makes block rotation a simple transformation of the local port graph.
 
-The viewer depicts these cataloged ports as **schematic circular recesses**
-at the center of each named face. This is a visualization convention only:
-real opening diameter, off-center placement, and internal channel geometry
-remain unknown and must not be inferred from the rendered mesh.
+The viewer depicts side exits as **face-centered circular recesses** and side
+inlets to downward routes as **bottom-edge semicircular recesses**. The catalog
+lists these inlet ports explicitly in `port_visualization.side_entry_notches`,
+keeping appearance separate from routing. Actual opening diameters and internal
+channel geometry remain unmeasured.
 
 ## Rails
 
@@ -122,6 +123,7 @@ A rail is modeled by:
 
 - total length
 - ordered hole positions
+- a centered longitudinal groove (1 cm wide; depth/profile not yet measured)
 - planar placement
 - height
 - route direction along the rail
