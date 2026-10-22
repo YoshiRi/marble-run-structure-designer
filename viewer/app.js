@@ -6,6 +6,7 @@
   const RAIL_WIDTH_CM = 3.0;
   const BLOCK_WIDTH_CM = 5.0;
   const BLOCK_DEPTH_CM = 5.0;
+  const HOLE_DIAMETER_CM = 1.5;
 
   const canvas = document.getElementById("renderCanvas");
   const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
@@ -147,20 +148,59 @@
     groups.structure.push(mesh);
   }
 
-  function renderRail(rail) {
-    const spec = railSpec(rail.rail_type);
+  function buildRailMesh(rail, spec) {
     const length = Number(spec.length_cm);
-    const railHeight = Number(spec.height || 1) * HEIGHT_SCALE_CM;
-    const box = BABYLON.MeshBuilder.CreateBox("rail-" + rail.id, {
+    const heightUnits = Number(spec.height || 1);
+    const railHeight = heightUnits * HEIGHT_SCALE_CM;
+    const center = railPoint(rail, length / 2);
+    const box = BABYLON.MeshBuilder.CreateBox("rail-solid-" + rail.id, {
       width: length,
       height: railHeight,
       depth: RAIL_WIDTH_CM,
     }, scene);
     box.material = material("railMat", palette.rail);
     box.rotation.y = -(Number(rail.yaw_deg || 0) * Math.PI) / 180;
-    const center = railPoint(rail, length / 2);
-    box.position = world(center.x, center.y, Number(rail.z_units) + Number(spec.height || 1) / 2);
-    addSelectable(box, {
+    box.position = world(center.x, center.y, Number(rail.z_units) + heightUnits / 2);
+    box.computeWorldMatrix(true);
+
+    // CSG makes actual vertical through-holes, rather than drawing black plugs.
+    // Retain a surface-marker fallback for browser/Babylon builds without CSG.
+    if (!BABYLON.CSG || typeof BABYLON.CSG.FromMesh !== "function") {
+      return { mesh: box, cutouts: false };
+    }
+    try {
+      let solid = BABYLON.CSG.FromMesh(box);
+      for (const localX of spec.hole_positions_cm || []) {
+        const p = railPoint(rail, Number(localX));
+        const cutter = BABYLON.MeshBuilder.CreateCylinder("hole-cutter", {
+          diameter: HOLE_DIAMETER_CM,
+          height: railHeight + 1.0,
+          tessellation: 32,
+        }, scene);
+        try {
+          cutter.position = world(p.x, p.y, Number(rail.z_units) + heightUnits / 2);
+          cutter.computeWorldMatrix(true);
+          solid = solid.subtract(BABYLON.CSG.FromMesh(cutter));
+        } finally {
+          cutter.dispose();
+        }
+      }
+      const cutMesh = solid.toMesh("rail-" + rail.id, box.material, scene);
+      box.dispose();
+      return { mesh: cutMesh, cutouts: true };
+    } catch (error) {
+      console.warn("CSG rail cutouts unavailable; using visible surface markers", error);
+      return { mesh: box, cutouts: false };
+    }
+  }
+
+  function renderRail(rail) {
+    const spec = railSpec(rail.rail_type);
+    const length = Number(spec.length_cm);
+    const heightUnits = Number(spec.height || 1);
+    const railHeight = heightUnits * HEIGHT_SCALE_CM;
+    const { mesh: railMesh, cutouts } = buildRailMesh(rail, spec);
+    addSelectable(railMesh, {
       id: rail.id,
       kind: "rail",
       type: rail.rail_type,
@@ -170,34 +210,77 @@
       yaw_deg: rail.yaw_deg || 0,
       flow_direction: rail.flow_direction || "a_to_b",
       hole_states: rail.hole_states || {},
+      hole_positions_cm: spec.hole_positions_cm || [],
+      holes_are_cutouts: cutouts,
     });
 
+    const holeColors = {
+      open: "#334155",
+      covered: "#f59e0b",
+      block_connected: "#22d3ee",
+      covered_slope: "#fb923c",
+    };
     (spec.hole_positions_cm || []).forEach((localX, idx) => {
       const p = railPoint(rail, Number(localX));
-      const marker = BABYLON.MeshBuilder.CreateCylinder("hole-" + rail.id + "-" + idx, {
-        diameter: 1.5,
-        height: railHeight + 0.35,
-        tessellation: 20,
-      }, scene);
-      marker.position = world(p.x, p.y, Number(rail.z_units) + Number(spec.height || 1) / 2);
-      marker.material = material("holeMat", "#111827");
-      marker.metadata = { selectable: true, info: {
+      const state = (rail.hole_states || {})[idx] ?? "open";
+      const topZ = Number(rail.z_units) + heightUnits;
+      const markerInfo = {
         id: rail.id + ":hole:" + idx,
         kind: "rail_hole",
         rail_id: rail.id,
         hole_index: idx,
         local_x_cm: Number(localX),
-        state: (rail.hole_states || {})[idx] ?? "open",
-      }};
-      groups.holes.push(marker);
+        state,
+        diameter_cm: HOLE_DIAMETER_CM,
+        diameter_status: "assumed",
+      };
+
+      // A narrow ring remains visible even for genuinely open CSG holes.
+      const rim = BABYLON.MeshBuilder.CreateTorus("hole-rim-" + rail.id + "-" + idx, {
+        diameter: HOLE_DIAMETER_CM + 0.25,
+        thickness: 0.15,
+        tessellation: 32,
+      }, scene);
+      rim.position = world(p.x, p.y, topZ);
+      rim.position.y += 0.10;
+      rim.material = material("holeRimMat", holeColors[state] || holeColors.open);
+      rim.metadata = { selectable: true, info: markerInfo };
+      groups.holes.push(rim);
+
+      // Covered holes get a visible cap; open holes remain transparent.
+      if (state === "covered" || state === "covered_slope" || !cutouts) {
+        const cap = BABYLON.MeshBuilder.CreateCylinder("hole-cap-" + rail.id + "-" + idx, {
+          diameter: HOLE_DIAMETER_CM,
+          height: 0.10,
+          tessellation: 32,
+        }, scene);
+        cap.position = world(p.x, p.y, topZ);
+        cap.position.y += 0.09;
+        const capColor = !cutouts && state !== "covered" && state !== "covered_slope"
+          ? "#111827"
+          : holeColors[state] || holeColors.open;
+        cap.material = material("holeCapMat", capColor);
+        cap.metadata = { selectable: true, info: markerInfo };
+        groups.holes.push(cap);
+      }
     });
 
-    const start = railEndWorld(rail, (rail.flow_direction || "a_to_b") === "b_to_a" ? "end_b" : "end_a");
-    const end = railEndWorld(rail, (rail.flow_direction || "a_to_b") === "b_to_a" ? "end_a" : "end_b");
+    // Keep the route overlay beside the rail so it cannot hide the holes.
+    const yaw = (Number(rail.yaw_deg || 0) * Math.PI) / 180;
+    const side = RAIL_WIDTH_CM / 2 + 0.7;
+    const sidePoint = end => {
+      const p = railEndWorld(rail, end);
+      return world(
+        p.x - Math.sin(yaw) * side,
+        p.y + Math.cos(yaw) * side,
+        Number(rail.z_units) + heightUnits * 0.75
+      );
+    };
+    const reversed = (rail.flow_direction || "a_to_b") === "b_to_a";
     const routeLine = BABYLON.MeshBuilder.CreateLines("route-" + rail.id, {
       points: [
-        world(start.x, start.y, Number(rail.z_units) + 1.0),
-        world(end.x, end.y, Number(rail.z_units) + 1.0),
+        sidePoint(reversed ? "end_b" : "end_a"),
+        sidePoint(reversed ? "end_a" : "end_b"),
       ],
     }, scene);
     routeLine.color = BABYLON.Color3.FromHexString("#22c55e");
@@ -385,7 +468,10 @@
       ["Parts", (layout.parts || []).length],
       ["Support links", (layout.supports || []).length],
       ["Route links", (layout.route_links || []).length],
-      ["Height scale", HEIGHT_SCALE_CM + " cm/u"],
+      ["Height scale", HEIGHT_SCALE_CM + " cm/u (assumed)"],
+      ["Rail width", RAIL_WIDTH_CM + " cm (assumed)"],
+      ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (assumed)"],
+      ["Hole diameter", HOLE_DIAMETER_CM + " cm (assumed)"],
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
     document.getElementById("layoutMeta").textContent = layout.name || "unnamed layout";
