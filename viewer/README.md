@@ -1,6 +1,6 @@
 # Viewer
 
-Static Babylon.js viewer for the common Quadrilla `Layout` schema.
+Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 
 ## Current MVP
 
