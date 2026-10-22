@@ -305,16 +305,17 @@ curved_rails:
     shape: compound_arc
     height: 1
     width_cm: 4.5
-    description: two short-curve arcs joined end to end, bending in opposite directions (user description)
-    segments:                  # in order from end A; turn is relative to the first segment
-      - { base: curved_short, turn: same }
-      - { base: curved_short, turn: opposite }
+    description: two short-curve arcs sharing a middle hole, bending in opposite directions (user description)
     hole_circle_radius_cm: { value: 23.0, source: same_as_short_curve, confidence: estimated }
-    centerline_length_cm: 56.18  # derived: 2 x 28.09
-    hole_arc_positions_cm: [2.0, 54.18]   # assumed: end holes only, as on the short curve
+    segments:                  # from end A; turn is relative to the rail's turn
+      - { length_cm: 26.09, turn: same }      # 2 cm overhang + 60 deg to the middle hole
+      - { length_cm: 26.09, turn: opposite }  # 60 deg to the end hole + 2 cm overhang
+    centerline_length_cm: 52.17  # derived
+    hole_arc_positions_cm: [2.0, 26.09, 50.17]  # user-confirmed: holes at both ends and the middle
+    hole_chord_cm: [23.0, 23.0]  # derived: the three holes are collinear, 23 + 23 = 46 cm
+    connection_equivalent_to: straight_long_center holes 0, 2, 4   # user-confirmed
     solver_support: not_yet
-    confidence: estimated
-    todo: confirm hole positions (end holes only, or also at the joint?) and whether the two arcs are 70 deg each
+    confidence: estimated_shape_user_confirmed
 
 hole_state_types:
   open:
