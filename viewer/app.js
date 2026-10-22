@@ -79,6 +79,13 @@
   let catalog = null;
   let layout = null;
   let routingGraph = null;
+  let lastOutcomes = null;
+  // Sampled runs for the current input hole: exit node -> count.
+  const rollTally = { source: "", counts: new Map(), total: 0 };
+  // Animated marbles in flight; cancelled when the layout or input changes.
+  const flyingMarbles = [];
+  const MARBLE_DIAMETER_CM = 1.6; // Provisional: not yet measured.
+  const MARBLE_SPEED_CM_S = 30;
 
   const palette = {
     yellow: "#eab308",
@@ -844,6 +851,13 @@
     setSelectOptions(sinkSelect, [], "", "Select an input hole first");
   }
 
+  function formatPercent(fraction) {
+    const percentage = fraction * 100;
+    return Math.abs(percentage - Math.round(percentage)) < 0.05
+      ? Math.round(percentage) + "%"
+      : percentage.toFixed(1) + "%";
+  }
+
   function renderExitProbabilities(outcomes, selectedExit) {
     const container = document.getElementById("exitProbabilities");
     container.replaceChildren();
@@ -877,7 +891,9 @@
     const table = document.createElement("table");
     table.className = "exit-table";
     const head = document.createElement("thead");
-    head.innerHTML = "<tr><th>Exit</th><th>Probability</th></tr>";
+    const tallyActive = rollTally.total > 0 && rollTally.source === outcomes.source;
+    head.innerHTML = "<tr><th>Exit</th><th>Probability</th><th>" +
+      (tallyActive ? "Rolled (" + rollTally.total + ")" : "Rolled") + "</th></tr>";
     table.appendChild(head);
     const body = document.createElement("tbody");
     for (const exit of outcomes.exits) {
@@ -897,13 +913,16 @@
       if (exit.probability == null) {
         probabilityCell.textContent = "Not calculated";
       } else {
-        const percentage = exit.probability * 100;
-        const formatted = Math.abs(percentage - Math.round(percentage)) < 0.05
-          ? Math.round(percentage) + "%"
-          : percentage.toFixed(1) + "%";
-        probabilityCell.textContent = (outcomes.estimated ? "≈ " : "") + formatted;
+        probabilityCell.textContent = (outcomes.estimated ? "≈ " : "") + formatPercent(exit.probability);
       }
-      row.append(nameCell, probabilityCell);
+      const rolledCell = document.createElement("td");
+      rolledCell.className = "rolled";
+      const count = tallyActive ? (rollTally.counts.get(exit.node) || 0) : 0;
+      rolledCell.textContent = tallyActive
+        ? formatPercent(count / rollTally.total) + " · " + count
+        : "—";
+      row.dataset.exit = exit.node;
+      row.append(nameCell, probabilityCell, rolledCell);
       body.appendChild(row);
     }
     table.appendChild(body);
@@ -923,6 +942,7 @@
     const status = document.getElementById("routeStatus");
     drawInputHoleMarkers(source);
     if (!routingGraph || !source) {
+      lastOutcomes = null;
       setSelectOptions(sinkSelect, [], "", "No reachable exits");
       renderExitProbabilities(null, "");
       status.textContent = "No valid block-connected input hole. Set an input rail hole to block_connected and verify its support.";
@@ -930,6 +950,11 @@
     }
 
     const outcomes = MarbleRouting.analyzeOutcomes(layout, catalog, routingGraph, source);
+    lastOutcomes = outcomes;
+    if (rollTally.source !== source) {
+      cancelMarbles();
+      resetTally(source);
+    }
     const querySink = routingPortKey(layout.routing_query?.sinks?.[0]);
     const preferredSink = [sinkSelect.value, querySink].find(candidate =>
       candidate && outcomes.exits.some(exit => exit.node === candidate));
@@ -967,6 +992,12 @@
     drawRoutingMarker(source, "#22c55e", 0.95);
     if (trace.reachable) drawRoutingMarker(sink, "#facc15", 1.0);
     for (const node of trace.deadEnds) drawRoutingMarker(node, "#f87171", 0.8);
+    for (const exit of outcomes.exits) {
+      if (exit.probability == null) continue;
+      drawExitLabel(exit.node,
+        (outcomes.estimated ? "≈" : "") + formatPercent(exit.probability),
+        exit.node === sink);
+    }
     const lines = [
       trace.reachable ? "REACHABLE" : "UNREACHABLE",
       "Graph status: " + (trace.valid ? "valid" : "invalid / incomplete"),
@@ -989,7 +1020,195 @@
     applyVisibility();
   }
 
+  // ---- Probability labels at exits -------------------------------------
+  function drawExitLabel(nodeKey, text, emphasized) {
+    const anchor = routingNodePosition(nodeKey);
+    if (!anchor) return;
+    const texture = new BABYLON.DynamicTexture("exit-label-tex-" + nodeKey,
+      { width: 256, height: 112 }, scene, true);
+    texture.hasAlpha = true;
+    const ctx = texture.getContext();
+    ctx.clearRect(0, 0, 256, 112);
+    ctx.fillStyle = emphasized ? "rgba(250, 204, 21, 0.95)" : "rgba(15, 23, 42, 0.82)";
+    const r = 22;
+    ctx.beginPath();
+    ctx.moveTo(r, 4); ctx.lineTo(252 - r, 4); ctx.quadraticCurveTo(252, 4, 252, 4 + r);
+    ctx.lineTo(252, 108 - r); ctx.quadraticCurveTo(252, 108, 252 - r, 108);
+    ctx.lineTo(r, 108); ctx.quadraticCurveTo(4, 108, 4, 108 - r);
+    ctx.lineTo(4, 4 + r); ctx.quadraticCurveTo(4, 4, r, 4); ctx.fill();
+    ctx.fillStyle = emphasized ? "#111827" : "#f8fafc";
+    ctx.font = "bold 62px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 128, 58);
+    texture.update();
+    const plane = BABYLON.MeshBuilder.CreatePlane("exit-label-" + nodeKey,
+      { width: 6.4, height: 2.8 }, scene);
+    plane.position = anchor.add(new BABYLON.Vector3(0, 3.8, 0));
+    plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+    const mat = new BABYLON.StandardMaterial("exit-label-mat-" + nodeKey, scene);
+    mat.diffuseTexture = texture;
+    mat.emissiveColor = BABYLON.Color3.White();
+    mat.disableLighting = true;
+    mat.useAlphaFromDiffuseTexture = true;
+    mat.backFaceCulling = false;
+    plane.material = mat;
+    plane.isPickable = false;
+    plane.renderingGroupId = 1; // Keep labels readable in front of parts.
+    groups.route.push(plane);
+  }
+
+  // ---- Sampled runs and marble animation --------------------------------
+  function resetTally(source) {
+    rollTally.source = source;
+    rollTally.counts.clear();
+    rollTally.total = 0;
+  }
+
+  function recordArrival(source, exitNode) {
+    if (rollTally.source !== source) return; // Marble from a previous input.
+    rollTally.counts.set(exitNode, (rollTally.counts.get(exitNode) || 0) + 1);
+    rollTally.total += 1;
+    if (lastOutcomes && lastOutcomes.source === source) {
+      renderExitProbabilities(lastOutcomes, document.getElementById("routeSink").value);
+    }
+  }
+
+  function flashExitRow(exitNode) {
+    const row = [...document.querySelectorAll("#exitProbabilities tr[data-exit]")]
+      .find(item => item.dataset.exit === exitNode);
+    if (!row) return;
+    row.classList.remove("just-arrived");
+    void row.offsetWidth; // Restart the CSS animation.
+    row.classList.add("just-arrived");
+  }
+
+  // Exit tail: leave the last opening and fall to the ground plane.
+  function exitTailPoints(exitNode, last) {
+    const radius = MARBLE_DIAMETER_CM / 2;
+    const colon = exitNode.indexOf(":");
+    const pose = MarbleRouting.portPose(layout, catalog, {
+      component_id: exitNode.slice(0, colon), port: exitNode.slice(colon + 1),
+    });
+    const points = [];
+    let p = last;
+    if (pose) {
+      const [nx, ny] = pose.normal;
+      p = last.add(new BABYLON.Vector3(nx * 2.5, 0, ny * 2.5));
+      points.push(p);
+    }
+    points.push(new BABYLON.Vector3(p.x, radius, p.z));
+    return points;
+  }
+
+  function marblePathPoints(run) {
+    const radius = MARBLE_DIAMETER_CM / 2;
+    const points = [];
+    for (const node of run.path) {
+      const pos = routingNodePosition(node);
+      if (!pos) continue;
+      const lifted = pos.add(new BABYLON.Vector3(0, radius, 0));
+      const prev = points[points.length - 1];
+      if (!prev || BABYLON.Vector3.DistanceSquared(prev, lifted) > 1e-4) points.push(lifted);
+    }
+    if (!points.length) return points;
+    // Start a little above the input hole so the drop-in is visible.
+    points.unshift(points[0].add(new BABYLON.Vector3(0, 4, 0)));
+    if (run.exit) points.push(...exitTailPoints(run.exit, points[points.length - 1]));
+    return points;
+  }
+
+  function launchMarble(source, run) {
+    const points = marblePathPoints(run);
+    if (points.length < 2) return false;
+    const lengths = [0];
+    for (let i = 1; i < points.length; i++) {
+      lengths.push(lengths[i - 1] + BABYLON.Vector3.Distance(points[i - 1], points[i]));
+    }
+    const mesh = BABYLON.MeshBuilder.CreateSphere("marble", {
+      diameter: MARBLE_DIAMETER_CM, segments: 16,
+    }, scene);
+    const mat = new BABYLON.StandardMaterial("marbleMat", scene);
+    mat.diffuseColor = BABYLON.Color3.FromHexString("#cbd5e1");
+    mat.specularColor = new BABYLON.Color3(1, 1, 1);
+    mat.specularPower = 64;
+    mat.emissiveColor = BABYLON.Color3.FromHexString("#334155");
+    mesh.material = mat;
+    mesh.isPickable = false;
+    mesh.position = points[0].clone();
+    flyingMarbles.push({ mesh, points, lengths, travelled: 0, source, run, done: false });
+    return true;
+  }
+
+  function stepMarbles() {
+    if (!flyingMarbles.length) return;
+    const dt = Math.min(engine.getDeltaTime() / 1000, 0.1);
+    for (const marble of flyingMarbles) {
+      marble.travelled += MARBLE_SPEED_CM_S * dt;
+      const total = marble.lengths[marble.lengths.length - 1];
+      if (marble.travelled >= total) {
+        marble.mesh.position = marble.points[marble.points.length - 1].clone();
+        marble.done = true;
+        continue;
+      }
+      let i = 1;
+      while (marble.lengths[i] < marble.travelled) i++;
+      const span = marble.lengths[i] - marble.lengths[i - 1] || 1;
+      const t = (marble.travelled - marble.lengths[i - 1]) / span;
+      marble.mesh.position = BABYLON.Vector3.Lerp(marble.points[i - 1], marble.points[i], t);
+    }
+    for (let i = flyingMarbles.length - 1; i >= 0; i--) {
+      const marble = flyingMarbles[i];
+      if (!marble.done) continue;
+      flyingMarbles.splice(i, 1);
+      setTimeout(() => marble.mesh.dispose(), 400);
+      if (marble.run.exit) {
+        recordArrival(marble.source, marble.run.exit);
+        flashExitRow(marble.run.exit);
+      }
+    }
+  }
+
+  function cancelMarbles() {
+    for (const marble of flyingMarbles) marble.mesh.dispose();
+    flyingMarbles.length = 0;
+  }
+
+  function rollStatus(text) {
+    document.getElementById("routeStatus").textContent = text;
+  }
+
+  function rollOne() {
+    const source = document.getElementById("routeSource").value;
+    if (!routingGraph || !source) return;
+    const run = MarbleRouting.sampleRun(layout, catalog, routingGraph, source);
+    if (!run.complete) {
+      rollStatus("The marble cannot finish from " + source + ": " + run.reason);
+      return;
+    }
+    if (!launchMarble(source, run)) recordArrival(source, run.exit);
+  }
+
+  function rollMany(count) {
+    const source = document.getElementById("routeSource").value;
+    if (!routingGraph || !source) return;
+    let failed = null;
+    for (let i = 0; i < count; i++) {
+      const run = MarbleRouting.sampleRun(layout, catalog, routingGraph, source);
+      if (!run.complete) { failed = run.reason; break; }
+      if (rollTally.source !== source) resetTally(source);
+      rollTally.counts.set(run.exit, (rollTally.counts.get(run.exit) || 0) + 1);
+      rollTally.total += 1;
+    }
+    if (failed) rollStatus("The marble cannot finish from " + source + ": " + failed);
+    if (lastOutcomes) {
+      renderExitProbabilities(lastOutcomes, document.getElementById("routeSink").value);
+    }
+  }
+
   function renderRouting() {
+    cancelMarbles();
+    resetTally("");
     routingGraph = MarbleRouting.buildGraph(layout, catalog);
     populateRoutingControls();
     updateRouting();
@@ -1207,6 +1426,13 @@
   });
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
+  document.getElementById("rollOne").addEventListener("click", rollOne);
+  document.getElementById("rollMany").addEventListener("click", () => rollMany(100));
+  document.getElementById("rollReset").addEventListener("click", () => {
+    resetTally(document.getElementById("routeSource").value);
+    if (lastOutcomes) renderExitProbabilities(lastOutcomes, document.getElementById("routeSink").value);
+  });
+  scene.onBeforeRenderObservable.add(stepMarbles);
   for (const id of ["routeSource", "routeSink"]) {
     document.getElementById(id).addEventListener("change", updateRouting);
   }

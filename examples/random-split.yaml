@@ -1,0 +1,134 @@
+schema_version: "0.1"
+name: random-split
+routing_options:
+  allow_side_entry_plus_one: false
+
+# Same frame as three-level-physically-connected, with a red random splitter
+# as the left column. A marble dropped in at the upper rail's start falls into
+# the splitter and leaves through its front (+y) or rear (-y) hole at random.
+
+rails:
+  - id: lower
+    rail_type: straight_long_center
+    x_cm: 0
+    y_cm: 0
+    z_units: 1
+    yaw_deg: 0
+    flow_direction: a_to_b
+    hole_states:
+      0: covered
+      1: covered
+      2: covered
+      3: covered
+      4: covered
+
+  - id: upper
+    rail_type: straight_short
+    x_cm: 0
+    y_cm: 0
+    z_units: 6
+    yaw_deg: 0
+    flow_direction: a_to_b
+    hole_states:
+      0: block_connected
+      3: block_connected
+
+  # The splitter is installed at z=2u, so its side holes open at 3u.
+  # Both exit rails lie on plain foundations with the groove at 2u (the
+  # installation level): the marble drops one unit out of either hole.
+  - id: exit_front
+    rail_type: straight_short
+    x_cm: 2
+    y_cm: 2.25
+    z_units: 1
+    yaw_deg: 90
+    flow_direction: a_to_b
+    hole_states:
+      0: covered
+      1: covered
+      2: covered
+      3: covered
+
+  - id: exit_rear
+    rail_type: straight_short
+    x_cm: 2
+    y_cm: -2.25
+    z_units: 1
+    yaw_deg: -90
+    flow_direction: a_to_b
+    hole_states:
+      0: covered
+      1: covered
+      2: covered
+      3: covered
+
+parts:
+  - id: foundation_left
+    part_type: wooden_foundation
+    x_cm: 2
+    y_cm: 0
+    z_units: 0
+
+  - id: foundation_right
+    part_type: wooden_foundation
+    x_cm: 48
+    y_cm: 0
+    z_units: 0
+
+  - id: red_column
+    part_type: red_random_split
+    x_cm: 2
+    y_cm: 0
+    z_units: 2
+
+  - id: green_column
+    part_type: green
+    x_cm: 25
+    y_cm: 0
+    z_units: 2
+
+  - { id: front_foundation_near, part_type: wooden_foundation, x_cm: 2, y_cm: 9.25, z_units: 0 }
+  - { id: front_foundation_far, part_type: wooden_foundation, x_cm: 2, y_cm: 27.25, z_units: 0 }
+  - { id: rear_foundation_near, part_type: wooden_foundation, x_cm: 2, y_cm: -9.25, z_units: 0 }
+  - { id: rear_foundation_far, part_type: wooden_foundation, x_cm: 2, y_cm: -27.25, z_units: 0 }
+
+supports:
+  - name: lower_left_ground
+    upper_rail_id: lower
+    upper_hole_index: 0
+    stack_part_ids: [foundation_left]
+
+  - name: lower_right_ground
+    upper_rail_id: lower
+    upper_hole_index: 4
+    stack_part_ids: [foundation_right]
+
+  - name: upper_left
+    upper_rail_id: upper
+    upper_hole_index: 0
+    stack_part_ids: [red_column]
+    lower_rail_id: lower
+    lower_hole_index: 0
+
+  - name: upper_right
+    upper_rail_id: upper
+    upper_hole_index: 3
+    stack_part_ids: [green_column]
+    lower_rail_id: lower
+    lower_hole_index: 2
+
+  - { name: front_near_ground, upper_rail_id: exit_front, upper_hole_index: 1, stack_part_ids: [front_foundation_near] }
+  - { name: front_far_ground, upper_rail_id: exit_front, upper_hole_index: 3, stack_part_ids: [front_foundation_far] }
+  - { name: rear_near_ground, upper_rail_id: exit_rear, upper_hole_index: 1, stack_part_ids: [rear_foundation_near] }
+  - { name: rear_far_ground, upper_rail_id: exit_rear, upper_hole_index: 3, stack_part_ids: [rear_foundation_far] }
+
+route_links:
+  - source: { component_id: red_column, port: front }
+    target: { component_id: exit_front, port: end_a }
+  - source: { component_id: red_column, port: rear }
+    target: { component_id: exit_rear, port: end_a }
+
+routing_query:
+  source: { component_id: upper, port: end_a }
+  sinks:
+    - { component_id: exit_front, port: end_b }
