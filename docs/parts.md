@@ -268,11 +268,17 @@ Behavior:
 
 For initial reachability-only solving, this can eventually be approximated as a branch to either rail end. A later viewer/simulation layer can model the hysteretic switching state.
 
-## Spiral
+## Spiral (twist)
 
-Working height: **3 units**, currently tentative.
+Natural wood. A chute (about 12 cm) joined to a funnel with a 23 cm rim, about
+36 cm overall (user estimates). Its two mount holes are 23 cm apart, matching a
+short straight rail's end holes, and the chute-end mount sits **3 units** above
+the funnel-center mount. The marble enters at the chute, circles the funnel and
+drops through the center outlet.
 
-The exact footprint, entry location, exit location, and support points remain to be measured.
+The viewer draws it schematically (`special_parts.spiral`, placement: funnel
+center, outlet level, direction toward the chute). Funnel depth and the exact
+inlet position are not measured; the solver does not model it yet.
 
 ## Deferred / out of initial scope
 
@@ -326,7 +332,10 @@ Confirmed by the user against the drawn model:
   of the curve over holes 0 and 3 of the straight). They must be on different
   levels, at least one unit apart.
 - The long curve's end holes do not coincide with any convenient hole of
-  another rail, consistent with its derived 39.8 cm end-hole chord. Because every curve shares R = 23 cm
+  another rail, consistent with its derived 39.8 cm end-hole chord.
+- A curve is not stable on its own (its center of mass lies outside the line
+  between its end supports); it becomes stable once a block stands on it.
+  The stability rule for curves must therefore require load above. Because every curve shares R = 23 cm
 and 60 deg hole spacing, curve holes always fall on a hexagonal pattern around
 the circle's center.
 

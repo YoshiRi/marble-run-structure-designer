@@ -21,6 +21,10 @@ geometry_cm:
     source: user_measurement
     confidence: measured
     note: inserted into mating piece; not added to effective stacked height
+  marble_diameter_cm:
+    value: 1.6
+    source: official_product_page_QD005_lists_16_mm_marbles
+    confidence: confirmed
   rail_width_cm:
     value: 4.5
     source: user_measurement
@@ -244,6 +248,7 @@ curved_rails:
     hole_arc_positions_cm: [2.0, 26.09]
     end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
     stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
@@ -264,6 +269,7 @@ curved_rails:
     centerline_length_cm: 52.17 # derived
     hole_arc_positions_cm: [2.0, 26.09, 50.17]
     end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
@@ -303,6 +309,25 @@ accessories:
       note: keep for viewer/construction-assist if desired
 
 special_parts:
+  spiral:
+    aliases: [twist, ツイスト]
+    shape: twist_funnel
+    appearance: natural_wood
+    implementation_scope: viewer_only   # schematic rendering; solver support not yet
+    level_difference_units:
+      value: 3
+      source: user_observation
+      confidence: observed
+      note: the chute-end mount sits 3 units above the funnel-center mount
+    overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
+    chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
+    funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
+    mount_hole_spacing_cm:
+      value: 23
+      source: user_observation_matches_short_straight_end_holes
+      confidence: observed
+    route_description: enters at the chute end, circles the funnel, drops through the center outlet
+    placement_convention: x/y = funnel center (outlet hole), z_units = outlet mount level, rotation_deg = direction toward the chute
   seesaw:
     implementation_scope: deferred
     mount:

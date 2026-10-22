@@ -59,9 +59,8 @@ Still intentionally unresolved:
 ## Curved rails
 
 - Confirm the end overhang beyond the end holes (assumed 2 cm, as on straight rails).
-- Support: does a curve stand on its two end holes (the arc's center of mass
-  lies off the line between them), or does it need a third support / the
-  middle hole?
+- Support (answered): a curve alone tips; it is stable with a block standing on
+  it. Still to decide how much load and where (any block above, or a specific hole?).
 - Owned counts and which sets include short and long curves.
 
 ## Deferred geometry

@@ -84,7 +84,7 @@
   const rollTally = { source: "", counts: new Map(), total: 0 };
   // Animated marbles in flight; cancelled when the layout or input changes.
   const flyingMarbles = [];
-  const MARBLE_DIAMETER_CM = 1.6; // Provisional: not yet measured.
+  let MARBLE_DIAMETER_CM = 1.6; // Official 16 mm; catalog value is authoritative.
   const MARBLE_SPEED_CM_S = 30;
 
   const palette = {
@@ -101,6 +101,7 @@
     accelerator_plate: "#64748b",
     default: "#94a3b8",
     rail: "#c8a66a",
+    twist: "#dcc497",
   };
 
   function clearRendered() {
@@ -135,6 +136,7 @@
     RAIL_GROOVE_DEPTH_CM = geometryValue(geometry.rail_groove_depth_cm, RAIL_GROOVE_DEPTH_CM);
     HOLE_DIAMETER_CM = geometryValue(geometry.rail_hole_diameter_cm, HOLE_DIAMETER_CM);
     BLOCK_PORT_DIAMETER_CM = geometryValue(geometry.block_port_diameter_cm, BLOCK_PORT_DIAMETER_CM);
+    MARBLE_DIAMETER_CM = geometryValue(geometry.marble_diameter_cm, MARBLE_DIAMETER_CM);
     BLOCK_WIDTH_CM = geometryValue(geometry.standard_block_footprint?.width_cm, BLOCK_WIDTH_CM);
     BLOCK_DEPTH_CM = geometryValue(geometry.standard_block_footprint?.depth_cm, BLOCK_DEPTH_CM);
     CONNECTOR_PROTRUSION_CM = geometryValue(
@@ -169,18 +171,160 @@
     return null;
   }
 
+  // Straight rails come from catalog.rails. Curved rails (catalog.curved_rails)
+  // are viewer-only for now: they are presented with the same fields, measured
+  // along the centerline arc, plus shape/radius.
   function railSpec(type) {
     const spec = catalog.rails?.[type];
-    if (!spec) throw new Error("Unknown rail type: " + type);
-    return spec;
+    if (spec) return spec;
+    const curved = catalog.curved_rails?.[type];
+    if (curved) {
+      return {
+        ...curved,
+        shape: "arc",
+        radius_cm: geometryValue(curved.hole_circle_radius_cm, 23),
+        length_cm: Number(curved.centerline_length_cm),
+        hole_positions_cm: curved.hole_arc_positions_cm || [],
+      };
+    }
+    throw new Error("Unknown rail type: " + type);
   }
 
+  // Point on the rail centerline at distance localX from end A. For a curved
+  // rail, x_cm/y_cm is end A, yaw_deg the travel direction there, and
+  // turn: left|right (default left) the side the arc bends toward.
   function railPoint(rail, localX) {
     const yaw = (Number(rail.yaw_deg || 0) * Math.PI) / 180;
+    const spec = railSpec(rail.rail_type);
+    if (spec.shape === "arc") {
+      const r = spec.radius_cm;
+      const sign = rail.turn === "right" ? -1 : 1;
+      const cx = Number(rail.x_cm) - sign * r * Math.sin(yaw);
+      const cy = Number(rail.y_cm) + sign * r * Math.cos(yaw);
+      const start = Math.atan2(Number(rail.y_cm) - cy, Number(rail.x_cm) - cx);
+      const angle = start + sign * Number(localX) / r;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    }
     return {
       x: Number(rail.x_cm) + Number(localX) * Math.cos(yaw),
       y: Number(rail.y_cm) + Number(localX) * Math.sin(yaw),
     };
+  }
+
+  function buildCurvedRailMesh(rail, spec) {
+    const heightUnits = Number(spec.height || 1);
+    const h = heightUnits * HEIGHT_SCALE_CM;
+    const half = RAIL_WIDTH_CM / 2;
+    const steps = Math.max(12, Math.ceil(Number(spec.length_cm) / 1.5));
+    const path = [];
+    for (let i = 0; i <= steps; i++) {
+      const p = railPoint(rail, Number(spec.length_cm) * i / steps);
+      path.push(world(p.x, p.y, Number(rail.z_units) + heightUnits / 2));
+    }
+    const shape = [
+      new BABYLON.Vector3(-half, -h / 2, 0), new BABYLON.Vector3(half, -h / 2, 0),
+      new BABYLON.Vector3(half, h / 2, 0), new BABYLON.Vector3(-half, h / 2, 0),
+      new BABYLON.Vector3(-half, -h / 2, 0),
+    ];
+    const mesh = BABYLON.MeshBuilder.ExtrudeShape("rail-" + rail.id, {
+      shape, path, cap: BABYLON.Mesh.CAP_ALL, sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+    }, scene);
+    mesh.material = material("railMat", palette.rail);
+    // Groove line along the top of the arc (schematic, no CSG on curves).
+    const groovePath = path.map(v => v.add(new BABYLON.Vector3(0, h / 2 + 0.02, 0)));
+    const groove = BABYLON.MeshBuilder.CreateTube("rail-groove-" + rail.id, {
+      path: groovePath, radius: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9) / 2,
+      tessellation: 8,
+    }, scene);
+    groove.material = material("grooveFallbackMat", "#8b6c45");
+    groove.isPickable = false;
+    groove.parent = null;
+    groups.structure.push(groove);
+    return { mesh, cutouts: false, grooveCutout: true };
+  }
+
+  // Twist (catalog: special_parts.spiral). Placement: x_cm/y_cm = funnel
+  // center (outlet hole), z_units = level the outlet rests on, rotation_deg =
+  // direction from the funnel center toward the chute. Viewer-only, schematic.
+  function renderTwist(part, spec) {
+    const rimD = geometryValue(spec.funnel_rim_diameter_cm, 23);
+    const spacing = geometryValue(spec.mount_hole_spacing_cm, 23);
+    const overall = geometryValue(spec.overall_length_cm, 36);
+    const rise = geometryValue(spec.level_difference_units, 3);
+    const unit = HEIGHT_SCALE_CM;
+    const z0 = Number(part.z_units);
+    const yaw = (Number(part.rotation_deg || 0) * Math.PI) / 180;
+    const dir = { x: Math.cos(yaw), y: Math.sin(yaw) };
+    const at = (d, zUnits) => world(Number(part.x_cm) + d * dir.x, Number(part.y_cm) + d * dir.y, zUnits);
+    const wood = material("twistWoodMat", palette.twist);
+    const meshes = [];
+
+    // Funnel: outlet floor 1 unit thick, cone rising to the rim.
+    const base = BABYLON.MeshBuilder.CreateCylinder("twist-base-" + part.id, {
+      diameter: 4.5, height: unit, tessellation: 32,
+    }, scene);
+    base.position = at(0, z0 + 0.5);
+    const coneHeight = (rise - 1) * unit;
+    const cone = BABYLON.MeshBuilder.CreateCylinder("twist-funnel-" + part.id, {
+      diameterTop: rimD, diameterBottom: 3.2, height: coneHeight, tessellation: 64,
+      cap: BABYLON.Mesh.NO_CAP, sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+    }, scene);
+    cone.position = at(0, z0 + 1 + (rise - 1) / 2);
+    const rim = BABYLON.MeshBuilder.CreateTorus("twist-rim-" + part.id, {
+      diameter: rimD, thickness: 0.8, tessellation: 64,
+    }, scene);
+    rim.position = at(0, z0 + rise);
+
+    // Chute: from the rim to the tip, sloping down toward the funnel.
+    const chuteStart = rimD / 2 - 1.0;
+    const tip = overall - rimD / 2;
+    const chuteLength = tip - chuteStart;
+    const chute = BABYLON.MeshBuilder.CreateBox("twist-chute-" + part.id, {
+      width: chuteLength, height: unit, depth: 4.5,
+    }, scene);
+    // Tip rests on the inlet level (z + rise); the funnel end is one unit lower.
+    chute.position = at(chuteStart + chuteLength / 2, z0 + rise);
+    chute.rotation.y = -yaw;
+    chute.rotation.z = Math.atan2(unit, chuteLength);
+    for (const mesh of [base, cone, rim, chute]) { mesh.material = wood; meshes.push(mesh); }
+
+    // Spiral groove on the funnel surface: from the chute side of the rim
+    // inward to the outlet, so the twist reads as a twist.
+    const turns = 2.25;
+    const spiral = [];
+    for (let i = 0; i <= 160; i++) {
+      const t = i / 160;
+      const radius = rimD / 2 - 0.9 - t * (rimD / 2 - 0.9 - 1.7);
+      const theta = yaw + t * turns * 2 * Math.PI;
+      const level = z0 + rise - t * (rise - 1) + 0.04;
+      spiral.push(world(Number(part.x_cm) + radius * Math.cos(theta),
+        Number(part.y_cm) + radius * Math.sin(theta), level));
+    }
+    const groove = BABYLON.MeshBuilder.CreateTube("twist-groove-" + part.id, {
+      path: spiral, radius: 0.22, tessellation: 6,
+    }, scene);
+    groove.material = material("twistGrooveMat", "#a57f45");
+    groove.isPickable = false;
+    groups.structure.push(groove);
+
+    // Mount holes: outlet at the center, inlet near the chute tip.
+    const holes = [[0, z0 + 1], [spacing, z0 + rise + 1]];
+    for (const [d, zLevel] of holes) {
+      const ring = BABYLON.MeshBuilder.CreateTorus("twist-hole-" + part.id + "-" + d, {
+        diameter: HOLE_DIAMETER_CM + 0.25, thickness: 0.15, tessellation: 32,
+      }, scene);
+      ring.position = at(d, zLevel);
+      ring.position.y += 0.1;
+      ring.material = material("holeRimMat", "#334155");
+      groups.holes.push(ring);
+    }
+    const info = {
+      id: part.id, kind: "twist", type: part.part_type, solver_support: "not_yet",
+      outlet_level_units: z0, inlet_level_units: z0 + rise,
+      funnel_rim_diameter_cm: rimD, mount_hole_spacing_cm: spacing, overall_length_cm: overall,
+      geometry_status: "schematic, from user description",
+    };
+    for (const mesh of meshes) addSelectable(mesh, info);
   }
 
   function world(xCm, yCm, zUnits) {
@@ -272,7 +416,8 @@
     const length = Number(spec.length_cm);
     const heightUnits = Number(spec.height || 1);
     const railHeight = heightUnits * HEIGHT_SCALE_CM;
-    const { mesh: railMesh, cutouts, grooveCutout } = buildRailMesh(rail, spec);
+    const { mesh: railMesh, cutouts, grooveCutout } = spec.shape === "arc"
+      ? buildCurvedRailMesh(rail, spec) : buildRailMesh(rail, spec);
     if (!grooveCutout) {
       const centerline = BABYLON.MeshBuilder.CreateBox("rail-groove-marker-" + rail.id, {
         width: length,
@@ -1365,7 +1510,11 @@
       Boolean(layout.routing_options?.allow_side_entry_plus_one);
     clearRendered();
     for (const rail of layout.rails || []) renderRail(rail);
-    for (const part of layout.parts || []) renderPart(part);
+    for (const part of layout.parts || []) {
+      const special = catalog.special_parts?.[part.part_type];
+      if (special?.shape === "twist_funnel") renderTwist(part, special);
+      else renderPart(part);
+    }
     renderStackSeams();
     renderSupports();
     renderRouting();
