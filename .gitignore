@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Local site build (see .github/workflows/pages.yml)
+_site/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
