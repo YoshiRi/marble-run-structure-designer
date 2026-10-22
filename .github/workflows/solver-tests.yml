@@ -15,4 +15,6 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
+      - name: Check browser routing engine
+        run: node --check viewer/routing.js
       - run: pytest -q
