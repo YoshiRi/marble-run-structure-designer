@@ -21,6 +21,10 @@ geometry_cm:
     source: user_measurement
     confidence: measured
     note: inserted into mating piece; not added to effective stacked height
+  marble_diameter_cm:
+    value: 1.6
+    source: official_product_page_QD005_lists_16_mm_marbles
+    confidence: confirmed
   rail_width_cm:
     value: 4.5
     source: user_measurement
@@ -184,6 +188,34 @@ structural_parts:
     role: foundation
     confidence: confirmed
 
+  # Flat boards with rail-style holes (user-reported). Holes presumably sit on
+  # the block grid; pitch, thickness and how they are used in a build are not
+  # measured yet, so no height is given and the solver ignores them.
+  plate_two_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 2
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_three_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 3
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_four_corner_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 4
+    hole_layout: four_corners
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+
 rails:
   straight_long:
     height: 1
@@ -219,6 +251,71 @@ rails:
     hole_positions_cm: [2, 7, 20, 25]
     confidence: inferred_from_measured_end_spacing
     todo: confirm all hole centers directly
+
+# Curved rails: same width and thickness as straight rails. Kept out of
+# `rails:` on purpose: the solver and viewer only model straight rails so far,
+# and must not treat these as straight. Geometry is derived from user
+# observations (see docs/parts.md, "Curved rails"), not yet measured.
+curved_rails:
+  curved_short:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_six_short_curves_overlapped_at_holes_close_a_circle_and_end_holes_match_short_straight_outer_holes
+      confidence: estimated
+      note: centerline radius through the hole centers; inner/outer edges at 20.75 / 25.25 cm
+    hole_angles_deg: [0, 60]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 69.96              # derived: 60 + 2 x overhang angle (4.98 deg)
+    centerline_length_cm: 28.09 # derived
+    hole_arc_positions_cm: [2.0, 26.09]
+    end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
+    stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
+
+  curved_long:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_three_long_curves_overlapped_at_holes_close_a_circle_and_middle_hole_overlaps_a_short_curve
+      confidence: estimated
+    hole_angles_deg: [0, 60, 120]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 129.96             # derived
+    centerline_length_cm: 52.17 # derived
+    hole_arc_positions_cm: [2.0, 26.09, 50.17]
+    end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
+
+  s_curve:
+    shape: compound_arc
+    height: 1
+    width_cm: 4.5
+    description: two short-curve arcs sharing a middle hole, bending in opposite directions (user description)
+    hole_circle_radius_cm: { value: 23.0, source: same_as_short_curve, confidence: estimated }
+    segments:                  # from end A; turn is relative to the rail's turn
+      - { length_cm: 26.09, turn: same }      # 2 cm overhang + 60 deg to the middle hole
+      - { length_cm: 26.09, turn: opposite }  # 60 deg to the end hole + 2 cm overhang
+    centerline_length_cm: 52.17  # derived
+    hole_arc_positions_cm: [2.0, 26.09, 50.17]  # user-confirmed: holes at both ends and the middle
+    hole_chord_cm: [23.0, 23.0]  # derived: the three holes are collinear, 23 + 23 = 46 cm
+    connection_equivalent_to: straight_long_center holes 0, 2, 4   # user-confirmed
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
 
 hole_state_types:
   open:
@@ -256,6 +353,27 @@ accessories:
       note: keep for viewer/construction-assist if desired
 
 special_parts:
+  spiral:
+    aliases: [twist, ツイスト]
+    shape: twist_funnel
+    appearance: natural_wood
+    implementation_scope: viewer_only   # schematic rendering; solver support not yet
+    level_difference_units:
+      value: 3
+      source: user_observation
+      confidence: observed
+      note: the chute-end mount sits 3 units above the funnel-center mount
+    overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
+    chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
+    funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
+    mount_hole_spacing_cm:
+      value: 23
+      source: user_observation_matches_short_straight_end_holes
+      confidence: observed
+    route_description: enters at the chute end, circles the funnel, drops through the center outlet
+    placement_convention: x/y = funnel center (outlet hole), z_units = outlet mount level, rotation_deg = direction toward the chute
+    size_variants:
+      note: the historical Twist set lists one large and one small spiral, but the user's two pieces are the same size; treat all as this size for now
   seesaw:
     implementation_scope: deferred
     mount:
