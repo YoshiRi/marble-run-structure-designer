@@ -515,19 +515,37 @@
     }
   }
 
-  function renderPart(part) {
-    const spec = catalog.routing_blocks?.[part.part_type]
-      || catalog.structural_parts?.[part.part_type]
-      || catalog.accessories?.routing_affecting?.[part.part_type]
-      || catalog.accessories?.non_routing?.[part.part_type]
+  function partSpec(partType) {
+    return catalog.routing_blocks?.[partType]
+      || catalog.structural_parts?.[partType]
+      || catalog.accessories?.routing_affecting?.[partType]
+      || catalog.accessories?.non_routing?.[partType]
       || {};
-    const heightUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
-    const heightCm = Math.max(0.35, heightUnits * HEIGHT_SCALE_CM);
+  }
+
+  function partBodyHeightCm(spec, fallbackUnits) {
+    return Math.max(
+      0.35,
+      geometryValue(spec.body_height_cm, Number(fallbackUnits) * HEIGHT_SCALE_CM)
+    );
+  }
+
+  function partBodyHeightUnits(part) {
+    const spec = partSpec(part.part_type);
+    const fallbackUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
+    return partBodyHeightCm(spec, fallbackUnits) / HEIGHT_SCALE_CM;
+  }
+
+  function renderPart(part) {
+    const spec = partSpec(part.part_type);
+    const catalogHeightUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
+    const heightCm = partBodyHeightCm(spec, catalogHeightUnits);
+    const renderedHeightUnits = heightCm / HEIGHT_SCALE_CM;
     const ports = (spec.ports || []).filter(p => blockPortGeometry(p, heightCm));
     const sideEntryNotches = new Set(spec.port_visualization?.side_entry_notches || []);
     const { mesh, cutouts } = buildBlockMesh(part, heightCm, ports, sideEntryNotches);
     mesh.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
-    mesh.position = world(part.x_cm, part.y_cm, Number(part.z_units) + heightUnits / 2);
+    mesh.position = world(part.x_cm, part.y_cm, Number(part.z_units) + renderedHeightUnits / 2);
     addSelectable(mesh, {
       id: part.id,
       kind: "part",
@@ -536,8 +554,10 @@
       z_units: part.z_units,
       rotation_deg: part.rotation_deg || 0,
       body_height_cm: heightCm,
+      body_height_units: renderedHeightUnits,
+      catalog_height_units: catalogHeightUnits,
       effective_stacking_height_cm: heightCm,
-      connector_protrusion_cm: heightUnits === 4 ? CONNECTOR_PROTRUSION_CM : null,
+      connector_protrusion_cm: catalogHeightUnits === 4 ? CONNECTOR_PROTRUSION_CM : null,
       connector_protrusion_rendered: false,
       ports,
       port_hole_diameter_cm: BLOCK_PORT_DIAMETER_CM,
@@ -546,6 +566,44 @@
       port_holes_are_cutouts: cutouts,
     });
     renderBlockPortMarkers(part, mesh, ports, heightCm, cutouts, sideEntryNotches);
+  }
+
+  // Same-type pieces that touch vertically otherwise look like one tall block.
+  // Add a subtle joint at the boundary so two 1-unit purple drops read as two parts.
+  function renderStackSeams() {
+    const parts = layout.parts || [];
+    for (const lower of parts) {
+      const topUnits = Number(lower.z_units) + partBodyHeightUnits(lower);
+      const upper = parts.find(candidate =>
+        candidate.id !== lower.id &&
+        candidate.part_type === lower.part_type &&
+        Math.abs(Number(candidate.x_cm) - Number(lower.x_cm)) < 0.01 &&
+        Math.abs(Number(candidate.y_cm) - Number(lower.y_cm)) < 0.01 &&
+        Math.abs(Number(candidate.z_units) - topUnits) < 0.01
+      );
+      if (!upper) continue;
+      const x = Number(lower.x_cm);
+      const y = Number(lower.y_cm);
+      const z = topUnits;
+      const halfW = BLOCK_WIDTH_CM / 2;
+      const halfD = BLOCK_DEPTH_CM / 2;
+      const seamMat = material("partJointMat", "#111827");
+      const strips = [
+        { width: BLOCK_WIDTH_CM + 0.04, height: 0.035, depth: 0.035, x, y: y + halfD, z },
+        { width: BLOCK_WIDTH_CM + 0.04, height: 0.035, depth: 0.035, x, y: y - halfD, z },
+        { width: 0.035, height: 0.035, depth: BLOCK_DEPTH_CM + 0.04, x: x + halfW, y, z },
+        { width: 0.035, height: 0.035, depth: BLOCK_DEPTH_CM + 0.04, x: x - halfW, y, z },
+      ];
+      for (const strip of strips) {
+        const seam = BABYLON.MeshBuilder.CreateBox("part-joint-" + lower.id + "-" + upper.id, {
+          width: strip.width, height: strip.height, depth: strip.depth,
+        }, scene);
+        seam.position = world(strip.x, strip.y, strip.z);
+        seam.material = seamMat;
+        seam.isPickable = false;
+        groups.structure.push(seam);
+      }
+    }
   }
 
   function renderSupports() {
@@ -778,11 +836,12 @@
       const spec = catalog.routing_blocks?.[part.part_type] || catalog.structural_parts?.[part.part_type] || {};
       const mass = blockMass(part.part_type);
       if (mass == null) { unknown.push(part.id); continue; }
-      const h = Number(spec.height || 1);
+      const hCm = partBodyHeightCm(spec, Number(spec.height || 1));
+      const hUnits = hCm / HEIGHT_SCALE_CM;
       total += mass;
       wx += mass * Number(part.x_cm);
       wy += mass * Number(part.y_cm);
-      wz += mass * (Number(part.z_units) + h / 2);
+      wz += mass * (Number(part.z_units) + hUnits / 2);
     }
     if (!total || unknown.length) return { evaluable: false, unknown, total_mass_g: total };
     return {
@@ -900,6 +959,7 @@
     clearRendered();
     for (const rail of layout.rails || []) renderRail(rail);
     for (const part of layout.parts || []) renderPart(part);
+    renderStackSeams();
     renderSupports();
     renderRouting();
     renderComAndPolygon();

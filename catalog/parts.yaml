@@ -5,7 +5,7 @@ geometry_cm:
     value: 1.5
     source: derived_from_user_measurement_6_cm_per_4_units
     confidence: derived
-    note: discrete stacking scale; rail height of 1 unit confirmed by user; thin/foundation dimensions remain provisional
+    note: discrete stacking scale; rail and purple drop-block heights are each confirmed as 1 unit (1.5 cm); foundation height remains provisional
   standard_block_footprint:
     width_cm: 4.5
     depth_cm: 4.5
@@ -58,7 +58,7 @@ height_units:
   spiral:
     value: 3
     confidence: tentative
-  purple_drop_block: 1
+  purple_drop_block: 1 # user-confirmed; physical body height is 1.5 cm, matching a rail
   wooden_foundation: 1
 
 routing_blocks:
@@ -157,6 +157,11 @@ routing_blocks:
 
   purple_drop:
     height: 1
+    body_height_cm:
+      value: 1.5
+      source: user_confirmation_rail_thickness
+      confidence: confirmed
+      note: same physical height as a one-unit rail
     mass_g:
       value: 12
       source: user_measurement

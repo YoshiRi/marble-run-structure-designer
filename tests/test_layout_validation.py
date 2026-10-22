@@ -230,3 +230,22 @@ def test_three_level_complete_layout_stability():
         sinks=(PortRef("exit", "end_b"),),
     )
     assert result.valid, result
+
+
+def test_purple_drop_block_height_matches_one_unit_rail():
+    from quadrilla_solver.routing_geometry import port_pose
+
+    purple = CATALOG.raw["routing_blocks"]["purple_drop"]
+    rail = CATALOG.raw["rails"]["straight_long"]
+    assert purple["height"] == 1
+    assert rail["height"] == 1
+    assert purple["body_height_cm"]["value"] == pytest.approx(1.5)
+
+    layout = Layout(
+        "purple-height",
+        parts=(PlacedPart("purple", "purple_drop", 0, 0, 2),),
+    )
+    top = port_pose(layout, CATALOG, PortRef("purple", "top"))
+    bottom = port_pose(layout, CATALOG, PortRef("purple", "bottom"))
+    assert top is not None and bottom is not None
+    assert top.position_cm[2] - bottom.position_cm[2] == pytest.approx(1.5)

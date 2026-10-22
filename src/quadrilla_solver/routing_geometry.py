@@ -59,7 +59,10 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
     if isinstance(footprint, dict):
         width = float(footprint.get("width_cm", 4.5))
         depth = float(footprint.get("depth_cm", 4.5))
-    h = height_units * height_scale
+    body_height = spec.get("body_height_cm")
+    if isinstance(body_height, dict):
+        body_height = body_height.get("value")
+    h = float(body_height) if body_height is not None else height_units * height_scale
     side_z = h / 2.0
     if ref.port in (spec.get("port_visualization", {}).get("side_entry_notches") or ()):
         side_z = 0.0

@@ -57,7 +57,9 @@ contributes 6 cm, not 7 cm.
 The rail width is **4.5 cm**. Rail holes are approximately **1.8 cm** in
 diameter. The rail height is **1 unit** as confirmed by the user, which maps
 to **1.5 cm** under the derived scale; this is not a separate thickness
-measurement. Straight rails have a **1 cm wide longitudinal groove in the
+measurement. The purple thin/drop block is also **1 unit = 1.5 cm** tall,
+matching the rail thickness (user-confirmed); its catalog records this physical
+height explicitly. Straight rails have a **1 cm wide longitudinal groove in the
 center** (user measurement). Groove depth and cross-section remain unknown;
 the viewer currently renders a provisional 0.3 cm deep rectangular groove.
 

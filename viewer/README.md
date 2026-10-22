@@ -25,6 +25,9 @@ blue-block side outlet physically mated to the beginning of an exit rail.
 block, so the trace ends at the real front opening rather than jumping to
 an unrelated lower rail.
 
+Vertically stacked pieces of the same type have a subtle joint line so multiple
+1-unit purple drop blocks are not mistaken for one taller part.
+
 The viewer deliberately uses schematic boxes rather than realistic meshes. Detailed collision geometry is deferred.
 
 ## Dimension provenance
@@ -49,7 +52,8 @@ The center-hole rail includes a cataloged center position at 25 cm.
 - 1 height unit = **1.5 cm**, derived from the standard block's 6 cm / 4 units
 - rail height is **1 unit**, explicitly confirmed by the user; this renders
   as **1.5 cm** from the derived scale (not a separate caliper measurement)
-- thin/drop-block and foundation heights remain unverified in centimeters
+- purple thin/drop block height: **1.5 cm (1 unit)**, user-confirmed and rendered from an explicit catalog dimension
+- wooden foundation height remains unverified in centimeters
 - block port diameter = **1.8 cm provisional**, borrowed from the approximate
   rail-hole diameter; actual block port diameters have not been measured
 - block side exit placement = **face center**, as specified by the user

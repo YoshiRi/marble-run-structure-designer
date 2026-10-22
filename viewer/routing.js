@@ -54,7 +54,7 @@
     const footprint = catalog.geometry_cm?.standard_block_footprint || {};
     const width = Number(footprint.width_cm ?? 4.5);
     const depth = Number(footprint.depth_cm ?? 4.5);
-    const height = Number(spec.height) * scale;
+    const height = geometryValue(spec.body_height_cm, Number(spec.height) * scale);
     const sideZ = (spec.port_visualization?.side_entry_notches || []).includes(ref.port)
       ? 0 : height / 2;
     const local = {

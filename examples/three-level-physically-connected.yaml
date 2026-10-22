@@ -67,7 +67,8 @@ parts:
     y_cm: 0
     z_units: 2
 
-  # Ground columns under exit rail (foundation 1u + 2 thin blocks = 3u).
+  # Ground columns under exit rail (foundation 1u + two separate purple 1u blocks = 3u).
+  # The viewer marks the joint between same-type stacked pieces.
   - { id: exit_foundation_near, part_type: wooden_foundation, x_cm: 2, y_cm: 9.25, z_units: 0 }
   - { id: exit_purple_near_1, part_type: purple_drop, x_cm: 2, y_cm: 9.25, z_units: 1 }
   - { id: exit_purple_near_2, part_type: purple_drop, x_cm: 2, y_cm: 9.25, z_units: 2 }
