@@ -1,12 +1,12 @@
-# Layout Generator (M2, first version)
+# Layout Generator (M2)
 
 `scripts/generate_layout.py` searches for buildable layouts from the combined
 contents of one or more commercial sets and writes the best ones as Layout YAML
 that the viewer can open.
 
 ```bash
-python scripts/generate_layout.py --sets QD001,QD003,QD005 --attempts 800 \
-    --seed 6 --keep 3 --out-dir examples/generated
+python scripts/generate_layout.py --sets QD001,QD003,QD005 --attempts 600 \
+    --seed 1 --keep 3 --out-dir examples/generated
 ```
 
 Options: `--max-height` (top rail level, units of 1.5 cm), `--footprint WxD`
@@ -14,51 +14,62 @@ Options: `--max-height` (top rail level, units of 1.5 cm), `--footprint WxD`
 
 ## What it builds
 
-A descending cascade grown from a top rail:
+A descending cascade grown from a top rail (`rail0`, marble enters at end A).
+Each rail carries the marble to a block-connected **stop hole**, where it drops
+into a **drop block** (a routing block whose top opening leads to side outlets:
+yellow, blue, green, cyan, red splitters), optionally under pass-through parts
+(purple drop, orange vertical) that lengthen the fall. Two drop modes:
 
-```text
-rail --(block-connected hole)--> drop column --(side outlet)--> rail --> ...
-```
+- **Landing drop**: the drop block stands on a new rail beneath it and lands the
+  marble on that rail just past its face (see `docs/layout.md`). The block both
+  holds up the upper rail and routes onto the lower one. Long rails may be the
+  center-hole variant, so a rail can drop at its center and leave the other half
+  free.
+- **Ground drop**: the drop block tops a ground column; each side outlet feeds a
+  new rail starting at the block face, at the outlet floor or one unit lower.
 
-- Rails are straight and axis-aligned (0/90/180/270 deg). Each rests on two
-  ground columns: a plain column under hole 1, and at the far end (hole 2 or 3)
-  either a drop column or, for a leaf rail that ends the run, another plain
-  column.
-- A drop column is a foundation, filler blocks/purple drop blocks, a routing
-  block whose top opening leads to side outlets (yellow, blue, green, cyan,
-  red splitters) and optionally pass-through parts above it (purple drop or
-  orange vertical) that lengthen the fall.
-- A side outlet feeds a new rail starting at the block face, either at the
-  outlet floor or one unit lower (drop-one).
-- Red splitters fork the cascade into two branches.
+Red splitters fork the cascade.
+
+## Columns
+
+Columns are abstract while building: a base (ground or a rail hole), the rail
+hole they hold up, and the routing parts at their top. When a new lower rail
+passes exactly through an existing column at one of its holes, the column is
+**split**: the lower half supports the new rail, the upper half stands on it.
+That is how upper columns come to stand on lower rails, on holes the marble does
+not roll over. Every rail keeps exactly two supports with an accepted hole pair.
+Fillers (foundation on the ground, 4u blocks, 1u purple drop blocks) are
+composed at the end; their feasibility is checked at every step.
 
 ## Constraints checked while building
 
-- inventory: the summed contents of the chosen sets, including covers (one per
-  covered hole) and wildcard `straight_unspecified` rails
+- inventory: summed contents of the chosen sets, including covers (one per
+  covered hole), foundations, and long rails shared by the plain and center-hole
+  variants; `straight_unspecified` rails are a wildcard
 - footprint and maximum height
 - solid collisions and marble clearance above every rolling segment
 - a lookahead that only turns an outlet toward directions with room for a rail
 
-Every finished candidate must then pass the full `validate_layout` (assembly,
-global stability, rail statics, connectivity, marble clearance).
+Every finished candidate must also pass `validate_layout` (assembly, global
+stability, rail statics, connectivity, marble clearance) and reach every exit.
 
 ## Scoring
 
 ```text
-10 x levels + 0.1 x rolling length (cm) + 6 x rail exits
-+ 4 x random branches - 8 x outlets left without a rail
+10 x levels + 0.1 x rolling length (cm) + 6 x rail exits + 4 x random branches
++ 2 x columns standing on rails - 8 x outlets left without a rail
 ```
 
-Levels/length and branches/exits are the current priorities.
+## Results (QD001+QD003+QD005)
+
+The first version (ground columns only) stopped at 6 rails because of covers.
+With landing drops and stacked columns, candidates reach 8-12 rails, 3-4 exits
+and up to 11 columns standing on rails, typically 6 levels within 24 units.
 
 ## Known limits
 
-- **Covers bind first.** With QD001+QD003+QD005 (18 covers) candidates stop at
-  6 rails. Covers are counted for every covered hole, including holes resting
-  on a support column; if a column's peg already closes the hole, the count is
-  conservative.
-- **Foundations bind next** (16): every column currently stands on the ground.
-  Columns standing on lower rails would remove that limit.
+- Covers are counted for every covered hole, including holes resting on a
+  column; if a column's peg already closes the hole, this is conservative.
+- An outlet facing against a rail's flow is not modeled as landing.
 - No curved/spiral rails, seesaws or covered slopes.
 - Filler blocks are routing blocks used purely as structure.

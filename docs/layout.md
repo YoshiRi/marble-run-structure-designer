@@ -105,6 +105,16 @@ Bottom outlets drop straight down the support column (physically confirmed):
 - the drop ends at a part without a `top` opening; a stack on the ground ends at
   its foundation
 
+A block standing directly on a rail can **land** the marble on that rail
+(physically confirmed): if the bottom part of a support stack stands on a rail
+hole and one of its side outlets faces along that rail in the rail's flow
+direction, the marble drops one unit from the outlet onto the groove just past
+the block face and continues to the next hole or end. This is how one block both
+holds up the rail above it and routes the marble onto the rail below it. An
+outlet facing against the rail's flow does not land on it. An explicit
+`route_link` from the same outlet takes precedence. See
+`examples/landing-tower.yaml`.
+
 `validate_connectivity()` also returns `paths`, mapping each reached sink to
 its shortest directed sequence of graph-node keys. The browser Viewer traces
 the same port graph in `viewer/routing.js` and overlays the selected route

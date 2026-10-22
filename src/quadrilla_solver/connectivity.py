@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from math import hypot
+from math import cos, hypot, radians, sin
 from typing import Mapping, Sequence
 
 from .catalog import PartCatalog
 from .model import Layout, PortRef, rail_hole_world
-from .routing_geometry import validate_route_link_geometry
+from .routing_geometry import port_pose, validate_route_link_geometry
 
 
 @dataclass(frozen=True)
@@ -181,6 +181,17 @@ def build_routing_graph(
         if "bottom" in part_ports.get(stack[0], set()) and "top" in part_ports.get(below_top, set()):
             _add_edge(graph, f"{stack[0]}:bottom", f"{below_top}:top")
 
+    # A block standing directly on a rail can land the marble on that rail:
+    # a side outlet facing along the rail drops one unit onto its groove just
+    # past the block face, and the marble rolls on in the rail's flow
+    # direction (physically confirmed). Explicit route links take precedence.
+    explicit_sources = {link.source.key for link in layout.route_links}
+    for support in layout.supports:
+        if not support.stack_part_ids or support.lower_rail_id is None:
+            continue
+        for source, target in _landing_edges(layout, catalog, support, explicit_sources):
+            _add_edge(graph, source, target)
+
     # Explicit connections must mate actual catalogued openings at the same
     # physical position and opposite facing normals. No teleport edges.
     known_components = layout.component_ids()
@@ -218,6 +229,49 @@ def build_routing_graph(
         nodes=tuple(edges),
         reasons=tuple(dict.fromkeys(reasons)),
     )
+
+
+def _landing_edges(layout, catalog, support, explicit_sources):
+    """Edges from the side outlets of a stack's bottom part onto its rail."""
+    rail = layout.rail_map().get(support.lower_rail_id)
+    part = layout.part_map().get(support.stack_part_ids[0])
+    if rail is None or part is None:
+        return []
+    spec = catalog.rails.get(rail.rail_type)
+    if spec is None:
+        return []
+    unit = catalog.raw.get("geometry_cm", {}).get("height_unit", {})
+    unit = float(unit.get("value", 1.5)) if isinstance(unit, Mapping) else float(unit or 1.5)
+    theta = radians(rail.yaw_deg)
+    axis = (cos(theta), sin(theta))
+    rail_top_cm = (rail.z_units + spec.height_units) * unit
+    outputs = {target for _, target in catalog.internal_routes(part.part_type)}
+    edges = []
+    for port in sorted(outputs & {"front", "rear", "left", "right"}):
+        if f"{part.id}:{port}" in explicit_sources:
+            continue
+        pose = port_pose(layout, catalog, PortRef(part.id, port))
+        if pose is None:
+            continue
+        along = pose.outward[0] * axis[0] + pose.outward[1] * axis[1]
+        if abs(along) < 0.95 or abs(pose.position_cm[2] - (rail_top_cm + unit)) > 0.05:
+            continue
+        landing = ((pose.position_cm[0] - rail.x_cm) * axis[0]
+                   + (pose.position_cm[1] - rail.y_cm) * axis[1])
+        stations = [("end_a", 0.0)] + [
+            (f"hole:{i}", x) for i, x in enumerate(spec.holes_cm)
+        ] + [("end_b", spec.length_cm)]
+        if along > 0 and rail.flow_direction == "a_to_b":
+            ahead = [name for name, x in stations if x > landing + 1e-6]
+            nxt = ahead[0] if ahead else None
+        elif along < 0 and rail.flow_direction == "b_to_a":
+            ahead = [name for name, x in stations if x < landing - 1e-6]
+            nxt = ahead[-1] if ahead else None
+        else:
+            nxt = None  # Outlet faces against the rail's flow.
+        if nxt is not None:
+            edges.append((f"{part.id}:{port}", _rail_node(rail.id, nxt)))
+    return edges
 
 
 def validate_connectivity(

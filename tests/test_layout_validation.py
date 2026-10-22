@@ -310,3 +310,24 @@ def test_bottom_outlets_drop_down_the_support_column():
     assert edges["green_top:bottom"] == ("cyan_mid:top",)
     # ...but cyan has no bottom outlet, so nothing drops further from it.
     assert "cyan_mid:bottom" not in edges
+
+
+def test_block_outlet_lands_on_the_rail_it_stands_on():
+    from quadrilla_solver.connectivity import build_routing_graph
+
+    layout = load_layout(ROOT / "examples" / "landing-tower.yaml")
+    result = validate_layout(
+        layout, CATALOG, source=PortRef("top", "end_a"), sinks=(PortRef("exit", "end_b"),),
+    )
+    assert result.valid, result
+    path = result.connectivity.paths["exit:end_b"]
+    # M (on middle's center) lands just past the center, heading to hole 3;
+    # N (on bottom's hole 4) faces -x and lands heading back to hole 3.
+    assert ("M:front", "middle:hole:3") in zip(path, path[1:])
+    assert ("N:front", "bottom:hole:3") in zip(path, path[1:])
+
+    # An outlet facing against the rail's flow does not land on it.
+    flipped = replace(layout, rails=tuple(
+        replace(r, flow_direction="a_to_b") if r.id == "bottom" else r for r in layout.rails
+    ))
+    assert build_routing_graph(flipped, CATALOG).edges.get("N:front", ()) == ()
