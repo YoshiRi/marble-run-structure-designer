@@ -52,6 +52,30 @@
     structure: [],
   };
 
+  // Show the z=0 datum explicitly instead of relying on a plain ground plane.
+  // Babylon uses Y as vertical; the grid is slightly above the floor to avoid z-fighting.
+  function createGroundLevelGrid() {
+    const lines = [];
+    for (let x = -70; x <= 70; x += 10) {
+      lines.push([
+        new BABYLON.Vector3(x, 0.025, -50),
+        new BABYLON.Vector3(x, 0.025, 50),
+      ]);
+    }
+    for (let z = -50; z <= 50; z += 10) {
+      lines.push([
+        new BABYLON.Vector3(-70, 0.025, z),
+        new BABYLON.Vector3(70, 0.025, z),
+      ]);
+    }
+    const mesh = BABYLON.MeshBuilder.CreateLineSystem("ground-level-grid", { lines }, scene);
+    mesh.color = new BABYLON.Color3(0.25, 0.31, 0.40);
+    mesh.alpha = 0.7;
+    mesh.isPickable = false;
+    return mesh;
+  }
+  const groundLevelGrid = createGroundLevelGrid();
+
   let catalog = null;
   let layout = null;
   let routingGraph = null;
@@ -541,6 +565,8 @@
     const catalogHeightUnits = Number(spec.height || (part.part_type === "accelerator_plate" ? 0.15 : 1));
     const heightCm = partBodyHeightCm(spec, catalogHeightUnits);
     const renderedHeightUnits = heightCm / HEIGHT_SCALE_CM;
+    const bottomLevel = Number(part.z_units);
+    const topLevel = bottomLevel + renderedHeightUnits;
     const ports = (spec.ports || []).filter(p => blockPortGeometry(p, heightCm));
     const sideEntryNotches = new Set(spec.port_visualization?.side_entry_notches || []);
     const { mesh, cutouts } = buildBlockMesh(part, heightCm, ports, sideEntryNotches);
@@ -552,6 +578,11 @@
       type: part.part_type,
       mass_g: blockMass(part.part_type),
       z_units: part.z_units,
+      bottom_z_units: bottomLevel,
+      top_z_units: topLevel,
+      bottom_elevation_cm: bottomLevel * HEIGHT_SCALE_CM,
+      top_elevation_cm: topLevel * HEIGHT_SCALE_CM,
+      touches_ground: Math.abs(bottomLevel) < 0.01,
       rotation_deg: part.rotation_deg || 0,
       body_height_cm: heightCm,
       body_height_units: renderedHeightUnits,
@@ -1025,6 +1056,7 @@
     const rows = [
       ["Rails", (layout.rails || []).length],
       ["Parts", (layout.parts || []).length],
+      ["Ground level", "z=0 (0 cm)"],
       ["Support links", (layout.supports || []).length],
       ["Route links", (layout.route_links || []).length],
       ["Height scale", HEIGHT_SCALE_CM + " cm/u (derived from 6 cm / 4u)"],
@@ -1040,6 +1072,8 @@
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
     document.getElementById("layoutMeta").textContent = layout.name || "unnamed layout";
+    document.getElementById("groundLevelLabel").textContent =
+      "Ground level: z=0 (0 cm) · 1u = " + HEIGHT_SCALE_CM + " cm";
   }
 
   function fitCamera() {
@@ -1082,6 +1116,7 @@
       com: document.getElementById("toggleCom").checked,
       polygon: document.getElementById("togglePolygon").checked,
     };
+    groundLevelGrid.setEnabled(document.getElementById("toggleGroundLevel").checked);
     for (const [key, visible] of Object.entries(settings)) {
       for (const mesh of groups[key]) mesh.setEnabled(visible);
     }
@@ -1141,7 +1176,7 @@
     };
     renderRouting();
   });
-  for (const id of ["toggleHoles","toggleSupports","toggleRoute","toggleCom","togglePolygon"]) {
+  for (const id of ["toggleHoles","toggleSupports","toggleRoute","toggleCom","togglePolygon","toggleGroundLevel"]) {
     document.getElementById(id).addEventListener("change", applyVisibility);
   }
 

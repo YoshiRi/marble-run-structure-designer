@@ -109,3 +109,20 @@ button, select, input { font: inherit; }
 .route-option { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .route-option input { margin-top: 2px; }
 .route-status { margin: 8px 0 0; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 8px; background: Canvas; font-size: 12px; line-height: 1.5; }
+
+
+.ground-level-label {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  max-width: calc(100% - 24px);
+  padding: 7px 10px;
+  border: 1px solid rgba(148, 163, 184, .36);
+  border-radius: 7px;
+  background: rgba(17, 24, 39, .84);
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}

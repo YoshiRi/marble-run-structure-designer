@@ -16,8 +16,8 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - external exit list and topology-based exit probabilities
 - optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
-- ground support polygon
-- click-to-inspect part/rail metadata
+- ground support polygon and optional visible ground-level grid (z=0)
+- click-to-inspect part/rail metadata, including each part's bottom/top levels and elevations
 - load a local Layout YAML file
 - no build step
 
