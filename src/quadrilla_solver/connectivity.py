@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
 from .catalog import PartCatalog
@@ -17,6 +18,8 @@ class ConnectivityResult:
     reachable_nodes: tuple[str, ...]
     dead_ends: tuple[str, ...]
     reasons: tuple[str, ...] = ()
+    # Shortest directed route to each reached sink (node keys in traversal order).
+    paths: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -191,20 +194,26 @@ def validate_connectivity(
     for sink in unknown_sinks:
         reasons.append(f"unknown_sink:{sink}")
 
-    visited: set[str] = set()
-    stack = [source_key]
-    while stack:
-        node = stack.pop()
-        if node in visited:
-            continue
-        visited.add(node)
-        stack.extend(
-            target
-            for target in routing.edges.get(node, ())
-            if target not in visited
-        )
+    # BFS records a shortest directed path, not just a reachability boolean.
+    visited: set[str] = {source_key}
+    previous: dict[str, str] = {}
+    queue = deque([source_key])
+    while queue:
+        node = queue.popleft()
+        for target in routing.edges.get(node, ()):
+            if target in visited:
+                continue
+            visited.add(target)
+            previous[target] = node
+            queue.append(target)
 
     reached = tuple(sorted(set(sink_keys) & visited))
+    paths: dict[str, tuple[str, ...]] = {}
+    for sink in reached:
+        nodes = [sink]
+        while nodes[-1] != source_key:
+            nodes.append(previous[nodes[-1]])
+        paths[sink] = tuple(reversed(nodes))
     dead_ends = tuple(
         sorted(
             node
@@ -233,4 +242,5 @@ def validate_connectivity(
         reachable_nodes=tuple(sorted(visited)),
         dead_ends=dead_ends,
         reasons=tuple(dict.fromkeys(reasons)),
+        paths=paths,
     )

@@ -155,3 +155,26 @@ def test_combined_layout_validation_passes_golden_example():
     assert result.local_statics.statics.valid
     assert result.connectivity is not None
     assert result.connectivity.valid
+
+
+def test_routing_solver_exposes_shortest_node_path():
+    result = validate_connectivity(
+        _example(),
+        CATALOG,
+        source=PortRef("upper", "end_a"),
+        sinks=(PortRef("lower", "end_b"),),
+    )
+    assert result.valid
+    assert result.paths["lower:end_b"] == (
+        "upper:end_a",
+        "upper:hole:0",
+        "blue_column:top",
+        "blue_column:front",
+        "lower:end_a",
+        "lower:hole:0",
+        "lower:hole:1",
+        "lower:hole:2",
+        "lower:hole:3",
+        "lower:hole:4",
+        "lower:end_b",
+    )
