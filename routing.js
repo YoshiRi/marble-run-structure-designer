@@ -301,6 +301,48 @@
       }
     }
 
+    // Mirror of _landing_edges: a side outlet of a block standing directly on
+    // a rail, facing along it in its flow direction, lands on that rail.
+    const explicitSources = new Set((layout.route_links || []).map(link => refKey(link.source)));
+    const unitCm = geometryValue(catalog.geometry_cm?.height_unit, 1.5);
+    for (const support of layout.supports || []) {
+      if (!support.stack_part_ids?.length || support.lower_rail_id == null) continue;
+      const rail = rails.get(support.lower_rail_id);
+      const part = parts.get(support.stack_part_ids[0]);
+      const railSpec = rail && catalog.rails?.[rail.rail_type];
+      if (!rail || !part || !railSpec) continue;
+      const theta = Number(rail.yaw_deg || 0) * Math.PI / 180;
+      const axis = [Math.cos(theta), Math.sin(theta)];
+      const railTopCm = (Number(rail.z_units) + Number(railSpec.height || 1)) * unitCm;
+      const outputs = new Set();
+      for (const route of partSpec(catalog, part.part_type)?.routes || []) {
+        if (route.from == null) continue;
+        for (const target of [...(route.to == null ? [] : [route.to]), ...(route.to_any_of || [])]) {
+          outputs.add(String(target));
+        }
+      }
+      for (const port of ["front", "left", "rear", "right"].filter(p => outputs.has(p)).sort()) {
+        if (explicitSources.has(part.id + ":" + port)) continue;
+        const pose = portPose(layout, catalog, { component_id: part.id, port });
+        if (!pose) continue;
+        const along = pose.normal[0] * axis[0] + pose.normal[1] * axis[1];
+        if (Math.abs(along) < 0.95 || Math.abs(pose.position[2] - (railTopCm + unitCm)) > 0.05) continue;
+        const landing = (pose.position[0] - Number(rail.x_cm)) * axis[0] +
+          (pose.position[1] - Number(rail.y_cm)) * axis[1];
+        const stations = [["end_a", 0],
+          ...(railSpec.hole_positions_cm || []).map((x, i) => ["hole:" + i, Number(x)]),
+          ["end_b", Number(railSpec.length_cm)]];
+        let next = null;
+        if (along > 0 && rail.flow_direction !== "b_to_a") {
+          next = stations.find(([, x]) => x > landing + 1e-6)?.[0] ?? null;
+        } else if (along < 0 && rail.flow_direction === "b_to_a") {
+          const ahead = stations.filter(([, x]) => x < landing - 1e-6);
+          next = ahead.length ? ahead[ahead.length - 1][0] : null;
+        }
+        if (next) edge(part.id + ":" + port, rail.id + ":" + next);
+      }
+    }
+
     // Explicit links must mate actual aligned openings. No teleport edges.
     for (const link of layout.route_links || []) {
       if (!knownComponents.has(link.source.component_id)) {
