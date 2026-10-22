@@ -18,14 +18,21 @@ parts:
 
   structural_parts:
     wooden_foundation: null
+    plate_two_holes: null
+    plate_three_holes: null
+    plate_four_corner_holes: null
 
   rails:
     straight_long: null
     straight_long_center: null
     straight_short: null
+    curved_short: null
+    curved_long: null
+    s_curve: null
 
   special_parts:
     seesaw: null
+    spiral: null   # twist; the user's two pieces are the same size
 
   routing_accessories:
     cover: null
@@ -37,4 +44,4 @@ parts:
 notes:
   - "Do not infer owned counts from commercial set specifications."
   - "Null is treated as unknown by InventoryValidator."
-  - "Add curved/spiral/special parts when their geometry/catalog entries are enabled."
+  - "Curved rails, S-curves, the twist and hole plates are listed so they can be counted; the solver does not use them yet."

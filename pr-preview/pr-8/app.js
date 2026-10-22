@@ -179,10 +179,22 @@
     if (spec) return spec;
     const curved = catalog.curved_rails?.[type];
     if (curved) {
+      const radius = geometryValue(curved.hole_circle_radius_cm, 23);
+      // Arc segments along the rail: {length, radius, sign: +1 same turn, -1 opposite}.
+      const segments = curved.shape === "compound_arc"
+        ? (curved.segments || []).map(seg => {
+            const base = catalog.curved_rails?.[seg.base] || {};
+            return {
+              length: Number(base.centerline_length_cm),
+              radius: geometryValue(base.hole_circle_radius_cm, radius),
+              sign: seg.turn === "opposite" ? -1 : 1,
+            };
+          })
+        : [{ length: Number(curved.centerline_length_cm), radius, sign: 1 }];
       return {
         ...curved,
         shape: "arc",
-        radius_cm: geometryValue(curved.hole_circle_radius_cm, 23),
+        segments,
         length_cm: Number(curved.centerline_length_cm),
         hole_positions_cm: curved.hole_arc_positions_cm || [],
       };
@@ -197,13 +209,24 @@
     const yaw = (Number(rail.yaw_deg || 0) * Math.PI) / 180;
     const spec = railSpec(rail.rail_type);
     if (spec.shape === "arc") {
-      const r = spec.radius_cm;
-      const sign = rail.turn === "right" ? -1 : 1;
-      const cx = Number(rail.x_cm) - sign * r * Math.sin(yaw);
-      const cy = Number(rail.y_cm) + sign * r * Math.cos(yaw);
-      const start = Math.atan2(Number(rail.y_cm) - cy, Number(rail.x_cm) - cx);
-      const angle = start + sign * Number(localX) / r;
-      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+      // Walk the arc segments from end A; each bends left (+) or right (-).
+      const railSign = rail.turn === "right" ? -1 : 1;
+      let x = Number(rail.x_cm), y = Number(rail.y_cm), heading = yaw;
+      let remaining = Math.max(0, Number(localX));
+      for (let i = 0; i < spec.segments.length; i++) {
+        const seg = spec.segments[i];
+        const last = i === spec.segments.length - 1;
+        const step = last ? remaining : Math.min(remaining, seg.length);
+        const sign = railSign * seg.sign;
+        const cx = x - sign * seg.radius * Math.sin(heading);
+        const cy = y + sign * seg.radius * Math.cos(heading);
+        heading += sign * step / seg.radius;
+        x = cx + sign * seg.radius * Math.sin(heading);
+        y = cy - sign * seg.radius * Math.cos(heading);
+        remaining -= step;
+        if (remaining <= 1e-9) break;
+      }
+      return { x, y };
     }
     return {
       x: Number(rail.x_cm) + Number(localX) * Math.cos(yaw),
