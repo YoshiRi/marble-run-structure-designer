@@ -24,5 +24,4 @@ The Apache License 2.0 does not grant trademark rights.
 - When product names are necessary, use them descriptively rather than in a way
   that suggests this project is an official product or service.
 
-Before a public release, the project name itself should be reviewed once more
-for avoidable trademark ambiguity.
+The project name is deliberately generic; third-party product names are used only to describe compatibility and provenance.
