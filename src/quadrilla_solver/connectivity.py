@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+from math import hypot
 from typing import Mapping, Sequence
 
 from .catalog import PartCatalog
-from .model import Layout, PortRef
+from .model import Layout, PortRef, rail_hole_world
+from .routing_geometry import validate_route_link_geometry
 
 
 @dataclass(frozen=True)
@@ -103,8 +105,9 @@ def build_routing_graph(
                     _rail_node(rail.id, nxt),
                 )
 
-    # If a support column ends with a routing block immediately under a
-    # block-connected rail hole, infer the vertical drop into that block's TOP.
+    # Only infer a drop through a real rail hole and a physically aligned
+    # block top. Support declarations alone do not establish a route.
+    valid_connected_holes: set[tuple[str, int]] = set()
     for support in layout.supports:
         if not support.stack_part_ids:
             continue
@@ -125,6 +128,22 @@ def build_routing_graph(
                 f"{rail.id}:{support.upper_hole_index}:{part.id}"
             )
             continue
+        spec = catalog.rails.get(rail.rail_type)
+        height = catalog.height_units(part.part_type)
+        if spec is None or height is None or not 0 <= support.upper_hole_index < len(spec.holes_cm):
+            reasons.append(f"block_connected_invalid_geometry:{rail.id}:{support.upper_hole_index}")
+            continue
+        x, y, _ = rail_hole_world(rail, catalog, support.upper_hole_index)
+        if (
+            hypot(part.x_cm - x, part.y_cm - y) > 0.35
+            or abs(part.z_units + height - rail.z_units) > 0.1
+        ):
+            reasons.append(
+                f"block_connected_geometry_mismatch:"
+                f"{rail.id}:{support.upper_hole_index}:{part.id}"
+            )
+            continue
+        valid_connected_holes.add((rail.id, support.upper_hole_index))
 
         _add_edge(
             graph,
@@ -132,8 +151,13 @@ def build_routing_graph(
             f"{part.id}:top",
         )
 
-    # Explicit connections handle horizontal block exits, special transitions,
-    # and any geometry whose exact port offset is not yet in the catalog.
+    for rail in layout.rails:
+        for index, state in rail.hole_states.items():
+            if state == "block_connected" and (rail.id, index) not in valid_connected_holes:
+                reasons.append(f"block_connected_without_valid_support:{rail.id}:{index}")
+
+    # Explicit connections must mate actual catalogued openings at the same
+    # physical position and opposite facing normals. No teleport edges.
     known_components = layout.component_ids()
     for link in layout.route_links:
         if link.source.component_id not in known_components:
@@ -145,6 +169,11 @@ def build_routing_graph(
             reasons.append(
                 f"route_link_unknown_component:{link.target.component_id}"
             )
+            continue
+
+        reason = validate_route_link_geometry(layout, catalog, link)
+        if reason is not None:
+            reasons.append(reason)
             continue
 
         source = link.source.key
@@ -227,14 +256,10 @@ def validate_connectivity(
     if not reachable:
         reasons.append("no_requested_sink_reachable")
 
-    # Unsupported route semantics make the result incomplete even when a sink
-    # happens to be reachable through another branch.
-    unsupported = any(
-        x.startswith("unsupported_") for x in reasons
-    )
-
+    # Invalid geometry makes the graph incomplete, even if another branch
+    # happens to reach the requested sink.
     return ConnectivityResult(
-        valid=reachable and not unknown_sinks and not unsupported,
+        valid=reachable and not reasons,
         reachable=reachable,
         source=source_key,
         sinks=sink_keys,
