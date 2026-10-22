@@ -268,11 +268,20 @@ Behavior:
 
 For initial reachability-only solving, this can eventually be approximated as a branch to either rail end. A later viewer/simulation layer can model the hysteretic switching state.
 
-## Spiral
+## Spiral (twist)
 
-Working height: **3 units**, currently tentative.
+Natural wood. A chute (about 12 cm) joined to a funnel with a 23 cm rim, about
+36 cm overall (user estimates). Its two mount holes are 23 cm apart, matching a
+short straight rail's end holes, and the chute-end mount sits **3 units** above
+the funnel-center mount. The marble enters at the chute, circles the funnel and
+drops through the center outlet.
 
-The exact footprint, entry location, exit location, and support points remain to be measured.
+The historical Twist set lists a large and a small spiral, but the user's two
+pieces are the same size, so all twists are treated as this size for now.
+
+The viewer draws it schematically (`special_parts.spiral`, placement: funnel
+center, outlet level, direction toward the chute). Funnel depth and the exact
+inlet position are not measured; the solver does not model it yet.
 
 ## Deferred / out of initial scope
 
@@ -290,3 +299,68 @@ Still unresolved for the parts that remain in the MVP path:
 - covered-slope routing semantics
 - exact support/stacking rules
 - any unobserved ports/routes on the natural-wood block
+
+## Curved rails
+
+Same width (4.5 cm) and thickness (1 unit) as the straight rails. Geometry is
+**derived** from user observations, not yet measured.
+
+Observations:
+
+- Short curve: a hole at each end. Six short curves overlapped at their holes
+  close a circle, so the end holes are **60 deg** apart around the center. The
+  two end holes line up with the outer holes of a short straight rail
+  (hole 0 and hole 3, 23 cm apart).
+- Long curve: holes at both ends and in the middle; a short curve overlaps it
+  hole to hole. Three long curves overlapped close a circle, so its end holes
+  are **120 deg** apart, with the middle hole at 60 deg.
+
+Derivation:
+
+```text
+end-hole chord 23 cm, 60 deg apart  ->  hole-circle radius R = 23 / (2 sin 30 deg) = 23.0 cm
+end overhang 2 cm (as on straight rails) = 4.98 deg at R
+short curve: 60 + 2 x 4.98  = 70 deg of arc, 28.1 cm along the centerline
+long curve:  120 + 2 x 4.98 = 130 deg of arc, 52.2 cm along the centerline
+edges: inner radius 20.75 cm, outer 25.25 cm
+```
+
+The 70 deg and 130 deg totals match the user's visual estimates, which
+supports the 2 cm overhang assumption.
+
+Confirmed by the user against the drawn model:
+
+- The shape matches the derived drawing.
+- A short curve and a short straight overlap exactly hole on hole (end holes
+  of the curve over holes 0 and 3 of the straight). They must be on different
+  levels, at least one unit apart.
+- The long curve's end holes do not coincide with any convenient hole of
+  another rail, consistent with its derived 39.8 cm end-hole chord.
+- A curve is not stable on its own (its center of mass lies outside the line
+  between its end supports); it becomes stable once a block stands on it.
+  The stability rule for curves must therefore require load above. Because every curve shares R = 23 cm
+and 60 deg hole spacing, curve holes always fall on a hexagonal pattern around
+the circle's center.
+
+Not yet modeled: the solver, generator and viewer still handle straight rails
+only (`curved_rails:` in `catalog/parts.yaml`, `solver_support: not_yet`).
+Open questions are listed in `docs/open-questions.md`.
+
+## S-curve
+
+Two short-curve arcs bending in opposite directions, with holes at both ends and
+in the middle (user-confirmed). Each half spans 60 deg between holes on the
+23 cm circle, so the three holes are **collinear and 23 cm apart** (46 cm end to
+end): for connections the S-curve is equivalent to a center-hole long rail's
+holes 0, 2 and 4 (user-confirmed). Derived: 52.2 cm along the centerline; the end
+tangents are parallel to each other and turned 30 deg from the line of holes.
+By point symmetry its center of mass sits on the middle hole, on the line between
+the end holes. Viewer-only for now.
+
+## Hole plates
+
+Flat boards with rail-style holes, user-reported: two holes in a row, three
+holes in a row, and four holes at the corners (`structural_parts.plate_*`).
+Hole pitch, outline, thickness and typical use are not measured yet; owned
+counts are still to be found. The solver ignores them.
+

@@ -56,6 +56,22 @@ Still intentionally unresolved:
 - whether the 4-5 marble value is fixed or only approximate
 - exact set of compatible rail variants
 
+## Curved rails
+
+- Confirm the end overhang beyond the end holes (assumed 2 cm, as on straight rails).
+- Support (answered): a curve alone tips; it is stable with a block standing on
+  it. Still to decide how much load and where (any block above, or a specific hole?).
+- Owned counts: the user's older Twist set (QDE6008AB05) lists 5 short and 5
+  long curves; actual counts still to be made.
+
+## Hole plates
+
+- Hole pitch (block grid 4.5 cm?), outline size and thickness of the 2-hole,
+  3-hole and 4-corner plates.
+- How they are used: tying neighboring columns together, a base under columns,
+  or something else.
+- Owned counts.
+
 ## Deferred geometry
 
 - curved rails

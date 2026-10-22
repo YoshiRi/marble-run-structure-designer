@@ -21,7 +21,7 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
   (random branches chosen with the same weights as the probability table);
   **Roll 100** samples instantly. The **Rolled** column tallies where sampled
   marbles ended, so it can be compared with the computed probabilities.
-  Marble diameter (1.6 cm) is provisional; motion is schematic, not physics.
+  Marble diameter is 1.6 cm (official 16 mm); motion is schematic, not physics.
 - optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
 - ground support polygon and optional visible ground-level grid (z=0)
@@ -165,3 +165,13 @@ The Layout YAML and catalog YAML remain the shared interface either way.
 - full physical marble dynamics and exact internal block channels
 - construction-assist overlays
 - marble animation
+
+## Curved rails and twist (viewer only)
+
+The viewer draws `curved_short` / `curved_long` rails (catalog `curved_rails`) and
+the twist (`special_parts.spiral`) schematically from estimated geometry. A curved
+rail is placed like a straight one (`x_cm`/`y_cm` = end A, `yaw_deg` = travel
+direction at end A) plus `turn: left|right`. The solver and the routing graph do
+not model these parts yet. Preview: load `tests/fixtures/curves-and-twist-preview.yaml`
+with **Load YAML**.
+
