@@ -1,0 +1,295 @@
+{
+  "sets": [
+    "QD001",
+    "QD003",
+    "QD005",
+    "QDE6008AB05"
+  ],
+  "layouts": [
+    {
+      "id": "mr-9bb890c9",
+      "file": "examples/gallery/mr-9bb890c9.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-9bb890c9.jpg",
+      "config": "more-splits",
+      "seed": 3,
+      "score": 120.8,
+      "tags": [
+        "curves",
+        "stacked"
+      ],
+      "metrics": {
+        "levels": 5,
+        "rails": 12,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 167.8,
+        "columns_on_rails": 11,
+        "curves": 2,
+        "twists": 0,
+        "parts": 77,
+        "covers": 13
+      }
+    },
+    {
+      "id": "mr-c692a49c",
+      "file": "examples/gallery/mr-c692a49c.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-c692a49c.jpg",
+      "config": "taller",
+      "seed": 1,
+      "score": 120.8,
+      "tags": [
+        "tall"
+      ],
+      "metrics": {
+        "levels": 7,
+        "rails": 10,
+        "exits": 2,
+        "random_branches": 1,
+        "rolling_length_cm": 197.5,
+        "columns_on_rails": 6,
+        "curves": 1,
+        "twists": 0,
+        "parts": 64,
+        "covers": 14
+      }
+    },
+    {
+      "id": "mr-712fa414",
+      "file": "examples/gallery/mr-712fa414.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-712fa414.jpg",
+      "config": "taller",
+      "seed": 3,
+      "score": 119.2,
+      "tags": [
+        "tall"
+      ],
+      "metrics": {
+        "levels": 7,
+        "rails": 10,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 202.5,
+        "columns_on_rails": 7,
+        "curves": 1,
+        "twists": 0,
+        "parts": 48,
+        "covers": 15
+      }
+    },
+    {
+      "id": "mr-358199f1",
+      "file": "examples/gallery/mr-358199f1.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-358199f1.jpg",
+      "config": "more-splits",
+      "seed": 3,
+      "score": 116.8,
+      "tags": [
+        "twist",
+        "many exits",
+        "tall"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 11,
+        "exits": 4,
+        "random_branches": 3,
+        "rolling_length_cm": 157.8,
+        "columns_on_rails": 7,
+        "curves": 0,
+        "twists": 1,
+        "parts": 73,
+        "covers": 14
+      }
+    },
+    {
+      "id": "mr-ddb56a1a",
+      "file": "examples/gallery/mr-ddb56a1a.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-ddb56a1a.jpg",
+      "config": "taller",
+      "seed": 3,
+      "score": 116.1,
+      "tags": [
+        "tall"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 10,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 180.8,
+        "columns_on_rails": 6,
+        "curves": 0,
+        "twists": 0,
+        "parts": 67,
+        "covers": 15
+      }
+    },
+    {
+      "id": "mr-0c5d1b85",
+      "file": "examples/gallery/mr-0c5d1b85.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-0c5d1b85.jpg",
+      "config": "more-splits",
+      "seed": 1,
+      "score": 112.3,
+      "tags": [
+        "many exits",
+        "long roll"
+      ],
+      "metrics": {
+        "levels": 5,
+        "rails": 10,
+        "exits": 4,
+        "random_branches": 3,
+        "rolling_length_cm": 252.8,
+        "columns_on_rails": 6,
+        "curves": 1,
+        "twists": 0,
+        "parts": 78,
+        "covers": 16
+      }
+    },
+    {
+      "id": "mr-8de823cf",
+      "file": "examples/gallery/mr-8de823cf.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-8de823cf.jpg",
+      "config": "more-splits",
+      "seed": 2,
+      "score": 111.2,
+      "tags": [
+        "twist",
+        "tall",
+        "long roll"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 9,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 232.2,
+        "columns_on_rails": 4,
+        "curves": 1,
+        "twists": 1,
+        "parts": 71,
+        "covers": 16
+      }
+    },
+    {
+      "id": "mr-35102db7",
+      "file": "examples/gallery/mr-35102db7.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-35102db7.jpg",
+      "config": "more-twists",
+      "seed": 3,
+      "score": 109.2,
+      "tags": [
+        "curves",
+        "tall"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 9,
+        "exits": 2,
+        "random_branches": 1,
+        "rolling_length_cm": 171.8,
+        "columns_on_rails": 5,
+        "curves": 2,
+        "twists": 0,
+        "parts": 66,
+        "covers": 12
+      }
+    },
+    {
+      "id": "mr-06761c59",
+      "file": "examples/gallery/mr-06761c59.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-06761c59.jpg",
+      "config": "balanced",
+      "seed": 1,
+      "score": 108.9,
+      "tags": [
+        "twist"
+      ],
+      "metrics": {
+        "levels": 5,
+        "rails": 10,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 129.0,
+        "columns_on_rails": 6,
+        "curves": 1,
+        "twists": 1,
+        "parts": 62,
+        "covers": 13
+      }
+    },
+    {
+      "id": "mr-2c3321ed",
+      "file": "examples/gallery/mr-2c3321ed.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-2c3321ed.jpg",
+      "config": "more-curves",
+      "seed": 3,
+      "score": 108.1,
+      "tags": [
+        "curves",
+        "tall"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 10,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 160.8,
+        "columns_on_rails": 7,
+        "curves": 2,
+        "twists": 0,
+        "parts": 67,
+        "covers": 12
+      }
+    },
+    {
+      "id": "mr-e5fedfc0",
+      "file": "examples/gallery/mr-e5fedfc0.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-e5fedfc0.jpg",
+      "config": "more-twists",
+      "seed": 1,
+      "score": 108.0,
+      "tags": [
+        "twist",
+        "tall"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 8,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 190.0,
+        "columns_on_rails": 6,
+        "curves": 0,
+        "twists": 1,
+        "parts": 33,
+        "covers": 13
+      }
+    },
+    {
+      "id": "mr-3ad93dc7",
+      "file": "examples/gallery/mr-3ad93dc7.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-3ad93dc7.jpg",
+      "config": "more-twists",
+      "seed": 2,
+      "score": 100.8,
+      "tags": [
+        "stacked"
+      ],
+      "metrics": {
+        "levels": 5,
+        "rails": 10,
+        "exits": 3,
+        "random_branches": 2,
+        "rolling_length_cm": 187.5,
+        "columns_on_rails": 10,
+        "curves": 0,
+        "twists": 0,
+        "parts": 47,
+        "covers": 14
+      }
+    }
+  ]
+}
