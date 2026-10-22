@@ -581,50 +581,30 @@
     const componentId = key.slice(0, colon);
     const port = key.slice(colon + 1);
     const rail = (layout.rails || []).find(r => r.id === componentId);
-    if (rail) {
+    if (rail && port.startsWith("hole:")) {
+      const index = Number(port.slice(5));
       const spec = railSpec(rail.rail_type);
-      let localX;
-      if (port === "end_a") localX = 0;
-      else if (port === "end_b") localX = Number(spec.length_cm);
-      else if (port.startsWith("hole:")) {
-        localX = Number(spec.hole_positions_cm[Number(port.slice(5))]);
-      }
-      if (!Number.isFinite(localX)) return null;
-      const p = railPoint(rail, localX);
-      const pos = world(p.x, p.y, Number(rail.z_units) + Number(spec.height || 1));
-      pos.y += 0.5; // Raise overlay above rail surface/groove.
-      return pos;
+      if (!Number.isInteger(index) || index < 0 ||
+          index >= (spec.hole_positions_cm || []).length) return null;
+      const p = railHoleWorld(rail, index);
+      // The route follows the rail's real central groove, not a side overlay.
+      return world(p.x, p.y, Number(rail.z_units) + Number(spec.height || 1) + 0.12 / HEIGHT_SCALE_CM);
     }
-    const part = (layout.parts || []).find(p => p.id === componentId);
-    if (!part) return null;
-    const spec = catalog.routing_blocks?.[part.part_type]
-      || catalog.structural_parts?.[part.part_type]
-      || catalog.special_parts?.[part.part_type] || {};
-    const heightUnits = Number(spec.height || 1);
-    const heightCm = heightUnits * HEIGHT_SCALE_CM;
-    const center = world(part.x_cm, part.y_cm, Number(part.z_units) + heightUnits / 2);
-    if (port === "top") {
-      center.y += heightCm / 2 + 0.35;
-      return center;
-    }
-    if (port === "bottom") {
-      center.y -= heightCm / 2 - 0.35;
-      return center;
-    }
-    const local = {
-      front: [0, BLOCK_DEPTH_CM / 2 + 0.35],
-      rear: [0, -BLOCK_DEPTH_CM / 2 - 0.35],
-      right: [BLOCK_WIDTH_CM / 2 + 0.35, 0],
-      left: [-BLOCK_WIDTH_CM / 2 - 0.35, 0],
-    }[port];
-    if (!local) return null;
-    const yaw = Number(part.rotation_deg || 0) * Math.PI / 180;
-    center.x += local[0] * Math.cos(yaw) - local[1] * Math.sin(yaw);
-    center.z += local[0] * Math.sin(yaw) + local[1] * Math.cos(yaw);
-    if ((spec.port_visualization?.side_entry_notches || []).includes(port)) {
-      center.y -= heightCm / 2 - BLOCK_PORT_DIAMETER_CM / 4;
-    }
-    return center;
+
+    // Use exactly the same port pose as the geometry validator. An unknown
+    // catalog port cannot produce a visual marker or a phantom route.
+    const pose = MarbleRouting.portPose(layout, catalog, {
+      component_id: componentId, port,
+    });
+    if (!pose) return null;
+    const [x, y, z] = pose.position;
+    const [nx, ny, nz] = pose.normal;
+    const clearance = 0.12;
+    return new BABYLON.Vector3(
+      x + nx * clearance,
+      z + nz * clearance + (rail ? 0.12 : 0),
+      y + ny * clearance
+    );
   }
 
   function routingEdgePoints(from, to) {
@@ -633,19 +613,45 @@
     if (!a || !b) return null;
     const fromId = from.slice(0, from.indexOf(":"));
     const toId = to.slice(0, to.indexOf(":"));
-    const part = (layout.parts || []).find(p => p.id === fromId);
-    if (part && fromId === toId) {
-      // Schematic overhead connector: actual internal channels are not known.
-      const spec = catalog.routing_blocks?.[part.part_type] || {};
-      const top = (Number(part.z_units) + Number(spec.height || 1)) * HEIGHT_SCALE_CM;
-      const waypoint = world(part.x_cm, part.y_cm, 0);
-      waypoint.y = Math.max(top + 1.8, a.y + 0.5, b.y + 0.5);
-      return [a, waypoint, b];
+    if (fromId === toId && (layout.parts || []).some(p => p.id === fromId)) {
+      // Actual internal block channels are unknown. Never invent an arc that
+      // leaves the block through solid material or cuts across a solid face.
+      return null;
     }
     return [a, b];
   }
 
+  function drawRoutingBlockHighlight(partId, color) {
+    const part = (layout.parts || []).find(p => p.id === partId);
+    if (!part) return;
+    const spec = catalog.routing_blocks?.[part.part_type]
+      || catalog.special_parts?.[part.part_type];
+    if (!spec?.height) return;
+    const outline = BABYLON.MeshBuilder.CreateBox("routing-block-outline-" + partId, {
+      width: BLOCK_WIDTH_CM + 0.18,
+      height: Number(spec.height) * HEIGHT_SCALE_CM + 0.18,
+      depth: BLOCK_DEPTH_CM + 0.18,
+    }, scene);
+    outline.position = world(part.x_cm, part.y_cm,
+      Number(part.z_units) + Number(spec.height) / 2);
+    outline.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
+    outline.material = material("routingBlockOutlineMat", color, 0.9);
+    outline.material.wireframe = true;
+    outline.isPickable = false;
+    groups.route.push(outline);
+  }
+
   function drawRoutingEdge(from, to, color, radius, label) {
+    const fromId = from.slice(0, from.indexOf(":"));
+    const toId = to.slice(0, to.indexOf(":"));
+    if (fromId === toId && (layout.parts || []).some(p => p.id === fromId)) {
+      // Internal route = highlighted *existing* ports and a block outline.
+      // We deliberately do not draw a physically unverified channel.
+      drawRoutingMarker(from, color, radius * 4);
+      drawRoutingMarker(to, color, radius * 4);
+      if (label === "selected-route") drawRoutingBlockHighlight(fromId, color);
+      return;
+    }
     const points = routingEdgePoints(from, to);
     if (!points || points.every(p => BABYLON.Vector3.DistanceSquared(p, points[0]) < 0.0001)) return;
     const tube = BABYLON.MeshBuilder.CreateTube(label, {
@@ -726,19 +732,20 @@
     }
     for (const [from, to] of trace.reachableEdges) {
       if (pathPairs.has(JSON.stringify([from, to]))) continue;
-      drawRoutingEdge(from, to, "#38bdf8", 0.09, "reachable-route");
+      drawRoutingEdge(from, to, "#38bdf8", 0.07, "reachable-route");
     }
     for (let i = 1; i < trace.path.length; i++) {
-      drawRoutingEdge(trace.path[i - 1], trace.path[i], "#4ade80", 0.23, "selected-route");
+      drawRoutingEdge(trace.path[i - 1], trace.path[i], "#4ade80", 0.13, "selected-route");
     }
-    drawRoutingMarker(source, "#22c55e", 1.25);
-    if (trace.reachable) drawRoutingMarker(sink, "#facc15", 1.35);
-    for (const node of trace.deadEnds) drawRoutingMarker(node, "#f87171", 0.95);
+    drawRoutingMarker(source, "#22c55e", 0.95);
+    if (trace.reachable) drawRoutingMarker(sink, "#facc15", 1.0);
+    for (const node of trace.deadEnds) drawRoutingMarker(node, "#f87171", 0.8);
     const lines = [
       trace.reachable ? "REACHABLE" : "UNREACHABLE",
       "Graph status: " + (trace.valid ? "valid" : "invalid / incomplete"),
       "Reachable nodes: " + trace.reachableNodes.length,
       "Dead ends: " + trace.deadEnds.length,
+      "Block internals: only actual entry/exit ports are highlighted (channels unknown).",
     ];
     if (trace.path.length) lines.push("Path (" + (trace.path.length - 1) + " edges):\n" +
       trace.path.join(" → "));
