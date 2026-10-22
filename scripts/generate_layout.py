@@ -38,6 +38,11 @@ def main() -> None:
     parser.add_argument("--split-probability", type=float, default=0.45)
     parser.add_argument("--curve-bias", type=float, default=0.5,
                         help="chance to build on holes that let straights become curves (needs curves in --sets)")
+    parser.add_argument("--max-exits", type=int, default=2, help="most branch outputs (exits) per layout")
+    parser.add_argument("--exit-style", choices=("contained", "any"), default="contained",
+                        help="contained: exits are block side outlets or dives through open rail holes; "
+                             "any: rails may also roll off their end")
+    parser.add_argument("--twist-probability", type=float, default=0.5)
     parser.add_argument("--attempts", type=int, default=500)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--keep", type=int, default=3)
@@ -52,7 +57,8 @@ def main() -> None:
     config = GeneratorConfig(
         max_height_units=args.max_height, footprint_cm=args.footprint,
         split_probability=args.split_probability, max_rails=args.max_rails,
-        curve_ready_bias=args.curve_bias,
+        curve_ready_bias=args.curve_bias, max_exits=args.max_exits, exit_style=args.exit_style,
+        twist_probability=args.twist_probability,
     )
     candidates = generate(catalog, budget, config=config, attempts=args.attempts,
                           seed=args.seed, keep=args.keep)
@@ -62,7 +68,9 @@ def main() -> None:
     for rank, candidate in enumerate(candidates, 1):
         m = candidate.metrics
         print(f"#{rank} score={candidate.score:.1f} levels={m['levels']} rails={m['rails']} "
-              f"rolling={m['rolling_length_cm']}cm exits={m['exits']} branches={m['random_branches']} "
+              f"rolling={m['rolling_length_cm']}cm shortest={m['min_exit_path_cm']}cm "
+              f"exits={m['exits']} (levels {m['exit_levels']}) branches={m['random_branches']} "
+              f"area={m['footprint_area_cm2']}cm2 "
               f"covers={m['covers']} curves={m.get('curved_rails', 0)} twists={m.get('twists', 0)}")
         if args.out_dir is None:
             continue
@@ -73,7 +81,8 @@ def main() -> None:
             description=f"Generated cascade from sets {', '.join(set_ids)} (seed {args.seed}, rank {rank}).",
             generator_info={"sets": set_ids, "seed": args.seed, "attempts": args.attempts,
                             "max_height_units": args.max_height,
-                            "footprint_cm": list(args.footprint), "score": round(candidate.score, 1)},
+                            "footprint_cm": list(args.footprint), "max_exits": args.max_exits,
+                            "exit_style": args.exit_style, "score": round(candidate.score, 1)},
         )
         path = args.out_dir / f"{name}.yaml"
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")

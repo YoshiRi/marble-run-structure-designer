@@ -279,11 +279,20 @@ drops through the center outlet.
 The historical Twist set lists a large and a small spiral, but the user's two
 pieces are the same size, so all twists are treated as this size for now.
 
-Modeled as a two-level rail (`special_rails.spiral`): end A at the chute tip,
-heading to the funnel center; holes at 1.5 cm (chute) and 24.5 cm (center),
-mounted 3 units and 0 units above the placement level. A block standing on the
-chute hole lands the marble on the chute; the funnel drops it through the center
-hole into the column below (the center hole may not be covered). Collision uses
+Modeled as a rail (`special_rails.spiral`) with a level difference of 3: end A
+at the chute tip, heading straight to the funnel center (top view); holes at
+1.5 cm (chute) and 24.5 cm (center), mounted 3 units and 0 units above the
+placement level.
+
+Entry (user-described): a block stands on the chute hole and drops the marble
+from its **bottom** outlet into the chute. Recommended blocks are blue (rear
+notch), green (left notch) and natural (front/rear notch), turned so the notch
+faces the incoming rail; the rail arrives from the **right** of the twist's
+heading, a hook-shaped route. A block standing there carries no rail, so it is
+a free-standing support (`upper_rail_id: null`). Side outlets do not land on
+the chute. The marble rolls down the chute, veers right at the rim and circles
+the funnel counter-clockwise (seen from above) into the center hole, which
+drops it into the column below (the center hole may not be covered). Collision uses
 the chute (flat at the mount hole, then sloping) and a square around the funnel.
 Funnel depth, the exact inlet position and the mass (150 g) are estimates.
 

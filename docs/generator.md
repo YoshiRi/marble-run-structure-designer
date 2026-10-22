@@ -48,13 +48,28 @@ score. Curves also save covers: a curve has no holes between its end holes.
 
 ## Twist
 
-The twist (QD005 lists 3; the user's two are the same size) is a third landing
-option: the drop block stands on the twist's chute hole and lands the marble on
-the chute; the funnel drops it through its center hole into a new drop column
-below. The chute hole mounts 3 units above the center hole, so columns and
-blocks respect per-hole mount levels. `twist_probability` (default 0.5) is the
-chance to try a twist first; +5 score per twist. About a third of builds with
-the default sets now contain one.
+The twist (QD005 lists 3; the user's two are the same size) is entered with a
+hook (user-described): a rail runs into the side inlet of an entry block
+standing on the twist's chute hole (blue rear, green left or natural front/rear
+notch, facing back up the rail), the block drops the marble from its bottom
+into the chute, and the twist heads to the **right** of the incoming rail, so
+the marble arrives from the twist's right side. It rolls down the chute,
+circles the funnel and drops through the center hole into a new drop column.
+Side outlets do not land on the chute. The chute hole mounts 3 units above the
+center hole, so the feeding rail sits at the chute's level and the entry block
+is free-standing (a support with no upper rail). `twist_probability` (default
+0.5) is the chance to try a twist first, mid-cascade or at a branch end; about
+a third of builds with the default sets contain one, two thirds at 0.9.
+
+## Exits
+
+`exit_style: contained` (default, user rule) ends a branch only where a marble
+can be caught: at a block's centered side outlet (`block_exit_probability`
+for low outlets, or when no rail fits), or by diving through an open rail hole
+with nothing below it (the farthest holes first). Rails never just roll off
+their end; `exit_style: any` (`--exit-style any`) allows that again.
+`max_exits` (default 2, `--max-exits`) caps the branch outputs: a splitter is
+only placed while the extra outlets fit under the cap.
 
 ## Columns
 
@@ -81,31 +96,50 @@ stability, rail statics, connectivity, marble clearance) and reach every exit.
 
 ## Scoring
 
+From the first gallery review (all candidates looked buildable; long rolls
+were valued; high drops, very short branches and sprawling builds were not):
+
 ```text
-10 x levels + 0.1 x rolling length (cm) + 6 x rail exits + 4 x random branches
-+ 2 x columns standing on rails - 8 x outlets left without a rail
+10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
++ 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
+- 1.5 x sum of exit levels (units) - 0.005 x footprint bounding-box area (cm2)
 ```
 
-## Results (QD001+QD003+QD005)
+A twist counts as 60 cm of rolling (chute plus about 1.75 turns; estimate).
+To confine a build to a table area use `--footprint WIDTHxDEPTH`.
 
-The first version (ground columns only) stopped at 6 rails because of covers.
-With landing drops and stacked columns, candidates reach 8-12 rails, 3-4 exits
-and up to 11 columns standing on rails, typically 6 levels within 24 units.
+## Results (QD001+QD003+QD005+QDE6008AB05)
+
+With two exits and contained exits, the best candidates have 6-8 levels and
+150-300 cm of rolling per branch, exits 2-3 units above the ground.
 
 ## Known limits
 
 - Covers are counted for every covered hole, including holes resting on a
   column; if a column's peg already closes the hole, this is conservative.
 - An outlet facing against a rail's flow is not modeled as landing.
+- The entry block on a twist is not part of the rail statics (it sits right
+  above the chute's own support column).
 - Long curves, seesaws and covered slopes are not generated yet.
 - Filler blocks are routing blocks used purely as structure.
 
 ## Review gallery
 
 `scripts/build_gallery.py` runs the generator under several configurations
-(balanced, more splits, more curves, more twists, taller, ground drops), drops
-duplicates by layout ID and picks a varied set: one per feature bucket (twist,
-curves, many exits, tall, stacked, long roll), then best score with at most a
-few per configuration. Output: `examples/gallery/<id>.yaml` and `index.json`.
+(balanced, more twists, no twists, more curves, three exits, taller, compact),
+drops duplicates by layout ID and picks a varied set: one per feature bucket
+(no twist, twist, two twists, curves, branched, tall, stacked, long roll,
+compact), then round-robin over configurations by score, at most a few each. Output: `examples/gallery/<id>.yaml` and `index.json`.
 Reviews reported by ID feed the scoring and future pattern weights.
 
+
+### Review log
+
+- Review 1 (gallery from commit 3a638d2, old twist model and rail-end exits):
+  11 of 12 Buildable (mr-9bb890c9 and mr-358199f1 also Interesting),
+  mr-e5fedfc0 Doubtful. Feedback: long rolling routes are what count; drops
+  from high up, very short branches and sprawling builds should lose points;
+  exits should be block outlets or dives through rail holes, not rail ends; cap
+  the branch outputs (default 2) because each exit needs a catcher. Led to the
+  contained exits, `max_exits` and the current scoring. Those layouts remain in
+  git history at that commit.

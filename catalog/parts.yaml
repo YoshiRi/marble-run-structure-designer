@@ -329,11 +329,13 @@ curved_rails:
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
-# The twist (spiral funnel) is modeled as a two-level rail running from the
-# chute tip (end A) to the funnel center. Its chute hole mounts 3 units above
-# its center hole; the marble lands on the chute from a block standing on the
-# chute hole, circles the funnel and drops through the center hole into the
-# column below. Geometry from user description; not measured.
+# The twist (spiral funnel) is modeled as a rail running straight from the
+# chute tip (end A) to the funnel center, with a level difference of 3: its
+# chute hole mounts 3 units above its center hole. The marble enters from the
+# bottom outlet of a block standing on the chute hole (blue, green or natural,
+# side inlet facing the feeding rail; user-recommended), rolls down the chute,
+# circles the funnel counter-clockwise seen from above and drops through the
+# center hole into the column below. Geometry from user description; not measured.
 special_rails:
   spiral:
     aliases: [twist, ツイスト]
@@ -346,6 +348,8 @@ special_rails:
     funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
     hole_positions_cm: [1.5, 24.5]   # chute hole near the tip; funnel center (outlet)
     hole_mount_levels_units: [3, 0]  # user-observed level difference of 3
+    entry: { hole: 0, via: block_bottom, recommended_blocks: [blue, green, natural_drop],
+             feed_from: right_of_heading, source: user_description }
     centerline_length_cm: 24.5       # routing ends at the funnel center
     com_cm: 21.0                     # mostly the funnel; provisional
     mass_g:

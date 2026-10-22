@@ -65,10 +65,14 @@ class SupportLink:
 
     If lower_rail_id is None, the stack starts at ground z=0.
     Otherwise it starts on top of lower_rail_id at lower_hole_index.
+
+    upper_rail_id None marks a free-standing stack that carries no rail, e.g.
+    the entry block standing on a twist's chute hole. It must stand on a
+    lower rail.
     """
 
-    upper_rail_id: str
-    upper_hole_index: int
+    upper_rail_id: str | None
+    upper_hole_index: int | None
     stack_part_ids: tuple[str, ...]
     lower_rail_id: str | None = None
     lower_hole_index: int | None = None
@@ -214,8 +218,12 @@ def load_layout(path: str | Path) -> Layout:
 
     supports = tuple(
         SupportLink(
-            upper_rail_id=str(x["upper_rail_id"]),
-            upper_hole_index=int(x["upper_hole_index"]),
+            upper_rail_id=(
+                str(x["upper_rail_id"]) if x.get("upper_rail_id") is not None else None
+            ),
+            upper_hole_index=(
+                int(x["upper_hole_index"]) if x.get("upper_hole_index") is not None else None
+            ),
             stack_part_ids=tuple(str(v) for v in x.get("stack_part_ids", ())),
             lower_rail_id=(
                 str(x["lower_rail_id"])

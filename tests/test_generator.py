@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from quadrilla_solver.catalog import load_catalog
+import yaml
+
 from quadrilla_solver.generator import (
+    layout_sinks,
     Budget, GeneratorConfig, generate, layout_to_yaml_dict, resolve_set_paths,
 )
 from quadrilla_solver.model import PortRef
@@ -31,9 +34,8 @@ def test_generated_layouts_validate_and_respect_the_set_inventory():
     budget = _budget().counts
     for candidate in _run(11):
         layout = candidate.layout
-        leaves = [f"{r.id}:end_b" for r in layout.rails
-                  if "block_connected" not in r.hole_states.values()]
-        sinks = tuple(PortRef(*s.split(":", 1)) for s in leaves)
+        sinks = candidate.sinks
+        assert sinks
         result = validate_layout(layout, CATALOG, source=PortRef("rail0", "end_a"), sinks=sinks)
         assert result.valid, result
         assert result.marble_clearance == ()
@@ -83,9 +85,7 @@ def test_published_generated_examples_stay_valid():
     assert paths
     for path in paths:
         layout = load_layout(path)
-        leaves = [f"{r.id}:end_b" for r in layout.rails
-                  if "block_connected" not in r.hole_states.values()]
-        sinks = tuple(PortRef(*s.split(":", 1)) for s in leaves)
+        sinks = layout_sinks(yaml.safe_load(path.read_text()))
         result = validate_layout(layout, CATALOG, source=PortRef("rail0", "end_a"), sinks=sinks)
         assert result.valid, (path.name, result)
 
@@ -142,8 +142,52 @@ def test_gallery_index_matches_its_layouts():
         path = ROOT / entry["file"]
         assert path.exists(), entry["file"]
         assert layout_id(load_layout(path)) == entry["id"] == path.stem
-        leaves = [f"{r.id}:end_b" for r in load_layout(path).rails
-                  if "block_connected" not in r.hole_states.values()]
         result = validate_layout(load_layout(path), CATALOG, source=PortRef("rail0", "end_a"),
-                                 sinks=tuple(PortRef(*s.split(":", 1)) for s in leaves))
+                                 sinks=layout_sinks(yaml.safe_load(path.read_text())))
         assert result.valid, entry["id"]
+
+
+def test_exits_are_contained_and_capped():
+    """Default rule: branches end at a block outlet or by diving through an
+    open rail hole (never off a rail end), at most max_exits of them."""
+    found = []
+    for seed in (2, 7):
+        found += generate(CATALOG, _budget(), config=GeneratorConfig(twist_probability=0.9),
+                          attempts=60, seed=seed, keep=10)
+    assert found
+    for c in found:
+        assert 1 <= len(c.sinks) <= 2
+        rails = c.layout.rail_map()
+        for sink in c.sinks:
+            assert sink.port != "end_b" and sink.port != "end_a"
+            if sink.component_id in rails:
+                index = int(sink.port.split(":")[1])
+                assert rails[sink.component_id].hole_states[index] == "open"
+        assert c.metrics["exits"] == len(c.sinks)
+    three = generate(CATALOG, _budget(), config=GeneratorConfig(max_exits=3, split_probability=0.9),
+                     attempts=60, seed=3, keep=10)
+    assert max(len(c.sinks) for c in three) <= 3
+
+
+def test_twists_are_entered_with_a_hook_from_the_right():
+    from math import cos, radians, sin
+
+    found = generate(CATALOG, _budget(), config=GeneratorConfig(twist_probability=0.9),
+                     attempts=80, seed=5, keep=10)
+    twisted = [c for c in found if c.metrics["twists"]]
+    assert twisted
+    for c in twisted:
+        rails, parts = c.layout.rail_map(), c.layout.part_map()
+        for s in c.layout.supports:
+            if s.lower_rail_id in rails and rails[s.lower_rail_id].rail_type == "spiral" \
+                    and s.lower_hole_index == 0:
+                assert s.upper_rail_id is None
+                entry = parts[s.stack_part_ids[0]]
+                assert entry.part_type in ("blue", "green", "natural_drop")
+                feed = next(l.source.component_id for l in c.layout.route_links
+                            if l.target.component_id == entry.id)
+                h = radians(rails[s.lower_rail_id].yaw_deg)
+                d = radians(rails[feed].yaw_deg)
+                # The feed travels toward the twist's left: it comes from the right.
+                assert abs(cos(d) - cos(h + radians(90))) < 1e-9
+                assert abs(sin(d) - sin(h + radians(90))) < 1e-9
