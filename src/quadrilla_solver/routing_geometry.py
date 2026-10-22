@@ -63,7 +63,11 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
     if isinstance(body_height, dict):
         body_height = body_height.get("value")
     h = float(body_height) if body_height is not None else height_units * height_scale
-    side_z = h / 2.0
+    # Centered side holes open with their floor one height unit above the
+    # block's installation level: exactly the groove height of a rail laid
+    # at that same level (physically confirmed). Side-entry notches feeding
+    # a downward route open at the installation level itself.
+    side_z = min(height_scale, h)
     if ref.port in (spec.get("port_visualization", {}).get("side_entry_notches") or ()):
         side_z = 0.0
     local = {
@@ -154,6 +158,47 @@ def _allows_side_entry_plus_one(
     )
 
 
+def _allows_side_exit_drop_one(
+    layout: Layout,
+    catalog: PartCatalog,
+    source: PortRef,
+    target: PortRef,
+    source_pose: PortPose,
+    target_pose: PortPose,
+    *,
+    position_tolerance_cm: float,
+    opposite_normal_dot_max: float,
+) -> bool:
+    """Allow a centered side outlet to drop one unit onto a rail groove.
+
+    A centered side hole sits at installation level +1, but the marble can
+    also roll straight out onto a rail whose groove is at the block's
+    installation level (physically confirmed), i.e. one unit lower.
+    """
+    part = layout.part_map().get(source.component_id)
+    if part is None or source.port not in ("front", "rear", "left", "right"):
+        return False
+    spec = catalog.part_spec(part.part_type)
+    if spec is None:
+        return False
+    if source.port in (spec.get("port_visualization", {}).get("side_entry_notches") or ()):
+        return False
+    rail = layout.rail_map().get(target.component_id)
+    if rail is None or target.port not in ("end_a", "end_b"):
+        return False
+
+    dx = source_pose.position_cm[0] - target_pose.position_cm[0]
+    dy = source_pose.position_cm[1] - target_pose.position_cm[1]
+    drop = source_pose.position_cm[2] - target_pose.position_cm[2]
+    normal_dot = sum(x * y for x, y in zip(source_pose.outward, target_pose.outward))
+    height_unit_cm = _dimension(catalog, "height_unit", 1.5)
+    return (
+        hypot(dx, dy) <= position_tolerance_cm
+        and abs(drop - height_unit_cm) <= position_tolerance_cm
+        and normal_dot <= opposite_normal_dot_max
+    )
+
+
 def validate_route_link_geometry(
     layout: Layout,
     catalog: PartCatalog,
@@ -183,10 +228,13 @@ def validate_route_link_geometry(
     distance = sqrt(sum((x - y) ** 2 for x, y in zip(a.position_cm, b.position_cm)))
     normal_dot = sum(x * y for x, y in zip(a.outward, b.outward))
     if distance > position_tolerance_cm or normal_dot > opposite_normal_dot_max:
-        if not _allows_side_entry_plus_one(
-            layout, catalog, source, target, a, b,
+        tolerances = dict(
             position_tolerance_cm=position_tolerance_cm,
             opposite_normal_dot_max=opposite_normal_dot_max,
+        )
+        if not (
+            _allows_side_entry_plus_one(layout, catalog, source, target, a, b, **tolerances)
+            or _allows_side_exit_drop_one(layout, catalog, source, target, a, b, **tolerances)
         ):
             return f"route_link_geometry_mismatch:{label}"
     return None

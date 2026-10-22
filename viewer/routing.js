@@ -55,8 +55,10 @@
     const width = Number(footprint.width_cm ?? 4.5);
     const depth = Number(footprint.depth_cm ?? 4.5);
     const height = geometryValue(spec.body_height_cm, Number(spec.height) * scale);
+    // Centered side holes: floor at installation level +1 unit (the groove of
+    // a rail laid at the same level). Side-entry notches: installation level.
     const sideZ = (spec.port_visualization?.side_entry_notches || []).includes(ref.port)
-      ? 0 : height / 2;
+      ? 0 : Math.min(scale, height);
     const local = {
       top: [0, 0, height, [0, 0, 1]],
       bottom: [0, 0, 0, [0, 0, -1]],
@@ -118,6 +120,27 @@
       dot <= -0.95;
   }
 
+  // Mirror of _allows_side_exit_drop_one: a centered side outlet may also
+  // drop one unit onto a rail whose groove is at the installation level.
+  function allowsSideExitDropOne(layout, catalog, source, target, a, b) {
+    if (!["front", "rear", "left", "right"].includes(source.port)) return false;
+    const part = (layout.parts || []).find(p => p.id === source.component_id);
+    if (!part) return false;
+    const spec = partSpec(catalog, part.part_type);
+    if (!spec) return false;
+    if ((spec.port_visualization?.side_entry_notches || []).includes(source.port)) return false;
+    const rail = (layout.rails || []).find(r => r.id === target.component_id);
+    if (!rail || !["end_a", "end_b"].includes(target.port)) return false;
+
+    const heightUnitCm = geometryValue(catalog.geometry_cm?.height_unit, 1.5);
+    const horizontalDistance = Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1]);
+    const drop = a.position[2] - b.position[2];
+    const dot = a.normal.reduce((sum, x, i) => sum + x * b.normal[i], 0);
+    return horizontalDistance <= 0.35 &&
+      Math.abs(drop - heightUnitCm) <= 0.35 &&
+      dot <= -0.95;
+  }
+
   function routeLinkError(layout, catalog, link) {
     const source = link.source, target = link.target;
     const label = source.component_id + ":" + source.port + ":" +
@@ -135,7 +158,8 @@
     const distance = Math.hypot(...a.position.map((x, i) => x - b.position[i]));
     const dot = a.normal.reduce((sum, x, i) => sum + x * b.normal[i], 0);
     if (distance > 0.35 || dot > -0.95) {
-      if (!allowsSideEntryPlusOne(layout, catalog, source, target, a, b)) {
+      if (!allowsSideEntryPlusOne(layout, catalog, source, target, a, b) &&
+          !allowsSideExitDropOne(layout, catalog, source, target, a, b)) {
         return "route_link_geometry_mismatch:" + label;
       }
     }

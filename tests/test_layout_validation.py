@@ -12,6 +12,7 @@ from quadrilla_solver.model import (
     PlacedPart,
     PlacedRail,
     PortRef,
+    RouteLink,
     SupportLink,
     load_layout,
 )
@@ -213,7 +214,12 @@ def test_route_link_ports_match_catalogued_visible_openings():
     source = port_pose(layout, CATALOG, link.source)
     target = port_pose(layout, CATALOG, link.target)
     assert source is not None and target is not None
-    assert source.position_cm == pytest.approx(target.position_cm, abs=1e-6)
+    # Blue block installed at 2u: its centered front hole opens at 3u (4.5 cm).
+    assert source.position_cm[2] == pytest.approx(3 * 1.5)
+    # The exit rail's groove is at the installation level, one unit lower,
+    # at the same XY: the marble drops straight out of the hole.
+    assert source.position_cm[:2] == pytest.approx(target.position_cm[:2], abs=1e-6)
+    assert source.position_cm[2] - target.position_cm[2] == pytest.approx(1.5)
     assert sum(x * y for x, y in zip(source.outward, target.outward)) == pytest.approx(-1)
     assert validate_route_link_geometry(layout, CATALOG, link) is None
 
@@ -249,3 +255,35 @@ def test_purple_drop_block_height_matches_one_unit_rail():
     bottom = port_pose(layout, CATALOG, PortRef("purple", "bottom"))
     assert top is not None and bottom is not None
     assert top.position_cm[2] - bottom.position_cm[2] == pytest.approx(1.5)
+
+
+def test_centered_side_ports_drop_one_but_never_climb():
+    """Cyan passes left -> right through centered holes at level +1.
+
+    Out of the right hole the marble may drop one unit onto a rail at the
+    installation level; a rail one unit below the left hole cannot feed it.
+    """
+    from quadrilla_solver.routing_geometry import port_pose, validate_route_link_geometry
+
+    cyan = PlacedPart("cyan", "cyan", 0, 0, 2)
+    # Rails along x: one leaving the right hole, one arriving at the left hole.
+    out_rail = PlacedRail("out", "straight_short", 2.25, 0, 1)
+    in_rail = PlacedRail("in", "straight_short", -2.25 - 27, 0, 1)
+    layout = Layout(
+        "cyan-levels",
+        rails=(out_rail, in_rail),
+        parts=(cyan,),
+        route_links=(
+            RouteLink(PortRef("cyan", "right"), PortRef("out", "end_a")),
+            RouteLink(PortRef("in", "end_b"), PortRef("cyan", "left")),
+        ),
+    )
+    right = port_pose(layout, CATALOG, PortRef("cyan", "right"))
+    assert right is not None and right.position_cm[2] == pytest.approx(3 * 1.5)
+
+    drop_out, climb_in = layout.route_links
+    assert validate_route_link_geometry(layout, CATALOG, drop_out) is None
+    assert validate_route_link_geometry(layout, CATALOG, climb_in) is not None
+    assert validate_route_link_geometry(
+        replace(layout, rails=(out_rail, replace(in_rail, z_units=2))), CATALOG, climb_in
+    ) is None
