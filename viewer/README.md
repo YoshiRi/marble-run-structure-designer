@@ -29,15 +29,11 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - load a local Layout YAML file
 - no build step
 
-The default `three-level-physically-connected.yaml` example includes a
-blue-block front outlet dropping one unit onto an exit rail that rests on plain
-ground foundations (no pedestal blocks needed). Centered side holes are drawn
-with their floor at installation level +1, where they physically open.
-`random-split.yaml` replaces the blue column with a red random splitter whose
-front and rear outlets drop onto two exit rails (≈50% each).
-`two-level-supported.yaml` has no downstream connection from its blue
-block, so the trace ends at the real front opening rather than jumping to
-an unrelated lower rail.
+The example menu lists layouts produced by the generator
+(`examples/generated/`, see [docs/generator.md](../docs/generator.md)). Any
+other Layout YAML can be opened with **Load YAML**; hand-built layouts used
+by the tests live in `tests/fixtures/`. Centered side holes are drawn with
+their floor at installation level +1, where they physically open.
 
 Vertically stacked pieces of the same type have a subtle joint line so multiple
 1-unit purple drop blocks are not mistaken for one taller part.

@@ -13,7 +13,7 @@ CATALOG = load_catalog(ROOT / "catalog" / "parts.yaml")
 
 def test_examples_have_no_collisions():
     for name in ("three-level-physically-connected", "two-level-supported", "random-split"):
-        layout = load_layout(ROOT / "examples" / f"{name}.yaml")
+        layout = load_layout(ROOT / "tests" / "fixtures" / f"{name}.yaml")
         assert solid_collisions(layout, CATALOG) == (), name
 
 
@@ -62,7 +62,7 @@ def test_rotated_rail_collision_uses_its_real_footprint():
 
 
 def test_block_standing_on_the_marble_path_is_reported():
-    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml")
     connectivity = validate_connectivity(
         layout, CATALOG, PortRef("upper", "end_a"), (PortRef("exit", "end_b"),)
     )

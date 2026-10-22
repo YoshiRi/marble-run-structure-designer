@@ -6,11 +6,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_default_viewer_sample_exit_rail_needs_no_purple_pedestal():
+def test_three_level_fixture_exit_rail_needs_no_purple_pedestal():
     """The blue outlet drops one unit onto a rail at its installation level,
     so the exit rail rests on single ground foundations."""
     layout = yaml.safe_load(
-        (ROOT / "examples" / "three-level-physically-connected.yaml").read_text()
+        (ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml").read_text()
     )
     parts = {part["id"]: part for part in layout["parts"]}
     assert not [p for p in parts.values() if p["part_type"] == "purple_drop"]

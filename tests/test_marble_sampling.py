@@ -46,7 +46,7 @@ process.stdout.write(JSON.stringify({
 
 
 def _run(example: str, source: str, runs: int) -> dict:
-    layout_data = yaml.safe_load((ROOT / "examples" / example).read_text())
+    layout_data = yaml.safe_load((ROOT / "tests" / "fixtures" / example).read_text())
     completed = subprocess.run(
         ["node", "-e", NODE_SCRIPT],
         input=json.dumps({
@@ -59,7 +59,7 @@ def _run(example: str, source: str, runs: int) -> dict:
 
 
 def test_random_split_example_is_a_valid_buildable_layout():
-    layout = load_layout(ROOT / "examples" / "random-split.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "random-split.yaml")
     result = validate_layout(
         layout, CATALOG, source=PortRef("upper", "end_a"),
         sinks=(PortRef("exit_front", "end_b"), PortRef("exit_rear", "end_b")),
@@ -82,7 +82,7 @@ def test_sampled_split_frequencies_match_analysis():
 def test_sampled_deterministic_run_follows_solver_path():
     data = _run("three-level-physically-connected.yaml", "upper:end_a", 50)
     assert data["counts"] == {"exit:end_b": 50}
-    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml")
     solver = validate_connectivity(
         layout, CATALOG, PortRef("upper", "end_a"), (PortRef("exit", "end_b"),)
     )

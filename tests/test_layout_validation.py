@@ -24,7 +24,7 @@ CATALOG = load_catalog(ROOT / "catalog" / "parts.yaml")
 
 
 def _example() -> Layout:
-    return load_layout(ROOT / "examples" / "two-level-supported.yaml")
+    return load_layout(ROOT / "tests" / "fixtures" / "two-level-supported.yaml")
 
 
 def test_common_layout_example_is_assemblable():
@@ -193,7 +193,7 @@ def test_unaligned_manual_link_is_rejected_not_rendered():
 
 
 def test_three_level_example_has_physically_aligned_full_route():
-    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml")
     assembly = validate_assembly(layout, CATALOG)
     assert assembly.valid, assembly.reasons
     result = validate_connectivity(
@@ -209,7 +209,7 @@ def test_three_level_example_has_physically_aligned_full_route():
 def test_route_link_ports_match_catalogued_visible_openings():
     from quadrilla_solver.routing_geometry import port_pose, validate_route_link_geometry
 
-    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml")
     link = layout.route_links[0]
     source = port_pose(layout, CATALOG, link.source)
     target = port_pose(layout, CATALOG, link.target)
@@ -230,7 +230,7 @@ def test_route_link_ports_match_catalogued_visible_openings():
 
 
 def test_three_level_complete_layout_stability():
-    layout = load_layout(ROOT / "examples" / "three-level-physically-connected.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "three-level-physically-connected.yaml")
     result = validate_layout(
         layout, CATALOG, source=PortRef("upper", "end_a"),
         sinks=(PortRef("exit", "end_b"),),
@@ -315,7 +315,7 @@ def test_bottom_outlets_drop_down_the_support_column():
 def test_block_outlet_lands_on_the_rail_it_stands_on():
     from quadrilla_solver.connectivity import build_routing_graph
 
-    layout = load_layout(ROOT / "examples" / "landing-tower.yaml")
+    layout = load_layout(ROOT / "tests" / "fixtures" / "landing-tower.yaml")
     result = validate_layout(
         layout, CATALOG, source=PortRef("top", "end_a"), sinks=(PortRef("exit", "end_b"),),
     )
