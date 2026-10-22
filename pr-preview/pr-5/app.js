@@ -838,6 +838,12 @@
     return true;
   }
 
+  function updateRollButtons(enabled) {
+    for (const id of ["rollOne", "rollOneTop", "rollMany"]) {
+      document.getElementById(id).disabled = !enabled;
+    }
+  }
+
   function populateRoutingControls() {
     const sourceSelect = document.getElementById("routeSource");
     const sinkSelect = document.getElementById("routeSink");
@@ -848,6 +854,7 @@
     const preferredSource = sourceOptions.some(item => item.value === querySource)
       ? querySource : sourceOptions[0]?.value;
     setSelectOptions(sourceSelect, sourceOptions, preferredSource, "No valid input holes");
+    updateRollButtons(sourceOptions.length > 0);
     setSelectOptions(sinkSelect, [], "", "Select an input hole first");
   }
 
@@ -1427,6 +1434,7 @@
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
   document.getElementById("rollOne").addEventListener("click", rollOne);
+  document.getElementById("rollOneTop").addEventListener("click", rollOne);
   document.getElementById("rollMany").addEventListener("click", () => rollMany(100));
   document.getElementById("rollReset").addEventListener("click", () => {
     resetTally(document.getElementById("routeSource").value);
