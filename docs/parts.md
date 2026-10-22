@@ -317,7 +317,16 @@ edges: inner radius 20.75 cm, outer 25.25 cm
 ```
 
 The 70 deg and 130 deg totals match the user's visual estimates, which
-supports the 2 cm overhang assumption. Because every curve shares R = 23 cm
+supports the 2 cm overhang assumption.
+
+Confirmed by the user against the drawn model:
+
+- The shape matches the derived drawing.
+- A short curve and a short straight overlap exactly hole on hole (end holes
+  of the curve over holes 0 and 3 of the straight). They must be on different
+  levels, at least one unit apart.
+- The long curve's end holes do not coincide with any convenient hole of
+  another rail, consistent with its derived 39.8 cm end-hole chord. Because every curve shares R = 23 cm
 and 60 deg hole spacing, curve holes always fall on a hexagonal pattern around
 the circle's center.
 

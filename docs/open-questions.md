@@ -59,8 +59,6 @@ Still intentionally unresolved:
 ## Curved rails
 
 - Confirm the end overhang beyond the end holes (assumed 2 cm, as on straight rails).
-- How two curves "overlap at holes": stacked one level apart (one curve's end
-  resting on the other's hole), or joined at the same level?
 - Support: does a curve stand on its two end holes (the arc's center of mass
   lies off the line between them), or does it need a third support / the
   middle hole?

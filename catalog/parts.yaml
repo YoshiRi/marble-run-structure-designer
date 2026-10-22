@@ -243,8 +243,9 @@ curved_rails:
     centerline_length_cm: 28.09 # derived
     hole_arc_positions_cm: [2.0, 26.09]
     end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
+    stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
     solver_support: not_yet
-    confidence: estimated
+    confidence: estimated_shape_user_confirmed
 
   curved_long:
     shape: arc
@@ -262,9 +263,9 @@ curved_rails:
     arc_deg: 129.96             # derived
     centerline_length_cm: 52.17 # derived
     hole_arc_positions_cm: [2.0, 26.09, 50.17]
-    end_hole_chord_cm: 39.84    # derived; matches no straight-rail hole pair
+    end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
     solver_support: not_yet
-    confidence: estimated
+    confidence: estimated_shape_user_confirmed
 
 hole_state_types:
   open:
