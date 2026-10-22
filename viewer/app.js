@@ -216,14 +216,17 @@
     return { mesh, cutouts: false, grooveCutout: true };
   }
 
-  // Twist (catalog: special_parts.spiral). Placement: x_cm/y_cm = funnel
+  // Twist mesh (catalog: special_rails.spiral, a two-level rail). Placement here: x_cm/y_cm = funnel
   // center (outlet hole), z_units = level the outlet rests on, rotation_deg =
   // direction from the funnel center toward the chute. Viewer-only, schematic.
-  function renderTwist(part, spec) {
+  function renderTwist(part, spec, rail = null) {
     const rimD = geometryValue(spec.funnel_rim_diameter_cm, 23);
-    const spacing = geometryValue(spec.mount_hole_spacing_cm, 23);
+    const holePositions = spec.hole_positions_cm || [];
+    const spacing = holePositions.length >= 2
+      ? Number(holePositions[holePositions.length - 1]) - Number(holePositions[0])
+      : geometryValue(spec.mount_hole_spacing_cm, 23);
     const overall = geometryValue(spec.overall_length_cm, 36);
-    const rise = geometryValue(spec.level_difference_units, 3);
+    const rise = Number(spec.hole_mount_levels_units?.[0] ?? geometryValue(spec.level_difference_units, 3));
     const unit = HEIGHT_SCALE_CM;
     const z0 = Number(part.z_units);
     const yaw = (Number(part.rotation_deg || 0) * Math.PI) / 180;
@@ -292,7 +295,9 @@
       groups.holes.push(ring);
     }
     const info = {
-      id: part.id, kind: "twist", type: part.part_type, solver_support: "not_yet",
+      id: part.id, kind: "twist", type: part.part_type,
+      solver_support: rail ? "rail_model" : "viewer_only",
+      hole_states: rail?.hole_states || {},
       outlet_level_units: z0, inlet_level_units: z0 + rise,
       funnel_rim_diameter_cm: rimD, mount_hole_spacing_cm: spacing, overall_length_cm: overall,
       geometry_status: "schematic, from user description",
@@ -386,6 +391,15 @@
 
   function renderRail(rail) {
     const spec = railSpec(rail.rail_type);
+    if (spec.shape === "twist") {
+      // Twist rail: end A at the chute tip, heading to the funnel center.
+      const center = railPoint(rail, Number(spec.length_cm));
+      renderTwist({
+        id: rail.id, part_type: rail.rail_type, x_cm: center.x, y_cm: center.y,
+        z_units: rail.z_units, rotation_deg: Number(rail.yaw_deg || 0) + 180,
+      }, spec, rail);
+      return;
+    }
     const length = Number(spec.length_cm);
     const heightUnits = Number(spec.height || 1);
     const railHeight = heightUnits * HEIGHT_SCALE_CM;
@@ -429,7 +443,7 @@
     (spec.hole_positions_cm || []).forEach((localX, idx) => {
       const p = railPoint(rail, Number(localX));
       const state = (rail.hole_states || {})[idx] ?? "open";
-      const topZ = Number(rail.z_units) + heightUnits;
+      const topZ = Number(rail.z_units) + MarbleRouting.holeLevel(spec, idx) + heightUnits;
       const markerInfo = {
         id: rail.id + ":hole:" + idx,
         kind: "rail_hole",
@@ -776,9 +790,12 @@
       if (support.lower_rail_id) {
         const lower = railMap[support.lower_rail_id];
         const lowerSpec = lower ? railSpec(lower.rail_type) : null;
-        if (lower && lowerSpec) lowerZ = Number(lower.z_units) + Number(lowerSpec.height || 1);
+        if (lower && lowerSpec) {
+          lowerZ = Number(lower.z_units) + MarbleRouting.holeLevel(lowerSpec, Number(support.lower_hole_index))
+            + Number(lowerSpec.height || 1);
+        }
       }
-      const upperZ = Number(rail.z_units);
+      const upperZ = Number(rail.z_units) + MarbleRouting.holeLevel(railSpec(rail.rail_type), Number(support.upper_hole_index));
       const line = BABYLON.MeshBuilder.CreateLines("support-" + (support.name || support.upper_rail_id), {
         points: [world(p.x, p.y, lowerZ), world(p.x, p.y, upperZ)],
       }, scene);
@@ -806,7 +823,7 @@
           index >= (spec.hole_positions_cm || []).length) return null;
       const p = railHoleWorld(rail, index);
       // The route follows the rail's real central groove, not a side overlay.
-      return world(p.x, p.y, Number(rail.z_units) + Number(spec.height || 1) + 0.12 / HEIGHT_SCALE_CM);
+      return world(p.x, p.y, Number(rail.z_units) + MarbleRouting.holeLevel(spec, index) + Number(spec.height || 1) + 0.12 / HEIGHT_SCALE_CM);
     }
 
     // Use exactly the same port pose as the geometry validator. An unknown

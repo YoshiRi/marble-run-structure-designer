@@ -315,6 +315,7 @@ def analyze_layout_statics(
                 length_cm=spec.length_cm,
                 mass_g=spec.mass_g,
                 supports=(converted[0], converted[1]),
+                com_cm=spec.com_cm,
             )
 
     if reasons or len(bodies) != len(layout.rails):

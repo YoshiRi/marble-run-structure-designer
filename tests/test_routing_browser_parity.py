@@ -59,6 +59,7 @@ process.stdout.write(JSON.stringify({
         ("stack_drop", "upper:end_a", "blue_mid:front"),
         ("stack_drop_from_rear", "blue_mid:rear", "yellow_base:front"),
         ("landing_tower", "top:end_a", "exit:end_b"),
+        ("twist_drop", "upper:end_a", "exit:end_b"),
     ],
 )
 def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
@@ -69,6 +70,8 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     } else "two-level-supported.yaml")
     if case == "landing_tower":
         example = "landing-tower.yaml"
+    if case == "twist_drop":
+        example = "twist-drop.yaml"
     if case.startswith("stack_drop"):
         example = "stack-drop.yaml"
     with (ROOT / "tests" / "fixtures" / example).open() as f:

@@ -46,6 +46,16 @@ While building, `--curve-bias` (default 0.5) is the chance to prefer these
 layouts carry about one curve each; higher values add curves at some cost in
 score. Curves also save covers: a curve has no holes between its end holes.
 
+## Twist
+
+The twist (QD005 lists 3; the user's two are the same size) is a third landing
+option: the drop block stands on the twist's chute hole and lands the marble on
+the chute; the funnel drops it through its center hole into a new drop column
+below. The chute hole mounts 3 units above the center hole, so columns and
+blocks respect per-hole mount levels. `twist_probability` (default 0.5) is the
+chance to try a twist first; +5 score per twist. About a third of builds with
+the default sets now contain one.
+
 ## Columns
 
 Columns are abstract while building: a base (ground or a rail hole), the rail
@@ -87,5 +97,5 @@ and up to 11 columns standing on rails, typically 6 levels within 24 units.
 - Covers are counted for every covered hole, including holes resting on a
   column; if a column's peg already closes the hole, this is conservative.
 - An outlet facing against a rail's flow is not modeled as landing.
-- Long curves, the twist (spiral), seesaws and covered slopes are not generated yet.
+- Long curves, seesaws and covered slopes are not generated yet.
 - Filler blocks are routing blocks used purely as structure.

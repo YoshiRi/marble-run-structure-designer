@@ -116,7 +116,8 @@ def validate_assembly(
                     f"lower=({lx:.6g},{ly:.6g})"
                 )
             lower_xy = (lx, ly)
-            base_z = lower.z_units + lower_spec.height_units
+            base_z = (lower.z_units + lower_spec.hole_level(support.lower_hole_index)
+                      + lower_spec.height_units)
             is_ground = False
 
         expected_z = base_z
@@ -160,10 +161,11 @@ def validate_assembly(
 
             expected_z += height
 
-        if abs(upper.z_units - expected_z) > z_tolerance_units:
+        upper_z = upper.z_units + upper_spec.hole_level(support.upper_hole_index)
+        if abs(upper_z - expected_z) > z_tolerance_units:
             reasons.append(
                 f"upper_rail_z_mismatch:{label}:{upper.id}:"
-                f"expected={expected_z:.6g}:actual={upper.z_units:.6g}"
+                f"expected={expected_z:.6g}:actual={upper_z:.6g}"
             )
 
         # A ground support with no column means the rail itself lies on ground.
@@ -192,6 +194,13 @@ def validate_assembly(
             for pair in combinations(local_holes, 2)
         ):
             reasons.append(f"no_stable_support_pair:{rail_id}")
+
+    # The twist's funnel always empties through its center hole.
+    for rail in layout.rails:
+        spec = catalog.rails.get(rail.rail_type)
+        if spec is not None and spec.shape == "twist":
+            if rail.hole_states.get(len(spec.holes_cm) - 1, "open") == "covered":
+                reasons.append(f"twist_center_hole_covered:{rail.id}")
 
     # Curved rails tip on their own: they are stable only with load above,
     # i.e. at least one column standing on them (user-confirmed).

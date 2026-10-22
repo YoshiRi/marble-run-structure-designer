@@ -31,6 +31,16 @@
   function railGeometry(catalog, type) {
     const straight = catalog.rails?.[type];
     if (straight) return { ...straight, shape: "straight" };
+    const special = catalog.special_rails?.[type];
+    if (special?.shape === "twist") {
+      // Two-level rail from the chute tip (end A) to the funnel center.
+      return {
+        ...special, shape: "twist",
+        length_cm: Number(special.centerline_length_cm),
+        hole_positions_cm: special.hole_positions_cm || [],
+        hole_levels: special.hole_mount_levels_units || [],
+      };
+    }
     const curved = catalog.curved_rails?.[type];
     if (!curved) return null;
     const radius = geometryValue(curved.hole_circle_radius_cm, 23);
@@ -42,6 +52,17 @@
       ...curved, shape: "arc", radius_cm: radius, segments,
       length_cm: length, hole_positions_cm: curved.hole_arc_positions_cm || [],
     };
+  }
+
+  // Mount level of a hole relative to rail.z_units (non-zero only on the twist).
+  function holeLevel(spec, index) {
+    return Number(spec?.hole_levels?.[index] || 0);
+  }
+
+  function endLevel(spec, port) {
+    const levels = spec?.hole_levels || [];
+    if (!levels.length) return 0;
+    return Number(port === "end_a" ? levels[0] : levels[levels.length - 1]);
   }
 
   // [x, y, heading radians] on the centerline, s cm from end A. Mirrors
@@ -84,7 +105,7 @@
       const distance = ref.port === "end_a" ? 0 : Number(spec.length_cm);
       const [px, py, angle] = railPose(catalog, rail, distance);
       return {
-        position: [px, py, (Number(rail.z_units) + Number(spec.height || 1)) * scale],
+        position: [px, py, (Number(rail.z_units) + endLevel(spec, ref.port) + Number(spec.height || 1)) * scale],
         normal: [dir * Math.cos(angle), dir * Math.sin(angle), 0],
       };
     }
@@ -300,7 +321,7 @@
       }
       const [holeX, holeY] = railPose(catalog, rail, Number(railSpec.hole_positions_cm[index]));
       if (Math.hypot(Number(part.x_cm) - holeX, Number(part.y_cm) - holeY) > 0.35 ||
-          Math.abs(Number(part.z_units) + Number(partHeight) - Number(rail.z_units)) > 0.1) {
+          Math.abs(Number(part.z_units) + Number(partHeight) - Number(rail.z_units) - holeLevel(railSpec, index)) > 0.1) {
         reasons.push("block_connected_geometry_mismatch:" + rail.id + ":" + index + ":" + part.id);
         continue;
       }
@@ -357,7 +378,7 @@
       // Direction of the rail where the block stands (tangent on a curve).
       const theta = railPose(catalog, rail, Number(railSpec.hole_positions_cm[hole]))[2];
       const axis = [Math.cos(theta), Math.sin(theta)];
-      const railTopCm = (Number(rail.z_units) + Number(railSpec.height || 1)) * unitCm;
+      const railTopCm = (Number(rail.z_units) + holeLevel(railSpec, hole) + Number(railSpec.height || 1)) * unitCm;
       const outputs = new Set();
       for (const route of partSpec(catalog, part.part_type)?.routes || []) {
         if (route.from == null) continue;
@@ -677,5 +698,5 @@
     return { path, exit: null, complete: false, reason: "step_limit:" + node };
   }
 
-  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose };
+  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose, holeLevel };
 });

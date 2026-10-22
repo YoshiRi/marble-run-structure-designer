@@ -128,3 +128,35 @@ def test_browser_routes_along_a_curve_like_python():
     python_result = validate_connectivity(layout, CATALOG, PortRef("rail0", "end_a"), (PortRef(*sink.split(":", 1)),))
     assert browser["result"]["reachableNodes"] == list(python_result.reachable_nodes)
     assert any(n.startswith("rail7:") for n in browser["result"]["reachableNodes"])
+
+
+def test_twist_drops_through_its_center_into_the_column_below():
+    from quadrilla_solver.collision import solid_collisions
+
+    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
+    result = validate_layout(layout, CATALOG, source=PortRef("upper", "end_a"),
+                             sinks=(PortRef("exit", "end_b"),))
+    assert result.valid, result
+    path = result.connectivity.paths["exit:end_b"]
+    # The block on the chute hole lands the marble on the twist, which drops it
+    # through the funnel center into C.
+    assert ("B:front", "twist:hole:1") in zip(path, path[1:])
+    assert ("twist:hole:1", "C:top") in zip(path, path[1:])
+    # The chute hole mounts 3 units above the center hole.
+    spec = CATALOG.rails["spiral"]
+    assert rail_hole_world(layout.rail_map()["twist"], CATALOG, 0)[2] == 8
+    assert rail_hole_world(layout.rail_map()["twist"], CATALOG, 1)[2] == 5
+    assert spec.shape == "twist"
+    # A block reaching up into the funnel (off its center) collides with it.
+    from dataclasses import replace
+    from quadrilla_solver.model import PlacedPart
+    blocked = replace(layout, parts=layout.parts + (PlacedPart("under", "blue", 6, 23, 2),))
+    assert any("twist" in r and "under" in r for r in solid_collisions(blocked, CATALOG))
+
+
+def test_twist_center_hole_must_not_be_covered():
+    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
+    from dataclasses import replace
+    rails = tuple(replace(r, hole_states={1: "covered"}) if r.id == "twist" else r for r in layout.rails)
+    reasons = validate_assembly(replace(layout, rails=rails), CATALOG).reasons
+    assert "twist_center_hole_covered:twist" in reasons

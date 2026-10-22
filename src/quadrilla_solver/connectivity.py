@@ -136,7 +136,7 @@ def build_routing_graph(
         x, y, _ = rail_hole_world(rail, catalog, support.upper_hole_index)
         if (
             hypot(part.x_cm - x, part.y_cm - y) > 0.35
-            or abs(part.z_units + height - rail.z_units) > 0.1
+            or abs(part.z_units + height - rail.z_units - spec.hole_level(support.upper_hole_index)) > 0.1
         ):
             reasons.append(
                 f"block_connected_geometry_mismatch:"
@@ -248,7 +248,7 @@ def _landing_edges(layout, catalog, support, explicit_sources):
     # Direction of the rail where the block stands (tangent on a curve).
     _, _, theta = rail_pose(rail, spec, spec.holes_cm[hole])
     axis = (cos(theta), sin(theta))
-    rail_top_cm = (rail.z_units + spec.height_units) * unit
+    rail_top_cm = (rail.z_units + spec.hole_level(hole) + spec.height_units) * unit
     outputs = {target for _, target in catalog.internal_routes(part.part_type)}
     edges = []
     for port in sorted(outputs & {"front", "rear", "left", "right"}):

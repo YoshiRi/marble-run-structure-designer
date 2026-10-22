@@ -37,7 +37,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 from .catalog import PartCatalog
-from .collision import Solid, penetration_cm, rail_solid
+from .collision import Solid, penetration_cm, rail_solids
 from .geometry import valid_support_pairs
 from .inventory import load_inventory
 from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink
@@ -56,7 +56,13 @@ _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
 # Inventory pool each rail kind draws from (presets do not list center holes
 # separately); `straight_unspecified` is a wildcard for any straight rail.
 _RAIL_POOL = {"straight_short": "straight_short", "straight_long": "straight_long",
-              "straight_long_center": "straight_long"}
+              "straight_long_center": "straight_long", "spiral": "spiral"}
+# The twist may be listed as one pool or by size; all are treated as one size.
+_SPIRAL_POOLS = ("spiral", "spiral_large", "spiral_small")
+
+
+def _spiral_capacity(counts: Mapping[str, int]) -> int:
+    return sum(counts.get(k, 0) for k in _SPIRAL_POOLS)
 # Holes a straight can be swapped to a curve on (substitution.py): building on
 # them keeps rails curve-ready.
 _CURVE_READY = {"straight_short": {0, 3}, "straight_long_center": {0, 2, 4}}
@@ -112,6 +118,7 @@ class GeneratorConfig:
     landing_probability: float = 0.6
     max_rails: int = 12
     curve_ready_bias: float = 0.5  # chance to try curve-ready holes first
+    twist_probability: float = 0.5  # chance to try a twist first for a landing drop
 
 
 @dataclass(frozen=True)
@@ -234,7 +241,7 @@ class CascadeGenerator:
         return abs(solid.center_xy[0]) + hx <= hw + 1e-9 and abs(solid.center_xy[1]) + hy <= hd + 1e-9
 
     def _solids(self, state: _State) -> list[Solid]:
-        solids = [rail_solid(r, self.catalog) for r in state.rails.values()]
+        solids = [piece for r in state.rails.values() for piece in rail_solids(r, self.catalog)]
         solids += [c.solid(self.half) for c in state.columns.values()]
         return solids
 
@@ -258,6 +265,8 @@ class CascadeGenerator:
         used: Counter = Counter()
         for rail in state.rails.values():
             used[_RAIL_POOL[rail.rail_type]] += 1
+        if used["spiral"] > _spiral_capacity(counts):
+            return False
         wildcard_needed = sum(max(0, used[p] - counts[p]) for p in ("straight_short", "straight_long"))
         if wildcard_needed > counts["straight_unspecified"]:
             return False
@@ -285,9 +294,13 @@ class CascadeGenerator:
     def _valid_pair(self, kind: str, holes: Sequence[int]) -> bool:
         return len(holes) == 2 and tuple(sorted(holes)) in self.support_pairs[kind]
 
+    def _level(self, rail: PlacedRail, hole: int) -> int:
+        """Mount level of a rail hole (the twist's chute hole sits 3 higher)."""
+        return int(rail.z_units) + self.catalog.rails[rail.rail_type].hole_level(hole)
+
     def _plain_column(self, state: _State, rail: PlacedRail, hole: int) -> Column:
         x, y = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[hole])
-        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, int(rail.z_units))
+        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, self._level(rail, hole))
 
     def _split_crossed_columns(self, state: _State, rail: PlacedRail,
                                corridor: Solid | None) -> list[int] | None:
@@ -297,8 +310,8 @@ class CascadeGenerator:
         the rail hits anything that cannot be split.
         """
         spec = self.catalog.rails[rail.rail_type]
-        body = rail_solid(rail, self.catalog)
-        hits = set(self._hits(state, [body] + ([corridor] if corridor else [])))
+        body = rail_solids(rail, self.catalog)
+        hits = set(self._hits(state, body + ([corridor] if corridor else [])))
         split_holes = []
         for hit in sorted(hits):
             column = state.columns.get(hit)
@@ -309,10 +322,10 @@ class CascadeGenerator:
                          and abs(self._point(rail, hx)[1] - column.y) < _AXIS_TOL_CM), None)
             if hole is None:
                 return None
+            level = self._level(rail, hole)
             lower = replace(column, id=state.new_id("c"), top_rail=rail.id, top_hole=hole,
-                            top_z=int(rail.z_units), top_types=(), block_rotation=0)
-            upper = replace(column, base_rail=rail.id, base_hole=hole,
-                            base_z=int(rail.z_units) + 1)
+                            top_z=level, top_types=(), block_rotation=0)
+            upper = replace(column, base_rail=rail.id, base_hole=hole, base_z=level + 1)
             if lower.filler_units(self.heights) < (0 if lower.base_rail is None else 1):
                 return None
             if upper.top_z - upper.base_z < 1 or upper.filler_units(self.heights) < 0:
@@ -344,9 +357,10 @@ class CascadeGenerator:
             states[stop] = "block_connected"
         rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=90.0 * direction,
                           flow_direction="a_to_b", hole_states=states)
-        body = rail_solid(rail, self.catalog)
-        corridor = self._corridor(rail, entry_x, end_x)
-        if not self._in_footprint(body):
+        body = rail_solids(rail, self.catalog)
+        # The twist's marble path runs inside its own funnel: no corridor.
+        corridor = None if spec.shape == "twist" else self._corridor(rail, entry_x, end_x)
+        if not all(self._in_footprint(piece) for piece in body):
             return None
         split = self._split_crossed_columns(state, rail, corridor)
         if split is None or (stop is not None and stop in split):
@@ -354,7 +368,8 @@ class CascadeGenerator:
         if any(h in keep_free for h in split):
             return None
         state.rails[rail.id] = rail
-        state.corridors[rail.id] = corridor
+        if corridor is not None:
+            state.corridors[rail.id] = corridor
         state.covers += len(covered)
 
         needed = 2 - len(split) - (1 if stop is not None else 0)
@@ -381,7 +396,7 @@ class CascadeGenerator:
                 return None
             for column in new_columns:
                 state.columns[column.id] = column
-        if self._hits(state, [corridor], ignore={rail.id}):
+        if corridor is not None and self._hits(state, [corridor], ignore={rail.id}):
             return None
         return rail if self._feasible(state) else None
 
@@ -411,7 +426,7 @@ class CascadeGenerator:
             for block in self._block_order():
                 outlets = self.drop_blocks[block]
                 top_types = self._drop_types(block)
-                block_z = int(rail.z_units) - sum(self.heights[t] for t in top_types)
+                block_z = self._level(rail, hole) - sum(self.heights[t] for t in top_types)
                 for turn in self.rng.sample(range(4), 4):
                     first = (incoming + turn) % 4
                     rotation = (90 * first + _PORT_ROTATION_OFFSET[outlets[0]]) % 360
@@ -429,7 +444,7 @@ class CascadeGenerator:
             return None
         trial = state.copy()
         column = Column(trial.new_id("c"), hx, hy, None, None, 0, rail.id, hole,
-                        int(rail.z_units), top_types, rotation)
+                        self._level(rail, hole), top_types, rotation)
         if self._hits(trial, [column.solid(self.half)]):
             return None
         trial.columns[column.id] = column
@@ -446,21 +461,32 @@ class CascadeGenerator:
         # Other outlets must not face back against the landing rail's flow.
         if any(dirs[p] == (d + 2) % 4 for p in ports if p != land_port):
             return None
-        rail_z = block_z - 1
-        if rail_z < 1:
-            return None
-        for kind in self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS)):
+        kinds = self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS))
+        twists_left = _spiral_capacity(self.budget.counts) - sum(
+            1 for r in state.rails.values() if r.rail_type == "spiral")
+        if "spiral" in self.catalog.rails and twists_left > 0:
+            first = self.rng.random() < self.config.twist_probability
+            kinds = ["spiral"] + kinds if first else kinds + ["spiral"]
+        for kind in kinds:
             spec = self.catalog.rails[kind]
+            twist = spec.shape == "twist"
             ready = self._curve_ready(kind)
-            order = self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
+            order = [0] if twist else self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
             order.sort(key=lambda h: h not in ready)
             for k in order:
+                # The block stands on hole k: the rail's placement level sits
+                # below it by one unit plus that hole's mount level.
+                rail_z = block_z - 1 - spec.hole_level(k)
+                if rail_z < 1:
+                    continue
                 landing = spec.holes_cm[k] + self.half
                 downstream = [i for i, hx_ in enumerate(spec.holes_cm) if hx_ > landing + 1.0]
                 preferred = [i for i in downstream if i in ready] or downstream
                 stops = ([self.rng.choice(preferred)] if downstream else []) + [None]
                 if len(state.rails) >= self.config.max_rails:
                     stops = [None]
+                if twist:  # the funnel always drops through its center hole
+                    stops = [len(spec.holes_cm) - 1] if len(state.rails) < self.config.max_rails else []
                 for stop in stops:
                     trial = state.copy()
                     sx = hx - spec.holes_cm[k] * _DIRS[d][0]
@@ -469,8 +495,8 @@ class CascadeGenerator:
                                              keep_free=(k,))
                     if lower is None:
                         continue
-                    column = Column(trial.new_id("c"), hx, hy, lower.id, k, rail_z + 1, rail.id, hole,
-                                    int(rail.z_units), top_types, rotation)
+                    column = Column(trial.new_id("c"), hx, hy, lower.id, k, block_z, rail.id, hole,
+                                    self._level(rail, hole), top_types, rotation)
                     if column.filler_units(self.heights) < 0 or self._hits(trial, [column.solid(self.half)]):
                         continue
                     trial.columns[column.id] = column
@@ -625,6 +651,7 @@ def score(metrics: Mapping[str, Any]) -> float:
         + 4.0 * metrics["random_branches"]
         + 2.0 * metrics["columns_on_rails"]
         + 3.0 * metrics.get("curved_rails", 0)
+        + 5.0 * metrics.get("twists", 0)
         - 8.0 * metrics["open_block_outlets"]
     )
 
@@ -641,7 +668,10 @@ def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
     overflow = max(0, short - counts.get("straight_short", 0)) + max(0, long_ - counts.get("straight_long", 0))
     if overflow > counts.get("straight_unspecified", 0):
         return False
-    return all(n <= counts.get(part, 0) for part, n in usage.items() if not part.startswith("straight_"))
+    if usage.get("spiral", 0) > _spiral_capacity(counts):
+        return False
+    return all(n <= counts.get(part, 0) for part, n in usage.items()
+               if not part.startswith("straight_") and part != "spiral")
 
 
 def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random.Random,
@@ -708,6 +738,7 @@ def generate(
         usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog)
         metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
+        metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
         metrics["covers"] = usage.get("cover", 0)
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
                      metrics["curved_rails"],

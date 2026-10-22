@@ -329,6 +329,33 @@ curved_rails:
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
+# The twist (spiral funnel) is modeled as a two-level rail running from the
+# chute tip (end A) to the funnel center. Its chute hole mounts 3 units above
+# its center hole; the marble lands on the chute from a block standing on the
+# chute hole, circles the funnel and drops through the center hole into the
+# column below. Geometry from user description; not measured.
+special_rails:
+  spiral:
+    aliases: [twist, ツイスト]
+    shape: twist
+    appearance: natural_wood
+    height: 1
+    width_cm: 4.5
+    overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
+    chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
+    funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
+    hole_positions_cm: [1.5, 24.5]   # chute hole near the tip; funnel center (outlet)
+    hole_mount_levels_units: [3, 0]  # user-observed level difference of 3
+    centerline_length_cm: 24.5       # routing ends at the funnel center
+    com_cm: 21.0                     # mostly the funnel; provisional
+    mass_g:
+      value: 150
+      source: rough_estimate_wood_volume
+      confidence: provisional
+    size_variants:
+      note: the historical Twist set lists a large and a small spiral, but the user's two pieces are the same size; treat all as this size for now
+    confidence: estimated_shape_user_described
+
 hole_state_types:
   open:
     description: hole is open and may permit a drop/connection depending on layout
@@ -365,27 +392,6 @@ accessories:
       note: keep for viewer/construction-assist if desired
 
 special_parts:
-  spiral:
-    aliases: [twist, ツイスト]
-    shape: twist_funnel
-    appearance: natural_wood
-    implementation_scope: viewer_only   # schematic rendering; solver support not yet
-    level_difference_units:
-      value: 3
-      source: user_observation
-      confidence: observed
-      note: the chute-end mount sits 3 units above the funnel-center mount
-    overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
-    chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
-    funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
-    mount_hole_spacing_cm:
-      value: 23
-      source: user_observation_matches_short_straight_end_holes
-      confidence: observed
-    route_description: enters at the chute end, circles the funnel, drops through the center outlet
-    placement_convention: x/y = funnel center (outlet hole), z_units = outlet mount level, rotation_deg = direction toward the chute
-    size_variants:
-      note: the historical Twist set lists one large and one small spiral, but the user's two pieces are the same size; treat all as this size for now
   seesaw:
     implementation_scope: deferred
     mount:

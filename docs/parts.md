@@ -279,9 +279,13 @@ drops through the center outlet.
 The historical Twist set lists a large and a small spiral, but the user's two
 pieces are the same size, so all twists are treated as this size for now.
 
-The viewer draws it schematically (`special_parts.spiral`, placement: funnel
-center, outlet level, direction toward the chute). Funnel depth and the exact
-inlet position are not measured; the solver does not model it yet.
+Modeled as a two-level rail (`special_rails.spiral`): end A at the chute tip,
+heading to the funnel center; holes at 1.5 cm (chute) and 24.5 cm (center),
+mounted 3 units and 0 units above the placement level. A block standing on the
+chute hole lands the marble on the chute; the funnel drops it through the center
+hole into the column below (the center hole may not be covered). Collision uses
+the chute (flat at the mount hole, then sloping) and a square around the funnel.
+Funnel depth, the exact inlet position and the mass (150 g) are estimates.
 
 ## Deferred / out of initial scope
 

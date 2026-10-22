@@ -38,7 +38,7 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
         x, y, angle = rail_pose(rail, spec, local_x)
         direction = -1.0 if ref.port == "end_a" else 1.0
         return PortPose(
-            (x, y, (rail.z_units + spec.height_units) * height_scale),
+            (x, y, (rail.z_units + spec.end_level(ref.port) + spec.height_units) * height_scale),
             (direction * cos(angle), direction * sin(angle), 0.0),
         )
 

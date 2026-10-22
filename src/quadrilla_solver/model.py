@@ -154,7 +154,7 @@ def rail_hole_world(
             f"{rail.id}: hole index {hole_index} outside {rail.rail_type}"
         )
     x, y, _ = rail_pose(rail, spec, spec.holes_cm[hole_index])
-    return x, y, rail.z_units
+    return x, y, rail.z_units + spec.hole_level(hole_index)
 
 
 def rail_com_world(
@@ -162,7 +162,8 @@ def rail_com_world(
     catalog: PartCatalog,
 ) -> tuple[float, float, float]:
     spec = catalog.rails[rail.rail_type]
-    x, y, _ = rail_pose(rail, spec, spec.length_cm / 2.0)
+    com = spec.com_cm if spec.com_cm is not None else spec.length_cm / 2.0
+    x, y, _ = rail_pose(rail, spec, com)
     return x, y, rail.z_units + spec.height_units / 2.0
 
 

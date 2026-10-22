@@ -63,7 +63,7 @@ def main() -> None:
         m = candidate.metrics
         print(f"#{rank} score={candidate.score:.1f} levels={m['levels']} rails={m['rails']} "
               f"rolling={m['rolling_length_cm']}cm exits={m['exits']} branches={m['random_branches']} "
-              f"covers={m['covers']} curves={m.get('curved_rails', 0)}")
+              f"covers={m['covers']} curves={m.get('curved_rails', 0)} twists={m.get('twists', 0)}")
         if args.out_dir is None:
             continue
         args.out_dir.mkdir(parents=True, exist_ok=True)

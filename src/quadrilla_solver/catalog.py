@@ -26,6 +26,18 @@ class RailSpec:
     radius_cm: float | None = None
     segments: tuple[tuple[float, int], ...] = ()
     needs_load_above: bool = False
+    # Mount level of each hole relative to the rail's z_units (the twist's
+    # chute hole sits 3 units above its center hole). Empty means all 0.
+    hole_levels: tuple[int, ...] = ()
+    com_cm: float | None = None
+
+    def hole_level(self, index: int) -> int:
+        return self.hole_levels[index] if self.hole_levels else 0
+
+    def end_level(self, port: str) -> int:
+        if not self.hole_levels:
+            return 0
+        return self.hole_levels[0] if port == "end_a" else self.hole_levels[-1]
 
 
 @dataclass(frozen=True)
@@ -167,6 +179,19 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
     data = _load_yaml(Path(parts_path))
     rails = data.get("rails", {})
     result: dict[str, RailSpec] = {}
+    for name, spec in (data.get("special_rails") or {}).items():
+        if not isinstance(spec, dict) or spec.get("shape") != "twist":
+            continue
+        result[name] = RailSpec(
+            name=name,
+            length_cm=float(spec["centerline_length_cm"]),
+            holes_cm=tuple(float(x) for x in spec["hole_positions_cm"]),
+            height_units=int(spec.get("height", 1)),
+            mass_g=_mass_value(spec),
+            shape="twist",
+            hole_levels=tuple(int(v) for v in spec.get("hole_mount_levels_units", ())),
+            com_cm=float(spec["com_cm"]) if spec.get("com_cm") is not None else None,
+        )
     for name, spec in (data.get("curved_rails") or {}).items():
         if not isinstance(spec, dict):
             continue
