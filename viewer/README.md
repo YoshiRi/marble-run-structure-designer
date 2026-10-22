@@ -6,7 +6,7 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 
 - schematic 3D rails and blocks
 - arbitrary rail yaw
-- rail-hole markers and hole states
+- visible rail-hole cutouts (Babylon.js CSG, with surface-marker fallback) and color-coded hole states
 - support links
 - route direction / explicit route links
 - global center of mass
@@ -16,6 +16,28 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - no build step
 
 The viewer deliberately uses schematic boxes rather than realistic meshes. Detailed collision geometry is deferred.
+
+## Dimension provenance
+
+The viewer reads rail lengths and hole positions from `catalog/parts.yaml`.
+Long-rail length (50 cm) and hole positions (2, 7, 43, 48 cm) are measured.
+Short-rail length (27 cm) is measured; some short-rail hole positions are inferred.
+The center-hole rail includes a cataloged center position at 25 cm.
+
+**Provisional rendering dimensions (not physical measurements):**
+
+- 1 height unit = 3 cm
+- rail width = 3 cm
+- block footprint = 5 × 5 cm
+- hole diameter = 1.5 cm
+
+The solver stores vertical positions in abstract height units. Do not treat the
+viewer as a dimensional CAD model until these dimensions are measured and
+recorded with provenance.
+
+The colored rings distinguish open, covered, block-connected, and slope-covered
+rail holes. Covered holes are shown with caps. CSG creates real through-holes
+where available; otherwise the viewer uses dark surface markers as a fallback.
 
 ## Local run
 
