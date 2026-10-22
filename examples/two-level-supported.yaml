@@ -84,3 +84,9 @@ route_links:
     target:
       component_id: lower
       port: end_a
+
+# Optional shared query for the browser routing inspector.
+routing_query:
+  source: { component_id: upper, port: end_a }
+  sinks:
+    - { component_id: lower, port: end_b }

@@ -94,6 +94,11 @@ Hole behavior in the MVP:
 
 Routing-block internal edges are loaded from `catalog/parts.yaml`.
 
+`validate_connectivity()` also returns `paths`, mapping each reached sink to
+its shortest directed sequence of graph-node keys. The browser Viewer traces
+the same port graph in `viewer/routing.js` and overlays the selected route
+and alternative reachable branches. It does not simulate ball dynamics.
+
 `RouteLink` explicitly connects transitions whose exact physical port offset is not yet modeled, such as a horizontal block exit into another rail.
 
 ## Example
@@ -110,3 +115,18 @@ That example is a full golden test for:
 - ground/global stability
 - recursive local rail statics
 - routing reachability
+
+## Optional routing query for the Viewer
+
+A layout may specify a default source and sink for the browser routing inspector:
+
+```yaml
+routing_query:
+  source: { component_id: upper, port: end_a }
+  sinks:
+    - { component_id: lower, port: end_b }
+```
+
+The Python CLI still accepts explicit `--source` and `--sink` arguments;
+`routing_query` is currently viewer metadata rather than part of the Python
+`Layout` dataclass. The Viewer supports selecting any other graph node.

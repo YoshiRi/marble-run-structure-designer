@@ -24,13 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check browser JavaScript
-        run: node --check viewer/app.js
+      - name: Check browser JavaScript and routing graph
+        run: |
+          node --check viewer/app.js
+          node --check viewer/routing.js
       - name: Assemble static site
         run: |
           mkdir -p _site
           cp viewer/index.html _site/index.html
           cp viewer/app.js _site/app.js
+          cp viewer/routing.js _site/routing.js
           cp viewer/styles.css _site/styles.css
           cp -r catalog _site/catalog
           cp -r examples _site/examples

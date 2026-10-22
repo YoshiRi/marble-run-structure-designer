@@ -48,6 +48,15 @@
           <dl id="summary" class="summary"></dl>
         </section>
         <section>
+          <h2>Routing graph</h2>
+          <div class="route-controls">
+            <label>Source <select id="routeSource" aria-label="Routing source"></select></label>
+            <label>Sink <select id="routeSink" aria-label="Routing destination"></select></label>
+          </div>
+          <p class="muted small-note">Green: selected directed path. Blue: other reachable branches. Red: dead ends. Yellow: destination. Paths through blocks are schematic, not simulated marble motion.</p>
+          <pre id="routeStatus" class="route-status" aria-live="polite">Loading routing graph…</pre>
+        </section>
+        <section>
           <h2>Global COM</h2>
           <div id="comSummary" class="mono muted">not computed</div>
         </section>
@@ -68,13 +77,15 @@
         <section>
           <h2>Browser solver status</h2>
           <p class="muted">
-            Viewer and global COM are client-side. Full Assembly / local statics /
-            Connectivity / Inventory validation currently remains in the Python solver.
+            Routing reachability and path tracing run in the browser using the
+            same graph rules as the Python solver. Full Assembly / local statics /
+            Inventory validation remains in Python.
           </p>
         </section>
       </aside>
     </main>
   </div>
+  <script src="./routing.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

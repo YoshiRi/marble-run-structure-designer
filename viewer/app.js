@@ -54,6 +54,7 @@
 
   let catalog = null;
   let layout = null;
+  let routingGraph = null;
 
   const palette = {
     yellow: "#eab308",
@@ -321,27 +322,8 @@
       }
     });
 
-    // Keep the route overlay beside the rail so it cannot hide the holes.
-    const yaw = (Number(rail.yaw_deg || 0) * Math.PI) / 180;
-    const side = RAIL_WIDTH_CM / 2 + 0.7;
-    const sidePoint = end => {
-      const p = railEndWorld(rail, end);
-      return world(
-        p.x - Math.sin(yaw) * side,
-        p.y + Math.cos(yaw) * side,
-        Number(rail.z_units) + heightUnits * 0.75
-      );
-    };
-    const reversed = (rail.flow_direction || "a_to_b") === "b_to_a";
-    const routeLine = BABYLON.MeshBuilder.CreateLines("route-" + rail.id, {
-      points: [
-        sidePoint(reversed ? "end_b" : "end_a"),
-        sidePoint(reversed ? "end_a" : "end_b"),
-      ],
-    }, scene);
-    routeLine.color = BABYLON.Color3.FromHexString("#22c55e");
-    groups.route.push(routeLine);
   }
+
 
   // Port directions are in the block's local coordinates. Exit holes are
   // centered; side inlets dropping downward use bottom-edge semicircular notches.
@@ -587,35 +569,189 @@
     }
   }
 
-  function renderRouteLinks() {
-    const railMap = Object.fromEntries((layout.rails || []).map(r => [r.id, r]));
-    const partMap = Object.fromEntries((layout.parts || []).map(p => [p.id, p]));
+  function routingPortKey(ref) {
+    if (!ref) return null;
+    if (typeof ref === "string") return ref;
+    return ref.component_id && ref.port ? ref.component_id + ":" + ref.port : null;
+  }
 
-    function portPosition(ref) {
-      if (railMap[ref.component_id]) {
-        const rail = railMap[ref.component_id];
-        if (ref.port === "end_a" || ref.port === "end_b") return railEndWorld(rail, ref.port);
-        if (ref.port.startsWith("hole:")) return railHoleWorld(rail, Number(ref.port.split(":")[1]));
+  function routingNodePosition(key) {
+    const colon = key.indexOf(":");
+    if (colon < 0) return null;
+    const componentId = key.slice(0, colon);
+    const port = key.slice(colon + 1);
+    const rail = (layout.rails || []).find(r => r.id === componentId);
+    if (rail) {
+      const spec = railSpec(rail.rail_type);
+      let localX;
+      if (port === "end_a") localX = 0;
+      else if (port === "end_b") localX = Number(spec.length_cm);
+      else if (port.startsWith("hole:")) {
+        localX = Number(spec.hole_positions_cm[Number(port.slice(5))]);
       }
-      const part = partMap[ref.component_id];
-      if (part) {
-        const spec = catalog.routing_blocks?.[part.part_type] || {};
-        const h = Number(spec.height || 1);
-        return { x: Number(part.x_cm), y: Number(part.y_cm), z: Number(part.z_units) + h / 2 };
-      }
-      return null;
+      if (!Number.isFinite(localX)) return null;
+      const p = railPoint(rail, localX);
+      const pos = world(p.x, p.y, Number(rail.z_units) + Number(spec.height || 1));
+      pos.y += 0.5; // Raise overlay above rail surface/groove.
+      return pos;
     }
+    const part = (layout.parts || []).find(p => p.id === componentId);
+    if (!part) return null;
+    const spec = catalog.routing_blocks?.[part.part_type]
+      || catalog.structural_parts?.[part.part_type]
+      || catalog.special_parts?.[part.part_type] || {};
+    const heightUnits = Number(spec.height || 1);
+    const heightCm = heightUnits * HEIGHT_SCALE_CM;
+    const center = world(part.x_cm, part.y_cm, Number(part.z_units) + heightUnits / 2);
+    if (port === "top") {
+      center.y += heightCm / 2 + 0.35;
+      return center;
+    }
+    if (port === "bottom") {
+      center.y -= heightCm / 2 - 0.35;
+      return center;
+    }
+    const local = {
+      front: [0, BLOCK_DEPTH_CM / 2 + 0.35],
+      rear: [0, -BLOCK_DEPTH_CM / 2 - 0.35],
+      right: [BLOCK_WIDTH_CM / 2 + 0.35, 0],
+      left: [-BLOCK_WIDTH_CM / 2 - 0.35, 0],
+    }[port];
+    if (!local) return null;
+    const yaw = Number(part.rotation_deg || 0) * Math.PI / 180;
+    center.x += local[0] * Math.cos(yaw) - local[1] * Math.sin(yaw);
+    center.z += local[0] * Math.sin(yaw) + local[1] * Math.cos(yaw);
+    if ((spec.port_visualization?.side_entry_notches || []).includes(port)) {
+      center.y -= heightCm / 2 - BLOCK_PORT_DIAMETER_CM / 4;
+    }
+    return center;
+  }
 
-    for (const link of layout.route_links || []) {
-      const a = portPosition(link.source);
-      const b = portPosition(link.target);
-      if (!a || !b) continue;
-      const line = BABYLON.MeshBuilder.CreateLines("route-link", {
-        points: [world(a.x, a.y, a.z + 0.7), world(b.x, b.y, b.z + 0.7)],
-      }, scene);
-      line.color = BABYLON.Color3.FromHexString("#34d399");
-      groups.route.push(line);
+  function routingEdgePoints(from, to) {
+    const a = routingNodePosition(from);
+    const b = routingNodePosition(to);
+    if (!a || !b) return null;
+    const fromId = from.slice(0, from.indexOf(":"));
+    const toId = to.slice(0, to.indexOf(":"));
+    const part = (layout.parts || []).find(p => p.id === fromId);
+    if (part && fromId === toId) {
+      // Schematic overhead connector: actual internal channels are not known.
+      const spec = catalog.routing_blocks?.[part.part_type] || {};
+      const top = (Number(part.z_units) + Number(spec.height || 1)) * HEIGHT_SCALE_CM;
+      const waypoint = world(part.x_cm, part.y_cm, 0);
+      waypoint.y = Math.max(top + 1.8, a.y + 0.5, b.y + 0.5);
+      return [a, waypoint, b];
     }
+    return [a, b];
+  }
+
+  function drawRoutingEdge(from, to, color, radius, label) {
+    const points = routingEdgePoints(from, to);
+    if (!points || points.every(p => BABYLON.Vector3.DistanceSquared(p, points[0]) < 0.0001)) return;
+    const tube = BABYLON.MeshBuilder.CreateTube(label, {
+      path: points, radius, tessellation: 8, cap: BABYLON.Mesh.CAP_ALL,
+    }, scene);
+    tube.material = material("routingMat", color);
+    tube.material.emissiveColor = BABYLON.Color3.FromHexString(color).scale(0.65);
+    tube.isPickable = false;
+    groups.route.push(tube);
+  }
+
+  function drawRoutingMarker(key, color, diameter) {
+    const pos = routingNodePosition(key);
+    if (!pos) return;
+    const marker = BABYLON.MeshBuilder.CreateSphere("routing-marker-" + key, {
+      diameter, segments: 12,
+    }, scene);
+    marker.position = pos;
+    marker.material = material("routingMarkerMat", color);
+    marker.material.emissiveColor = BABYLON.Color3.FromHexString(color).scale(0.55);
+    marker.isPickable = false;
+    groups.route.push(marker);
+  }
+
+  function clearRoutingMeshes() {
+    for (const mesh of groups.route) {
+      if (mesh && !mesh.isDisposed()) mesh.dispose();
+    }
+    groups.route.length = 0;
+  }
+
+  function populateRoutingControls() {
+    const sourceSelect = document.getElementById("routeSource");
+    const sinkSelect = document.getElementById("routeSink");
+    const nodes = routingGraph.nodes;
+    const sources = nodes.filter(key => routingGraph.edges[key].length);
+    const rails = [...(layout.rails || [])].sort((a, b) =>
+      Number(b.z_units) - Number(a.z_units));
+    const highest = rails[0];
+    const lowest = rails.at(-1);
+    const query = layout.routing_query || {};
+    const preferredSource = routingPortKey(query.source)
+      || (highest && highest.id + ":" +
+        (highest.flow_direction === "b_to_a" ? "end_b" : "end_a"));
+    const preferredSink = routingPortKey(query.sinks?.[0])
+      || (lowest && lowest.id + ":" +
+        (lowest.flow_direction === "b_to_a" ? "end_a" : "end_b"));
+
+    function setOptions(select, options, preferred) {
+      select.replaceChildren();
+      const values = [...options];
+      if (preferred && !values.includes(preferred)) values.push(preferred);
+      for (const value of values) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      }
+      if (preferred) select.value = preferred;
+    }
+    setOptions(sourceSelect, sources, preferredSource);
+    setOptions(sinkSelect, nodes, preferredSink);
+  }
+
+  function updateRouting() {
+    clearRoutingMeshes();
+    const source = document.getElementById("routeSource").value;
+    const sink = document.getElementById("routeSink").value;
+    const status = document.getElementById("routeStatus");
+    if (!routingGraph || !source || !sink) {
+      status.textContent = "No routing source/sink available.";
+      return;
+    }
+    const trace = MarbleRouting.trace(routingGraph, source, sink);
+    const pathPairs = new Set();
+    for (let i = 1; i < trace.path.length; i++) {
+      pathPairs.add(JSON.stringify([trace.path[i - 1], trace.path[i]]));
+    }
+    for (const [from, to] of trace.reachableEdges) {
+      if (pathPairs.has(JSON.stringify([from, to]))) continue;
+      drawRoutingEdge(from, to, "#38bdf8", 0.09, "reachable-route");
+    }
+    for (let i = 1; i < trace.path.length; i++) {
+      drawRoutingEdge(trace.path[i - 1], trace.path[i], "#4ade80", 0.23, "selected-route");
+    }
+    drawRoutingMarker(source, "#22c55e", 1.25);
+    if (trace.reachable) drawRoutingMarker(sink, "#facc15", 1.35);
+    for (const node of trace.deadEnds) drawRoutingMarker(node, "#f87171", 0.95);
+    const lines = [
+      trace.reachable ? "REACHABLE" : "UNREACHABLE",
+      "Graph status: " + (trace.valid ? "valid" : "invalid / incomplete"),
+      "Reachable nodes: " + trace.reachableNodes.length,
+      "Dead ends: " + trace.deadEnds.length,
+    ];
+    if (trace.path.length) lines.push("Path (" + (trace.path.length - 1) + " edges):\n" +
+      trace.path.join(" → "));
+    if (trace.deadEnds.length) lines.push("Dead ends: " + trace.deadEnds.join(", "));
+    if (trace.reasons.length) lines.push("Reasons: " + trace.reasons.join(", "));
+    status.textContent = lines.join("\n");
+    applyVisibility();
+  }
+
+  function renderRouting() {
+    routingGraph = MarbleRouting.buildGraph(layout, catalog);
+    populateRoutingControls();
+    updateRouting();
   }
 
   function globalCom() {
@@ -758,7 +894,7 @@
     for (const rail of layout.rails || []) renderRail(rail);
     for (const part of layout.parts || []) renderPart(part);
     renderSupports();
-    renderRouteLinks();
+    renderRouting();
     renderComAndPolygon();
     updateSummary();
     applyVisibility();
@@ -822,6 +958,9 @@
   });
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
+  for (const id of ["routeSource", "routeSink"]) {
+    document.getElementById(id).addEventListener("change", updateRouting);
+  }
   for (const id of ["toggleHoles","toggleSupports","toggleRoute","toggleCom","togglePolygon"]) {
     document.getElementById(id).addEventListener("change", applyVisibility);
   }
