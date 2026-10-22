@@ -21,6 +21,7 @@
           <select id="exampleSelect">
             <option value="examples/three-level-physically-connected.yaml">three-level-physically-connected</option>
             <option value="examples/two-level-supported.yaml">two-level-supported</option>
+            <option value="examples/random-split.yaml">random-split</option>
           </select>
         </label>
         <label class="file-button">
@@ -59,6 +60,11 @@
             <label>Highlight exit
               <select id="routeSink" aria-label="Highlighted exit"></select>
             </label>
+          </div>
+          <div class="roll-controls">
+            <button id="rollOne" type="button">Roll a marble</button>
+            <button id="rollMany" type="button">Roll 100</button>
+            <button id="rollReset" type="button" class="quiet">Clear tally</button>
           </div>
           <div id="exitProbabilities" class="exit-probabilities" aria-live="polite">
             <p class="muted small-note">Loading exits…</p>

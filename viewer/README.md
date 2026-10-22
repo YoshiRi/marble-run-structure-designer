@@ -16,6 +16,12 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - click-to-select input holes in the 3D view: every valid candidate shows a
   teal drop marker; clicking a marker or the hole itself selects it (green)
 - external exit list and topology-based exit probabilities
+- exit probabilities also shown as labels at each exit in the 3D view
+- marble rolling: **Roll a marble** animates one marble along a sampled route
+  (random branches chosen with the same weights as the probability table);
+  **Roll 100** samples instantly. The **Rolled** column tallies where sampled
+  marbles ended, so it can be compared with the computed probabilities.
+  Marble diameter (1.6 cm) is provisional; motion is schematic, not physics.
 - optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
 - ground support polygon and optional visible ground-level grid (z=0)
@@ -27,6 +33,8 @@ The default `three-level-physically-connected.yaml` example includes a
 blue-block front outlet dropping one unit onto an exit rail that rests on plain
 ground foundations (no pedestal blocks needed). Centered side holes are drawn
 with their floor at installation level +1, where they physically open.
+`random-split.yaml` replaces the blue column with a red random splitter whose
+front and rear outlets drop onto two exit rails (≈50% each).
 `two-level-supported.yaml` has no downstream connection from its blue
 block, so the trace ends at the real front opening rather than jumping to
 an unrelated lower rail.
