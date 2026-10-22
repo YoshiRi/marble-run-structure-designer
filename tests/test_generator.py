@@ -105,3 +105,45 @@ def test_generator_stacks_columns_on_rails_and_lands_marbles():
                if src.split(":")[0] not in rails and dst.split(":")[0] in rails
                and ":hole:" in dst]
     assert landing
+
+
+def test_layout_id_is_stable_and_survives_yaml_round_trips(tmp_path):
+    import yaml
+
+    from quadrilla_solver.generator import layout_id
+    from quadrilla_solver.model import load_layout
+
+    candidate = _run(3)[0]
+    first = layout_id(candidate.layout)
+    assert first.startswith("mr-") and len(first) == 11
+    data = layout_to_yaml_dict(candidate, name="x", description="y", generator_info={})
+    assert data["layout_id"] == first
+    path = tmp_path / "layout.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False))
+    assert layout_id(load_layout(path)) == first
+    # Names and metrics do not change the ID; the build does.
+    renamed = layout_to_yaml_dict(candidate, name="other", description="z", generator_info={"a": 1})
+    assert renamed["layout_id"] == first
+    from dataclasses import replace
+    moved = replace(candidate.layout, parts=tuple(
+        replace(p, x_cm=p.x_cm + 1) if i == 0 else p for i, p in enumerate(candidate.layout.parts)))
+    assert layout_id(moved) != first
+
+
+def test_gallery_index_matches_its_layouts():
+    import json
+
+    from quadrilla_solver.generator import layout_id
+    from quadrilla_solver.model import load_layout
+
+    index = json.loads((ROOT / "examples" / "gallery" / "index.json").read_text())
+    assert index["layouts"]
+    for entry in index["layouts"]:
+        path = ROOT / entry["file"]
+        assert path.exists(), entry["file"]
+        assert layout_id(load_layout(path)) == entry["id"] == path.stem
+        leaves = [f"{r.id}:end_b" for r in load_layout(path).rails
+                  if "block_connected" not in r.hole_states.values()]
+        result = validate_layout(load_layout(path), CATALOG, source=PortRef("rail0", "end_a"),
+                                 sinks=tuple(PortRef(*s.split(":", 1)) for s in leaves))
+        assert result.valid, entry["id"]

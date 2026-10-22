@@ -792,10 +792,32 @@ def layout_to_dict(layout: Layout, source_rail: str = "rail0") -> dict[str, Any]
     }
 
 
+def layout_id(layout: Layout) -> str:
+    """Stable short ID derived from the layout's structure only.
+
+    Rails, parts, supports and route links (canonically rounded and sorted)
+    are hashed, so the same build always gets the same ID regardless of its
+    name, description or metrics, and any change to the build changes it.
+    """
+    import hashlib
+    import json
+
+    data = layout_to_dict(layout)
+    canonical = {
+        "rails": sorted(data["rails"], key=lambda r: r["id"]),
+        "parts": sorted(data["parts"], key=lambda p: p["id"]),
+        "supports": sorted(data["supports"], key=lambda s: (s["upper_rail_id"], s["upper_hole_index"])),
+        "route_links": sorted(data["route_links"], key=lambda l: json.dumps(l, sort_keys=True)),
+    }
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return "mr-" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
+
+
 def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
                         generator_info: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": "0.1",
+        "layout_id": layout_id(candidate.layout),
         "name": name,
         "description": description,
         "generator": dict(generator_info),

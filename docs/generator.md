@@ -99,3 +99,13 @@ and up to 11 columns standing on rails, typically 6 levels within 24 units.
 - An outlet facing against a rail's flow is not modeled as landing.
 - Long curves, seesaws and covered slopes are not generated yet.
 - Filler blocks are routing blocks used purely as structure.
+
+## Review gallery
+
+`scripts/build_gallery.py` runs the generator under several configurations
+(balanced, more splits, more curves, more twists, taller, ground drops), drops
+duplicates by layout ID and picks a varied set: one per feature bucket (twist,
+curves, many exits, tall, stacked, long roll), then best score with at most a
+few per configuration. Output: `examples/gallery/<id>.yaml` and `index.json`.
+Reviews reported by ID feed the scoring and future pattern weights.
+

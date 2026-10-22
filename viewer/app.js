@@ -1513,7 +1513,9 @@
       ["Block port holes", "Ø" + BLOCK_PORT_DIAMETER_CM + " cm (provisional)"],
     ];
     summary.innerHTML = rows.map(([k,v]) => "<dt>" + k + "</dt><dd>" + v + "</dd>").join("");
-    document.getElementById("layoutMeta").textContent = layout.name || "unnamed layout";
+    const name = layout.name || "unnamed layout";
+    document.getElementById("layoutMeta").textContent =
+      layout.layout_id && layout.layout_id !== name ? layout.layout_id + " · " + name : name;
     document.getElementById("groundLevelLabel").textContent =
       "Ground level: z=0 (0 cm) · 1u = " + HEIGHT_SCALE_CM + " cm";
   }
@@ -1585,7 +1587,19 @@
     try {
       catalog = await loadCatalog();
       applyCatalogGeometry();
-      await loadExample(document.getElementById("exampleSelect").value);
+      // ?layout=examples/... opens a specific layout (e.g. from the gallery).
+      const requested = new URLSearchParams(window.location.search).get("layout");
+      const select = document.getElementById("exampleSelect");
+      if (requested && /^examples\/[\w\-./]+\.ya?ml$/.test(requested) && !requested.includes("..")) {
+        if (![...select.options].some(o => o.value === requested)) {
+          const option = document.createElement("option");
+          option.value = requested;
+          option.textContent = requested.split("/").pop().replace(/\.ya?ml$/, "");
+          select.appendChild(option);
+        }
+        select.value = requested;
+      }
+      await loadExample(select.value);
     } catch (error) {
       document.getElementById("layoutMeta").textContent = String(error);
       console.error(error);

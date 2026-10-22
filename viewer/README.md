@@ -175,3 +175,16 @@ direction at end A) plus `turn: left|right`. The solver and the routing graph do
 not model these parts yet. Preview: load `tests/fixtures/curves-and-twist-preview.yaml`
 with **Load YAML**.
 
+## Gallery and layout IDs
+
+`gallery.html` lists generated review candidates (`examples/gallery/`, built by
+`scripts/build_gallery.py`). Every generated layout carries a `layout_id` such
+as `mr-9bb890c9`: a short hash of its rails, parts, supports and links, so the
+same build always has the same ID. The viewer shows it in the header and opens a
+layout directly with `index.html?layout=examples/gallery/<id>.yaml`.
+
+Each gallery card has Buildable / Doubtful / Interesting marks and a note, kept
+in the browser (localStorage). **Copy review summary** produces lines such as
+`mr-9bb890c9: Buildable, Interesting — note` to paste into a chat or issue.
+Thumbnails are rendered with `scripts/render_gallery_thumbnails.js` (dev tool).
+
