@@ -17,7 +17,7 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
   teal drop marker; clicking a marker or the hole itself selects it (green)
 - external exit list and topology-based exit probabilities
 - exit probabilities also shown as labels at each exit in the 3D view
-- marble rolling: **Roll a marble** animates one marble along a sampled route
+- marble rolling: **Roll a marble** (top toolbar and sidebar) animates one marble along a sampled route
   (random branches chosen with the same weights as the probability table);
   **Roll 100** samples instantly. The **Rolled** column tallies where sampled
   marbles ended, so it can be compared with the computed probabilities.
