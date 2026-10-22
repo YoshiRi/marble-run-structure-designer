@@ -1,6 +1,8 @@
 # Quadrilla Designer
 
-A design-assistance project for BorneLund/Hape Quadrilla marble runs.
+An independent, unofficial design-assistance project for studying and building compatible Hape/BorneLund Quadrilla marble-run structures.
+
+This project is not affiliated with, sponsored by, or endorsed by Hape, BorneLund, or any other manufacturer, distributor, or rights holder referenced by the project. Product and company names are used descriptively; see [TRADEMARKS.md](TRADEMARKS.md).
 
 The project focuses on **automatic layout generation**, a **layout/routing viewer**, and a **construction-assist UI**. It intentionally models Quadrilla as a discrete routing/construction system rather than as a full rigid-body physics simulation.
 
@@ -63,3 +65,12 @@ See [docs/model.md](docs/model.md) and [docs/parts.md](docs/parts.md) for the cu
 ```
 
 The repository is currently in the **specification / catalog-building phase**. Part definitions are being separated into confirmed observations and tentative assumptions so the solver can be built on explicit data rather than implicit knowledge.
+
+
+## Licensing
+
+- Software: [Apache License 2.0](LICENSE)
+- Project-authored documentation, examples, and copyrightable original catalog/measurement content: [CC BY-SA 4.0](CONTENT_LICENSE.md)
+- Third-party components retain their own licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+The project also maintains a [defensive publication policy](docs/defensive-publication.md) for algorithmic milestones that are later made public.
