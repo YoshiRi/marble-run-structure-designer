@@ -805,6 +805,9 @@
       "Dead ends: " + trace.deadEnds.length,
       "Block internals: only actual entry/exit ports are highlighted (channels unknown).",
     ];
+    if (layout.routing_options?.allow_side_entry_plus_one) {
+      lines.push("Side-drop +1-level connection allowance: enabled.");
+    }
     if (trace.path.length) lines.push("Path (" + (trace.path.length - 1) + " edges):\n" +
       trace.path.join(" → "));
     if (trace.deadEnds.length) lines.push("Dead ends: " + trace.deadEnds.join(", "));
@@ -956,6 +959,8 @@
   }
 
   function renderAll() {
+    document.getElementById("allowSideEntryPlusOne").checked =
+      Boolean(layout.routing_options?.allow_side_entry_plus_one);
     clearRendered();
     for (const rail of layout.rails || []) renderRail(rail);
     for (const part of layout.parts || []) renderPart(part);
@@ -1028,6 +1033,13 @@
   for (const id of ["routeSource", "routeSink"]) {
     document.getElementById(id).addEventListener("change", updateRouting);
   }
+  document.getElementById("allowSideEntryPlusOne").addEventListener("change", event => {
+    layout.routing_options = {
+      ...(layout.routing_options || {}),
+      allow_side_entry_plus_one: event.target.checked,
+    };
+    renderRouting();
+  });
   for (const id of ["toggleHoles","toggleSupports","toggleRoute","toggleCom","togglePolygon"]) {
     document.getElementById(id).addEventListener("change", applyVisibility);
   }

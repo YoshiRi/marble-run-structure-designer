@@ -96,6 +96,28 @@
       : route.from === ref.port);
   }
 
+  function allowsSideEntryPlusOne(layout, catalog, source, target, a, b) {
+    if (!layout.routing_options?.allow_side_entry_plus_one) return false;
+    const rail = (layout.rails || []).find(r => r.id === source.component_id);
+    if (!rail || !["end_a", "end_b"].includes(source.port)) return false;
+    const part = (layout.parts || []).find(p => p.id === target.component_id);
+    if (!part) return false;
+    const spec = partSpec(catalog, part.part_type);
+    if (!(spec?.port_visualization?.side_entry_notches || []).includes(target.port)) {
+      return false;
+    }
+
+    const heightUnitCm = geometryValue(catalog.geometry_cm?.height_unit, 1.5);
+    const dx = a.position[0] - b.position[0];
+    const dy = a.position[1] - b.position[1];
+    const verticalGap = a.position[2] - b.position[2];
+    const horizontalDistance = Math.hypot(dx, dy);
+    const dot = a.normal.reduce((sum, x, i) => sum + x * b.normal[i], 0);
+    return horizontalDistance <= 0.35 &&
+      Math.abs(verticalGap - heightUnitCm) <= 0.35 &&
+      dot <= -0.95;
+  }
+
   function routeLinkError(layout, catalog, link) {
     const source = link.source, target = link.target;
     const label = source.component_id + ":" + source.port + ":" +
@@ -113,7 +135,9 @@
     const distance = Math.hypot(...a.position.map((x, i) => x - b.position[i]));
     const dot = a.normal.reduce((sum, x, i) => sum + x * b.normal[i], 0);
     if (distance > 0.35 || dot > -0.95) {
-      return "route_link_geometry_mismatch:" + label;
+      if (!allowsSideEntryPlusOne(layout, catalog, source, target, a, b)) {
+        return "route_link_geometry_mismatch:" + label;
+      }
     }
     return null;
   }

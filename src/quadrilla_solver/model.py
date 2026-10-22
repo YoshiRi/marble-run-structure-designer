@@ -83,6 +83,7 @@ class Layout:
     parts: tuple[PlacedPart, ...] = ()
     supports: tuple[SupportLink, ...] = ()
     route_links: tuple[RouteLink, ...] = ()
+    routing_options: Mapping[str, Any] = field(default_factory=dict)
 
     def rail_map(self) -> dict[str, PlacedRail]:
         return {x.id: x for x in self.rails}
@@ -213,4 +214,5 @@ def load_layout(path: str | Path) -> Layout:
         parts=parts,
         supports=supports,
         route_links=route_links,
+        routing_options=dict(data.get("routing_options", {}) or {}),
     )

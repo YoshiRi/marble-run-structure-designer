@@ -40,6 +40,9 @@ process.stdout.write(JSON.stringify({graph, result: trace(graph, source, sink)})
         ("unknown_link", "upper:end_a", "blue_column:front"),
         ("bad_support_port", "upper:end_a", "blue_column:front"),
         ("bidirectional", "cyan0:right", "cyan1:left"),
+        ("side_entry_aligned", "entry:end_a", "drop:bottom"),
+        ("side_entry_plus_one_disallowed", "entry:end_a", "drop:bottom"),
+        ("side_entry_plus_one_allowed", "entry:end_a", "drop:bottom"),
         ("aligned_rail_exit", "upper:end_a", "exit:end_b"),
         ("misaligned_rail_exit", "upper:end_a", "exit:end_b"),
         ("wrong_flow_direction", "upper:end_a", "exit:end_b"),
@@ -56,6 +59,31 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     with (ROOT / "examples" / example).open() as f:
         layout_data = yaml.safe_load(f)
     layout_data = deepcopy(layout_data)
+
+    if case in {
+        "side_entry_aligned", "side_entry_plus_one_disallowed",
+        "side_entry_plus_one_allowed",
+    }:
+        rail_z = 1 if case == "side_entry_aligned" else 2
+        layout_data = {
+            "name": case,
+            "rails": [{
+                "id": "entry", "rail_type": "straight_short",
+                "x_cm": 0, "y_cm": -29.25, "z_units": rail_z,
+                "yaw_deg": 90, "flow_direction": "a_to_b",
+                "hole_states": {0: "covered", 1: "covered", 2: "covered", 3: "covered"},
+            }],
+            "parts": [{
+                "id": "drop", "part_type": "blue",
+                "x_cm": 0, "y_cm": 0, "z_units": 2,
+            }],
+            "route_links": [{
+                "source": {"component_id": "entry", "port": "end_b"},
+                "target": {"component_id": "drop", "port": "rear"},
+            }],
+        }
+        if case == "side_entry_plus_one_allowed":
+            layout_data["routing_options"] = {"allow_side_entry_plus_one": True}
 
     if case == "open_hole":
         layout_data["rails"][0]["hole_states"][2] = "open"
@@ -135,3 +163,9 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     assert browser["result"]["deadEnds"] == list(python_result.dead_ends)
     assert browser["result"]["reasons"] == list(python_result.reasons)
     assert browser["result"]["path"] == list(python_result.paths.get(sink, ()))
+
+    if case in {"side_entry_aligned", "side_entry_plus_one_allowed"}:
+        assert python_result.valid and python_result.reachable, python_result.reasons
+    elif case == "side_entry_plus_one_disallowed":
+        assert not python_result.valid and not python_result.reachable
+        assert any(reason.startswith("route_link_geometry_mismatch:") for reason in python_result.reasons)

@@ -54,7 +54,8 @@
             <label>Source <select id="routeSource" aria-label="Routing source"></select></label>
             <label>Sink <select id="routeSink" aria-label="Routing destination"></select></label>
           </div>
-          <p class="muted small-note">Green: selected directed path along rail grooves. Blue: other reachable branches. Red: dead ends. Yellow: destination. Block internals are not drawn; only existing ports are highlighted. Misaligned connections are rejected.</p>
+          <label class="route-option"><input id="allowSideEntryPlusOne" type="checkbox"> Allow rail groove one level above a side-drop inlet</label>
+          <p class="muted small-note">Green: selected directed path along rail grooves. Blue: other reachable branches. Red: dead ends. Yellow: destination. By default, a rail groove must align with the side inlet's installation level. The option allows a +1-unit (1.5 cm) vertical offset for side-drop inlets only; XY alignment and facing direction are still checked.</p>
           <pre id="routeStatus" class="route-status" aria-live="polite">Loading routing graph…</pre>
         </section>
         <section>

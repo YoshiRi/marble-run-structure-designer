@@ -1,5 +1,7 @@
 schema_version: "0.1"
 name: three-level-physically-connected
+routing_options:
+  allow_side_entry_plus_one: false
 
 rails:
   - id: lower

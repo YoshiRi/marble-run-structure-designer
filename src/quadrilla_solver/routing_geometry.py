@@ -114,6 +114,46 @@ def _supports_flow(
     return False
 
 
+def _allows_side_entry_plus_one(
+    layout: Layout,
+    catalog: PartCatalog,
+    source: PortRef,
+    target: PortRef,
+    source_pose: PortPose,
+    target_pose: PortPose,
+    *,
+    position_tolerance_cm: float,
+    opposite_normal_dot_max: float,
+) -> bool:
+    """Allow a rail groove one height unit above an open-bottom side inlet."""
+    if not layout.routing_options.get("allow_side_entry_plus_one", False):
+        return False
+
+    rail = layout.rail_map().get(source.component_id)
+    if rail is None or source.port not in ("end_a", "end_b"):
+        return False
+    part = layout.part_map().get(target.component_id)
+    if part is None:
+        return False
+    spec = catalog.part_spec(part.part_type)
+    if spec is None:
+        return False
+    side_notches = spec.get("port_visualization", {}).get("side_entry_notches") or ()
+    if target.port not in side_notches:
+        return False
+
+    dx = source_pose.position_cm[0] - target_pose.position_cm[0]
+    dy = source_pose.position_cm[1] - target_pose.position_cm[1]
+    vertical_gap = source_pose.position_cm[2] - target_pose.position_cm[2]
+    normal_dot = sum(x * y for x, y in zip(source_pose.outward, target_pose.outward))
+    height_unit_cm = _dimension(catalog, "height_unit", 1.5)
+    return (
+        hypot(dx, dy) <= position_tolerance_cm
+        and abs(vertical_gap - height_unit_cm) <= position_tolerance_cm
+        and normal_dot <= opposite_normal_dot_max
+    )
+
+
 def validate_route_link_geometry(
     layout: Layout,
     catalog: PartCatalog,
@@ -143,5 +183,10 @@ def validate_route_link_geometry(
     distance = sqrt(sum((x - y) ** 2 for x, y in zip(a.position_cm, b.position_cm)))
     normal_dot = sum(x * y for x, y in zip(a.outward, b.outward))
     if distance > position_tolerance_cm or normal_dot > opposite_normal_dot_max:
-        return f"route_link_geometry_mismatch:{label}"
+        if not _allows_side_entry_plus_one(
+            layout, catalog, source, target, a, b,
+            position_tolerance_cm=position_tolerance_cm,
+            opposite_normal_dot_max=opposite_normal_dot_max,
+        ):
+            return f"route_link_geometry_mismatch:{label}"
     return None

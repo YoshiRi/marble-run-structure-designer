@@ -99,15 +99,23 @@ its shortest directed sequence of graph-node keys. The browser Viewer traces
 the same port graph in `viewer/routing.js` and overlays the selected route
 and alternative reachable branches. It does not simulate ball dynamics.
 
-`RouteLink` may connect only **catalogued, physically mating openings**.
-For example, a block side outlet may connect to the upstream end of a rail
-only if their surface positions agree within 0.35 cm, their outward normals
-face in opposite directions, and the source/target roles agree with the
-directed internal routes and rail flow direction. Misaligned links are
-**rejected** with a `route_link_geometry_mismatch` diagnostic, not drawn as
-teleporting lines. Rail holes cannot be used as arbitrary explicit link
-endpoints. A `block_connected` hole feeds a top port only when the
+`RouteLink` normally connects **catalogued openings at the same physical
+position** within 0.35 cm, with outward normals facing in opposite directions
+and source/target roles consistent with the directed routes and rail flow.
+Misaligned links are rejected with a `route_link_geometry_mismatch` diagnostic,
+not drawn as teleporting lines. Rail holes cannot be used as arbitrary explicit
+link endpoints. A `block_connected` hole feeds a top port only when the
 support-column block top matches the hole's XY and the rail underside height.
+
+Side-entry notches that feed a downward route (blue rear, green left, and
+natural-drop front/rear) have a specific optional allowance. By default, the
+rail groove must meet the notch at the part's installation level. Set
+`routing_options.allow_side_entry_plus_one: true` to also accept the rail
+groove exactly one height unit (1.5 cm) above that level. This exception still
+requires matching XY, opposite-facing normals, and a valid directed connection;
+it models the open-bottom drop inlet rather than claiming the port centers are
+at the same height. The Viewer has a checkbox for this option; its toggle is
+session-only unless saved in the layout YAML.
 
 These tests are based on provisional schematic opening positions from the
 catalog. They do not certify collision clearance, internal channels, or
@@ -131,9 +139,19 @@ That example is a full golden test for:
 - recursive local rail statics
 - routing reachability
 
-## Optional routing query for the Viewer
+## Routing options and Viewer query
 
-A layout may specify a default source and sink for the browser routing inspector:
+A layout may configure the optional side-drop connection rule:
+
+```yaml
+routing_options:
+  allow_side_entry_plus_one: false
+```
+
+The default is `false`. The Viewer checkbox can override it for the current
+session; set it in YAML to choose the initial state.
+
+A layout may also specify a default source and sink for the browser routing inspector:
 
 ```yaml
 routing_query:

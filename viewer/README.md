@@ -13,6 +13,7 @@ Static Babylon.js viewer for the project's common marble-run `Layout` schema.
 - actual graph reachability and shortest directed source-to-sink path highlighting
 - reachable branches, dead-end markers, and invalid/unsupported routing diagnostics
 - route source/sink selectors (defaults from optional layout `routing_query`)
+- optional side-drop inlet rule allowing a rail groove one height unit above the notch
 - global center of mass
 - ground support polygon
 - click-to-inspect part/rail metadata
@@ -114,6 +115,13 @@ through solid wood. Cyan branches show other
 reachable graph edges, including possible random routes. Open holes interrupt
 rail traversal; covered holes preserve it; block-connected holes can drop into
 a supporting routing block. Unsupported covered-slope semantics are reported.
+
+Side-entry notches that route downwards normally connect at the part's
+installation level. The **Allow rail groove one level above a side-drop inlet**
+checkbox optionally permits a +1-unit (1.5 cm) vertical offset, while retaining
+XY alignment, facing-direction, and flow-direction checks. The option is off
+by default and can also be configured in YAML with
+`routing_options.allow_side_entry_plus_one: true`.
 
 For local Layout YAML files, the optional `routing_query` field specifies the
 initial source and destination:
