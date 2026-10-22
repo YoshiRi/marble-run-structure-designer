@@ -858,9 +858,44 @@
     return null;
   }
 
+  // Hook-shaped path through a twist (user-described): the marble drops into
+  // the chute at the chute hole, rolls down the chute to the rim, veers right
+  // and circles the funnel counter-clockwise (seen from above) into the
+  // center hole. Empty unless `to` is a twist's center hole.
+  function twistPointsInto(from, to, lift) {
+    const b = railNodeStation(to);
+    if (!b || b.spec.shape !== "twist") return [];
+    const holes = (b.spec.hole_positions_cm || []).map(Number);
+    if (b.s !== holes[holes.length - 1]) return [];
+    const z0 = Number(b.rail.z_units);
+    const rise = MarbleRouting.holeLevel(b.spec, 0);
+    const rimR = geometryValue(b.spec.funnel_rim_diameter_cm, 23) / 2 - 1.0;
+    const [cx, cy, heading] = MarbleRouting.railPose(catalog, b.rail, b.s);
+    const up = new BABYLON.Vector3(0, lift, 0);
+    const out = [];
+    // Chute: from the chute hole down to the rim, one unit lower.
+    const s0 = holes[0], s1 = b.s - rimR;
+    for (let i = 0; i <= 6; i++) {
+      const s = s0 + (s1 - s0) * i / 6;
+      const p = railPoint(b.rail, s);
+      out.push(world(p.x, p.y, z0 + rise + 1 - i / 6).add(up));
+    }
+    // Funnel: spiral from the rim (chute side) to the center, descending.
+    const start = heading + Math.PI, turns = 1.75, steps = 72;
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const r = rimR * (1 - t) + 0.6 * t;
+      const theta = start + t * turns * 2 * Math.PI;
+      out.push(world(cx + r * Math.cos(theta), cy + r * Math.sin(theta), z0 + rise - t * (rise - 1)).add(up));
+    }
+    return out;
+  }
+
   // Intermediate points that keep a path on a curved rail's arc between two
   // nodes of the same rail (empty for straight rails).
   function arcPointsBetween(from, to, lift) {
+    const twist = twistPointsInto(from, to, lift);
+    if (twist.length) return twist;
     const a = railNodeStation(from), b = railNodeStation(to);
     if (!a || !b || a.rail !== b.rail || a.spec.shape !== "arc") return [];
     const steps = Math.max(2, Math.ceil(Math.abs(b.s - a.s) / 1.5));
