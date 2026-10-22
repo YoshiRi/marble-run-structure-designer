@@ -182,14 +182,11 @@
       const radius = geometryValue(curved.hole_circle_radius_cm, 23);
       // Arc segments along the rail: {length, radius, sign: +1 same turn, -1 opposite}.
       const segments = curved.shape === "compound_arc"
-        ? (curved.segments || []).map(seg => {
-            const base = catalog.curved_rails?.[seg.base] || {};
-            return {
-              length: Number(base.centerline_length_cm),
-              radius: geometryValue(base.hole_circle_radius_cm, radius),
-              sign: seg.turn === "opposite" ? -1 : 1,
-            };
-          })
+        ? (curved.segments || []).map(seg => ({
+            length: Number(seg.length_cm),
+            radius,
+            sign: seg.turn === "opposite" ? -1 : 1,
+          }))
         : [{ length: Number(curved.centerline_length_cm), radius, sign: 1 }];
       return {
         ...curved,

@@ -63,7 +63,6 @@ Still intentionally unresolved:
   it. Still to decide how much load and where (any block above, or a specific hole?).
 - Owned counts: the user's older Twist set (QDE6008AB05) lists 5 short and 5
   long curves; actual counts still to be made.
-- S-curve: hole positions (end holes only, or also at the joint?).
 
 ## Hole plates
 

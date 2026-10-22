@@ -348,10 +348,14 @@ Open questions are listed in `docs/open-questions.md`.
 
 ## S-curve
 
-Two short-curve arcs joined end to end, bending in opposite directions (user
-description). Derived: 56.2 cm along the centerline; the ends are parallel,
-offset about 43.2 cm forward and 30.2 cm sideways. Assumed holes: one near each
-end, as on the short curve (`curved_rails.s_curve`). Viewer-only for now.
+Two short-curve arcs bending in opposite directions, with holes at both ends and
+in the middle (user-confirmed). Each half spans 60 deg between holes on the
+23 cm circle, so the three holes are **collinear and 23 cm apart** (46 cm end to
+end): for connections the S-curve is equivalent to a center-hole long rail's
+holes 0, 2 and 4 (user-confirmed). Derived: 52.2 cm along the centerline; the end
+tangents are parallel to each other and turned 30 deg from the line of holes.
+By point symmetry its center of mass sits on the middle hole, on the line between
+the end holes. Viewer-only for now.
 
 ## Hole plates
 
