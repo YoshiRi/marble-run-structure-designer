@@ -1,6 +1,6 @@
 # Project Goal
 
-Quadrilla Designer is intended to help design and physically build Quadrilla marble-run layouts.
+Marble Run Structure Designer helps design, validate, and physically build modular marble-run layouts. The current part catalog models Hape Quadrilla compatibility.
 
 ## 1. Automatic Design
 
