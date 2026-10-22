@@ -21,7 +21,7 @@ def validate_assembly(
     layout: Layout,
     catalog: PartCatalog,
     *,
-    xy_tolerance_cm: float = 1e-6,
+    xy_tolerance_cm: float = 1e-3,  # 0.01 mm: absorbs float/YAML rounding on curves
     z_tolerance_units: float = 1e-6,
 ) -> AssemblyResult:
     reasons: list[str] = []
@@ -192,6 +192,14 @@ def validate_assembly(
             for pair in combinations(local_holes, 2)
         ):
             reasons.append(f"no_stable_support_pair:{rail_id}")
+
+    # Curved rails tip on their own: they are stable only with load above,
+    # i.e. at least one column standing on them (user-confirmed).
+    loaded = {s.lower_rail_id for s in layout.supports if s.lower_rail_id and s.stack_part_ids}
+    for rail in layout.rails:
+        spec = catalog.rails.get(rail.rail_type)
+        if spec is not None and spec.needs_load_above and rail.id not in loaded:
+            reasons.append(f"curve_needs_load_above:{rail.id}")
 
     # Foundation is ground-only. A placed foundation that is not used as the
     # base of a ground support is therefore not a valid assembly.

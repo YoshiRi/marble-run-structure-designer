@@ -30,11 +30,14 @@ def _footprint(text: str) -> tuple[float, float]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sets", default="QD001,QD003,QD005",
-                        help="comma-separated set ids whose combined contents bound the inventory")
+                        help="comma-separated set ids whose combined contents bound the inventory "
+                             "(add QDE6008AB05, the older Twist set, for curved rails)")
     parser.add_argument("--max-height", type=int, default=24, help="top rail level in height units (1u = 1.5 cm)")
     parser.add_argument("--footprint", type=_footprint, default=(90.0, 90.0), help="WIDTHxDEPTH in cm")
     parser.add_argument("--max-rails", type=int, default=12)
     parser.add_argument("--split-probability", type=float, default=0.45)
+    parser.add_argument("--curve-bias", type=float, default=0.5,
+                        help="chance to build on holes that let straights become curves (needs curves in --sets)")
     parser.add_argument("--attempts", type=int, default=500)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--keep", type=int, default=3)
@@ -49,6 +52,7 @@ def main() -> None:
     config = GeneratorConfig(
         max_height_units=args.max_height, footprint_cm=args.footprint,
         split_probability=args.split_probability, max_rails=args.max_rails,
+        curve_ready_bias=args.curve_bias,
     )
     candidates = generate(catalog, budget, config=config, attempts=args.attempts,
                           seed=args.seed, keep=args.keep)
@@ -59,7 +63,7 @@ def main() -> None:
         m = candidate.metrics
         print(f"#{rank} score={candidate.score:.1f} levels={m['levels']} rails={m['rails']} "
               f"rolling={m['rolling_length_cm']}cm exits={m['exits']} branches={m['random_branches']} "
-              f"covers={m['covers']}")
+              f"covers={m['covers']} curves={m.get('curved_rails', 0)}")
         if args.out_dir is None:
             continue
         args.out_dir.mkdir(parents=True, exist_ok=True)

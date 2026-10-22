@@ -3,11 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from math import cos, radians, sin
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import yaml
 
 from .catalog import PartCatalog
+
+if TYPE_CHECKING:
+    from .catalog import RailSpec
 
 
 @dataclass(frozen=True)
@@ -33,11 +36,13 @@ class PlacedPart:
 @dataclass(frozen=True)
 class PlacedRail:
     """
-    Straight rail placement.
+    Rail placement.
 
     x_cm/y_cm is end-A of the rail centerline.
     z_units is the bottom/support-plane elevation of the rail.
-    yaw_deg is continuous in plan view.
+    yaw_deg is the travel direction at end A (continuous in plan view).
+    turn ("left"/"right") is the side a curved rail first bends toward;
+    ignored for straight rails.
     """
 
     id: str
@@ -48,6 +53,7 @@ class PlacedRail:
     yaw_deg: float = 0.0
     flow_direction: str = "a_to_b"
     hole_states: Mapping[int, str] = field(default_factory=dict)
+    turn: str = "left"
 
 
 @dataclass(frozen=True)
@@ -106,6 +112,37 @@ def rail_local_to_world(
     )
 
 
+def rail_pose(
+    rail: PlacedRail,
+    spec: "RailSpec",
+    s_cm: float,
+) -> tuple[float, float, float]:
+    """(x, y, heading in radians) on the centerline, s_cm from end A.
+
+    Negative s_cm extrapolates before end A along the first segment.
+    """
+    x, y, heading = rail.x_cm, rail.y_cm, radians(rail.yaw_deg)
+    if spec.shape != "arc":
+        return x + s_cm * cos(heading), y + s_cm * sin(heading), heading
+    rail_sign = -1 if rail.turn == "right" else 1
+    remaining = s_cm
+    segments = spec.segments
+    for index, (length, seg_sign) in enumerate(segments):
+        last = index == len(segments) - 1
+        step = remaining if (last or remaining < 0) else min(remaining, length)
+        sign = rail_sign * seg_sign
+        r = spec.radius_cm
+        cx = x - sign * r * sin(heading)
+        cy = y + sign * r * cos(heading)
+        heading += sign * step / r
+        x = cx + sign * r * sin(heading)
+        y = cy - sign * r * cos(heading)
+        remaining -= step
+        if remaining <= 1e-9:
+            break
+    return x, y, heading
+
+
 def rail_hole_world(
     rail: PlacedRail,
     catalog: PartCatalog,
@@ -116,7 +153,7 @@ def rail_hole_world(
         raise IndexError(
             f"{rail.id}: hole index {hole_index} outside {rail.rail_type}"
         )
-    x, y = rail_local_to_world(rail, spec.holes_cm[hole_index])
+    x, y, _ = rail_pose(rail, spec, spec.holes_cm[hole_index])
     return x, y, rail.z_units
 
 
@@ -125,7 +162,7 @@ def rail_com_world(
     catalog: PartCatalog,
 ) -> tuple[float, float, float]:
     spec = catalog.rails[rail.rail_type]
-    x, y = rail_local_to_world(rail, spec.length_cm / 2.0)
+    x, y, _ = rail_pose(rail, spec, spec.length_cm / 2.0)
     return x, y, rail.z_units + spec.height_units / 2.0
 
 
@@ -157,6 +194,7 @@ def load_layout(path: str | Path) -> Layout:
                 int(k): str(v)
                 for k, v in (x.get("hole_states", {}) or {}).items()
             },
+            turn=str(x.get("turn", "left")),
         )
         for x in data.get("rails", ())
     )

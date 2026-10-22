@@ -68,7 +68,7 @@ height_units:
 routing_blocks:
   yellow:
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front]
     port_visualization: { side_entry_notches: [] }
     routes:
@@ -81,7 +81,7 @@ routing_blocks:
       value: 53
       source: user_measurement
       confidence: measured
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, rear, bottom]
     port_visualization: { side_entry_notches: [rear] }
     routes:
@@ -91,7 +91,7 @@ routing_blocks:
 
   green:
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, left, bottom]
     port_visualization: { side_entry_notches: [left] }
     routes:
@@ -101,7 +101,7 @@ routing_blocks:
 
   cyan:
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, left, right]
     routes:
       - { from: top, to: front }
@@ -112,7 +112,7 @@ routing_blocks:
   natural_drop:
     appearance: natural_wood
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [front, rear, bottom]
     port_visualization: { side_entry_notches: [front, rear] }
     routes:
@@ -123,7 +123,7 @@ routing_blocks:
 
   red_random_split:
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, rear]
     routes:
       - from: top
@@ -135,7 +135,7 @@ routing_blocks:
   red_right_angle:
     appearance: red
     height: 4
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, right]
     routes:
       - from: top
@@ -152,7 +152,7 @@ routing_blocks:
       value: 58
       source: user_measurement
       confidence: measured
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, bottom]
     routes:
       - { from: top, to: bottom }
@@ -170,7 +170,7 @@ routing_blocks:
       value: 12
       source: user_measurement
       confidence: measured
-    rotations_deg: [0, 90, 180, 270]
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, bottom]
     routes:
       - { from: top, to: bottom }
@@ -261,6 +261,10 @@ curved_rails:
     shape: arc
     height: 1
     width_cm: 4.5
+    mass_g:
+      value: 76
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
     hole_circle_radius_cm:
       value: 23.0
       source: derived_six_short_curves_overlapped_at_holes_close_a_circle_and_end_holes_match_short_straight_outer_holes
@@ -272,8 +276,8 @@ curved_rails:
       source: assumed_same_as_straight_rail_end_holes
       confidence: provisional
     arc_deg: 69.96              # derived: 60 + 2 x overhang angle (4.98 deg)
-    centerline_length_cm: 28.09 # derived
-    hole_arc_positions_cm: [2.0, 26.09]
+    centerline_length_cm: 28.0855437  # derived: 4 + 23*pi/3
+    hole_arc_positions_cm: [2.0, 26.0855437]
     end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
     stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
     stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
@@ -284,6 +288,10 @@ curved_rails:
     shape: arc
     height: 1
     width_cm: 4.5
+    mass_g:
+      value: 142
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
     hole_circle_radius_cm:
       value: 23.0
       source: derived_three_long_curves_overlapped_at_holes_close_a_circle_and_middle_hole_overlaps_a_short_curve
@@ -294,8 +302,8 @@ curved_rails:
       source: assumed_same_as_straight_rail_end_holes
       confidence: provisional
     arc_deg: 129.96             # derived
-    centerline_length_cm: 52.17 # derived
-    hole_arc_positions_cm: [2.0, 26.09, 50.17]
+    centerline_length_cm: 52.1710874  # derived: 4 + 2*23*pi/3
+    hole_arc_positions_cm: [2.0, 26.0855437, 50.1710874]
     end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
     stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
     solver_support: not_yet
@@ -305,13 +313,17 @@ curved_rails:
     shape: compound_arc
     height: 1
     width_cm: 4.5
+    mass_g:
+      value: 142
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
     description: two short-curve arcs sharing a middle hole, bending in opposite directions (user description)
     hole_circle_radius_cm: { value: 23.0, source: same_as_short_curve, confidence: estimated }
     segments:                  # from end A; turn is relative to the rail's turn
-      - { length_cm: 26.09, turn: same }      # 2 cm overhang + 60 deg to the middle hole
-      - { length_cm: 26.09, turn: opposite }  # 60 deg to the end hole + 2 cm overhang
-    centerline_length_cm: 52.17  # derived
-    hole_arc_positions_cm: [2.0, 26.09, 50.17]  # user-confirmed: holes at both ends and the middle
+      - { length_cm: 26.0855437, turn: same }      # 2 cm overhang + 60 deg to the middle hole
+      - { length_cm: 26.0855437, turn: opposite }  # 60 deg to the end hole + 2 cm overhang
+    centerline_length_cm: 52.1710874  # derived
+    hole_arc_positions_cm: [2.0, 26.0855437, 50.1710874]  # user-confirmed: holes at both ends and the middle
     hole_chord_cm: [23.0, 23.0]  # derived: the three holes are collinear, 23 + 23 = 46 cm
     connection_equivalent_to: straight_long_center holes 0, 2, 4   # user-confirmed
     solver_support: not_yet

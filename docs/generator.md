@@ -30,6 +30,22 @@ yellow, blue, green, cyan, red splitters), optionally under pass-through parts
 
 Red splitters fork the cascade.
 
+## Curved rails (substitution)
+
+With curves in the inventory (add the older Twist set: `--sets
+QD001,QD003,QD005,QDE6008AB05`), each valid candidate is post-processed: a short
+straight becomes a short curve, and a center-hole long rail an S-curve, when
+the curve's holes coincide with every hole the straight uses (holes 0/3 and
+0/2/4), the marble does not enter it through an explicit link at its end, and
+blocks standing on it only land the marble on it. Those blocks turn with the
+curve's tangent (+-30 deg); everything below the rail is unchanged. Every swap
+is re-validated; short and long curves also need a block standing on them.
+
+While building, `--curve-bias` (default 0.5) is the chance to prefer these
+"curve-ready" holes. At 0.5 the best scores are essentially unchanged and kept
+layouts carry about one curve each; higher values add curves at some cost in
+score. Curves also save covers: a curve has no holes between its end holes.
+
 ## Columns
 
 Columns are abstract while building: a base (ground or a rail hole), the rail
@@ -71,5 +87,5 @@ and up to 11 columns standing on rails, typically 6 levels within 24 units.
 - Covers are counted for every covered hole, including holes resting on a
   column; if a column's peg already closes the hole, this is conservative.
 - An outlet facing against a rail's flow is not modeled as landing.
-- No curved/spiral rails, seesaws or covered slopes.
+- Long curves, the twist (spiral), seesaws and covered slopes are not generated yet.
 - Filler blocks are routing blocks used purely as structure.

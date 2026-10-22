@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from math import cos, hypot, radians, sin, sqrt
 
 from .catalog import PartCatalog
-from .model import Layout, PortRef, RouteLink, rail_local_to_world
+from .model import Layout, PortRef, RouteLink, rail_pose
 
 
 @dataclass(frozen=True)
@@ -35,8 +35,7 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
         if spec is None or ref.port not in ("end_a", "end_b"):
             return None
         local_x = 0.0 if ref.port == "end_a" else spec.length_cm
-        x, y = rail_local_to_world(rail, local_x)
-        angle = radians(rail.yaw_deg)
+        x, y, angle = rail_pose(rail, spec, local_x)
         direction = -1.0 if ref.port == "end_a" else 1.0
         return PortPose(
             (x, y, (rail.z_units + spec.height_units) * height_scale),

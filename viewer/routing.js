@@ -25,23 +25,66 @@
     return null;
   }
 
+  // Rail spec by type: straight rails from catalog.rails, curved rails from
+  // catalog.curved_rails presented with the same fields (positions along the
+  // centerline) plus arc segments. Mirrors catalog.load_rail_specs.
+  function railGeometry(catalog, type) {
+    const straight = catalog.rails?.[type];
+    if (straight) return { ...straight, shape: "straight" };
+    const curved = catalog.curved_rails?.[type];
+    if (!curved) return null;
+    const radius = geometryValue(curved.hole_circle_radius_cm, 23);
+    const length = Number(curved.centerline_length_cm);
+    const segments = curved.segments?.length
+      ? curved.segments.map(seg => ({ length: Number(seg.length_cm), sign: seg.turn === "opposite" ? -1 : 1 }))
+      : [{ length, sign: 1 }];
+    return {
+      ...curved, shape: "arc", radius_cm: radius, segments,
+      length_cm: length, hole_positions_cm: curved.hole_arc_positions_cm || [],
+    };
+  }
+
+  // [x, y, heading radians] on the centerline, s cm from end A. Mirrors
+  // model.rail_pose (negative s extrapolates before end A).
+  function railPose(catalog, rail, s) {
+    const spec = railGeometry(catalog, rail.rail_type);
+    let x = Number(rail.x_cm), y = Number(rail.y_cm);
+    let heading = Number(rail.yaw_deg || 0) * Math.PI / 180;
+    if (!spec || spec.shape !== "arc") {
+      return [x + s * Math.cos(heading), y + s * Math.sin(heading), heading];
+    }
+    const railSign = rail.turn === "right" ? -1 : 1;
+    let remaining = Number(s);
+    for (let i = 0; i < spec.segments.length; i++) {
+      const seg = spec.segments[i];
+      const last = i === spec.segments.length - 1;
+      const step = (last || remaining < 0) ? remaining : Math.min(remaining, seg.length);
+      const sign = railSign * seg.sign;
+      const r = spec.radius_cm;
+      const cx = x - sign * r * Math.sin(heading);
+      const cy = y + sign * r * Math.cos(heading);
+      heading += sign * step / r;
+      x = cx + sign * r * Math.sin(heading);
+      y = cy - sign * r * Math.cos(heading);
+      remaining -= step;
+      if (remaining <= 1e-9) break;
+    }
+    return [x, y, heading];
+  }
+
   // Physical surface positions, not the offset positions used to draw markers.
   // The returned position is [world x, world y, vertical z], all in centimeters.
   function portPose(layout, catalog, ref) {
     const scale = geometryValue(catalog.geometry_cm?.height_unit, 1.5);
     const rail = (layout.rails || []).find(r => r.id === ref.component_id);
     if (rail) {
-      const spec = catalog.rails?.[rail.rail_type];
+      const spec = railGeometry(catalog, rail.rail_type);
       if (!spec || !["end_a", "end_b"].includes(ref.port)) return null;
-      const angle = Number(rail.yaw_deg || 0) * Math.PI / 180;
       const dir = ref.port === "end_a" ? -1 : 1;
       const distance = ref.port === "end_a" ? 0 : Number(spec.length_cm);
+      const [px, py, angle] = railPose(catalog, rail, distance);
       return {
-        position: [
-          Number(rail.x_cm) + distance * Math.cos(angle),
-          Number(rail.y_cm) + distance * Math.sin(angle),
-          (Number(rail.z_units) + Number(spec.height || 1)) * scale,
-        ],
+        position: [px, py, (Number(rail.z_units) + Number(spec.height || 1)) * scale],
         normal: [dir * Math.cos(angle), dir * Math.sin(angle), 0],
       };
     }
@@ -208,7 +251,7 @@
 
     // Rails are directed chains, stopped by open/connected holes.
     for (const rail of layout.rails || []) {
-      const spec = catalog.rails?.[rail.rail_type];
+      const spec = railGeometry(catalog, rail.rail_type);
       if (!spec) continue;
       const sequence = [
         "end_a",
@@ -246,7 +289,7 @@
           support.upper_hole_index + ":" + part.id);
         continue;
       }
-      const railSpec = catalog.rails?.[rail.rail_type];
+      const railSpec = railGeometry(catalog, rail.rail_type);
       const partHeight = partSpec(catalog, part.part_type)?.height;
       const index = Number(support.upper_hole_index);
       if (!railSpec || partHeight == null ||
@@ -255,9 +298,7 @@
         reasons.push("block_connected_invalid_geometry:" + rail.id + ":" + index);
         continue;
       }
-      const yaw = Number(rail.yaw_deg || 0) * Math.PI / 180;
-      const holeX = Number(rail.x_cm) + Number(railSpec.hole_positions_cm[index]) * Math.cos(yaw);
-      const holeY = Number(rail.y_cm) + Number(railSpec.hole_positions_cm[index]) * Math.sin(yaw);
+      const [holeX, holeY] = railPose(catalog, rail, Number(railSpec.hole_positions_cm[index]));
       if (Math.hypot(Number(part.x_cm) - holeX, Number(part.y_cm) - holeY) > 0.35 ||
           Math.abs(Number(part.z_units) + Number(partHeight) - Number(rail.z_units)) > 0.1) {
         reasons.push("block_connected_geometry_mismatch:" + rail.id + ":" + index + ":" + part.id);
@@ -309,9 +350,12 @@
       if (!support.stack_part_ids?.length || support.lower_rail_id == null) continue;
       const rail = rails.get(support.lower_rail_id);
       const part = parts.get(support.stack_part_ids[0]);
-      const railSpec = rail && catalog.rails?.[rail.rail_type];
+      const railSpec = rail && railGeometry(catalog, rail.rail_type);
       if (!rail || !part || !railSpec) continue;
-      const theta = Number(rail.yaw_deg || 0) * Math.PI / 180;
+      const hole = Number(support.lower_hole_index);
+      if (!Number.isInteger(hole) || hole < 0 || hole >= (railSpec.hole_positions_cm || []).length) continue;
+      // Direction of the rail where the block stands (tangent on a curve).
+      const theta = railPose(catalog, rail, Number(railSpec.hole_positions_cm[hole]))[2];
       const axis = [Math.cos(theta), Math.sin(theta)];
       const railTopCm = (Number(rail.z_units) + Number(railSpec.height || 1)) * unitCm;
       const outputs = new Set();
@@ -327,8 +371,10 @@
         if (!pose) continue;
         const along = pose.normal[0] * axis[0] + pose.normal[1] * axis[1];
         if (Math.abs(along) < 0.95 || Math.abs(pose.position[2] - (railTopCm + unitCm)) > 0.05) continue;
-        const landing = (pose.position[0] - Number(rail.x_cm)) * axis[0] +
-          (pose.position[1] - Number(rail.y_cm)) * axis[1];
+        // The marble lands just past the block face, half a block from the hole.
+        const halfBlock = Math.abs((pose.position[0] - Number(part.x_cm)) * axis[0] +
+          (pose.position[1] - Number(part.y_cm)) * axis[1]);
+        const landing = Number(railSpec.hole_positions_cm[hole]) + (along > 0 ? halfBlock : -halfBlock);
         const stations = [["end_a", 0],
           ...(railSpec.hole_positions_cm || []).map((x, i) => ["hole:" + i, Number(x)]),
           ["end_b", Number(railSpec.length_cm)]];
@@ -433,7 +479,7 @@
   function listInputHoles(layout, catalog, graph) {
     const candidates = [];
     for (const rail of layout.rails || []) {
-      const spec = catalog.rails?.[rail.rail_type];
+      const spec = railGeometry(catalog, rail.rail_type);
       if (!spec) continue;
       for (let index = 0; index < (spec.hole_positions_cm || []).length; index++) {
         const state = rail.hole_states?.[index] ?? "open";
@@ -631,5 +677,5 @@
     return { path, exit: null, complete: false, reason: "step_limit:" + node };
   }
 
-  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun };
+  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose };
 });

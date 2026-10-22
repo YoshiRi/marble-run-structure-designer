@@ -41,6 +41,7 @@ from .collision import Solid, penetration_cm, rail_solid
 from .geometry import valid_support_pairs
 from .inventory import load_inventory
 from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink
+from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, substitute
 from .validation import validate_layout
 
 _DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
@@ -56,6 +57,9 @@ _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
 # separately); `straight_unspecified` is a wildcard for any straight rail.
 _RAIL_POOL = {"straight_short": "straight_short", "straight_long": "straight_long",
               "straight_long_center": "straight_long"}
+# Holes a straight can be swapped to a curve on (substitution.py): building on
+# them keeps rails curve-ready.
+_CURVE_READY = {"straight_short": {0, 3}, "straight_long_center": {0, 2, 4}}
 _UNIT_CM = 1.5
 _MARBLE_DIAMETER_CM = 1.6
 _TOL_CM = 0.05
@@ -107,6 +111,7 @@ class GeneratorConfig:
     pass_through_probability: float = 0.35
     landing_probability: float = 0.6
     max_rails: int = 12
+    curve_ready_bias: float = 0.5  # chance to try curve-ready holes first
 
 
 @dataclass(frozen=True)
@@ -361,9 +366,11 @@ class CascadeGenerator:
                 return None
         else:
             options = [h for h in range(len(holes)) if h not in fixed]
-            # Prefer a column right under a block standing on this rail (tower).
+            # Prefer a column right under a block standing on this rail (tower),
+            # then holes that keep the rail curve-ready.
             self.rng.shuffle(options)
-            options.sort(key=lambda h: h not in keep_free)
+            ready = self._curve_ready(kind)
+            options.sort(key=lambda h: (h not in keep_free, h not in ready))
             choices = ([(h,) for h in options] if needed == 1 else
                        [(a, b) for i, a in enumerate(options) for b in options[i + 1:]])
             chosen = next((c for c in choices if self._valid_pair(kind, fixed + list(c))), None)
@@ -444,10 +451,14 @@ class CascadeGenerator:
             return None
         for kind in self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS)):
             spec = self.catalog.rails[kind]
-            for k in self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm)):
+            ready = self._curve_ready(kind)
+            order = self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
+            order.sort(key=lambda h: h not in ready)
+            for k in order:
                 landing = spec.holes_cm[k] + self.half
                 downstream = [i for i, hx_ in enumerate(spec.holes_cm) if hx_ > landing + 1.0]
-                stops = ([self.rng.choice(downstream)] if downstream else []) + [None]
+                preferred = [i for i in downstream if i in ready] or downstream
+                stops = ([self.rng.choice(preferred)] if downstream else []) + [None]
                 if len(state.rails) >= self.config.max_rails:
                     stops = [None]
                 for stop in stops:
@@ -482,6 +493,11 @@ class CascadeGenerator:
                             next_state, more = sub
                             return next_state, outlets + more
         return None
+
+    def _curve_ready(self, kind: str) -> set[int]:
+        if self.rng.random() >= self.config.curve_ready_bias:
+            return set()
+        return _CURVE_READY.get(kind, set())
 
     def _outlet(self, column: Column, port: str, d: int, block_z: int, depth: int) -> _Outlet:
         return _Outlet(column.id, port, port, column.x + self.half * _DIRS[d][0],
@@ -600,15 +616,50 @@ class Candidate:
 
 def score(metrics: Mapping[str, Any]) -> float:
     """Levels and rolling length, then branches and exits (user priorities);
-    a small bonus for columns standing on rails (stacked, compact builds)."""
+    small bonuses for columns standing on rails (stacked, compact builds) and
+    for curved rails (variety)."""
     return (
         10.0 * metrics["levels"]
         + 0.1 * metrics["rolling_length_cm"]
         + 6.0 * metrics["rail_exits"]
         + 4.0 * metrics["random_branches"]
         + 2.0 * metrics["columns_on_rails"]
+        + 3.0 * metrics.get("curved_rails", 0)
         - 8.0 * metrics["open_block_outlets"]
     )
+
+
+def layout_usage(layout: Layout) -> dict[str, int]:
+    used = Counter(r.rail_type for r in layout.rails) + Counter(p.part_type for p in layout.parts)
+    used["cover"] = sum(1 for r in layout.rails for s in r.hole_states.values() if s == "covered")
+    return dict(sorted(used.items()))
+
+
+def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
+    short = usage.get("straight_short", 0)
+    long_ = usage.get("straight_long", 0) + usage.get("straight_long_center", 0)
+    overflow = max(0, short - counts.get("straight_short", 0)) + max(0, long_ - counts.get("straight_long", 0))
+    if overflow > counts.get("straight_unspecified", 0):
+        return False
+    return all(n <= counts.get(part, 0) for part, n in usage.items() if not part.startswith("straight_"))
+
+
+def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random.Random,
+               source: PortRef, sinks: Sequence[PortRef]) -> Layout:
+    """Swap eligible straights for curves while the layout stays valid."""
+    if not any(budget.counts[c] > 0 for c, _ in CURVE_FOR_STRAIGHT.values()):
+        return layout
+    candidates = eligible_rails(layout)
+    rng.shuffle(candidates)
+    for rail_id in candidates:
+        for turn in rng.sample(("left", "right"), 2):
+            trial = substitute(layout, catalog, rail_id, turn)
+            if not _within_budget(layout_usage(trial), budget.counts):
+                break
+            if validate_layout(trial, catalog, source=source, sinks=sinks).valid:
+                layout = trial
+                break
+    return layout
 
 
 def _metrics(state: _State, layout: Layout, catalog: PartCatalog) -> dict[str, Any]:
@@ -653,8 +704,13 @@ def generate(
         result = validate_layout(layout, catalog, source=PortRef("rail0", "end_a"), sinks=sinks)
         if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
             continue
+        layout = add_curves(layout, catalog, budget, rng, PortRef("rail0", "end_a"), sinks)
+        usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog)
+        metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
+        metrics["covers"] = usage.get("cover", 0)
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
+                     metrics["curved_rails"],
                      tuple(sorted(Counter(p.part_type for p in layout.parts).items())))
         candidate = Candidate(layout, score(metrics), metrics, usage)
         if signature not in found or found[signature].score < candidate.score:
@@ -662,9 +718,19 @@ def generate(
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]
 
 
-def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
-                        generator_info: Mapping[str, Any]) -> dict[str, Any]:
-    layout = candidate.layout
+def _rail_dict(r: PlacedRail, num) -> dict[str, Any]:
+    out = {"id": r.id, "rail_type": r.rail_type}
+    if r.rail_type in ("straight_short", "straight_long", "straight_long_center"):
+        out.update(x_cm=num(r.x_cm), y_cm=num(r.y_cm), yaw_deg=num(r.yaw_deg))
+    else:  # curves: keep precision so holes stay on their columns
+        out.update(x_cm=round(r.x_cm, 7), y_cm=round(r.y_cm, 7), yaw_deg=round(r.yaw_deg, 7), turn=r.turn)
+    out.update(z_units=num(r.z_units), flow_direction=r.flow_direction,
+               hole_states=dict(sorted(r.hole_states.items())))
+    return out
+
+
+def layout_to_dict(layout: Layout, source_rail: str = "rail0") -> dict[str, Any]:
+    """Layout YAML structure (rails, parts, supports, links, routing query)."""
 
     def num(v: float) -> float | int:
         v = round(float(v), 4)
@@ -679,18 +745,7 @@ def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
         return out
 
     return {
-        "schema_version": "0.1",
-        "name": name,
-        "description": description,
-        "generator": dict(generator_info),
-        "metrics": dict(candidate.metrics),
-        "inventory_used": dict(candidate.usage),
-        "rails": [
-            {"id": r.id, "rail_type": r.rail_type, "x_cm": num(r.x_cm), "y_cm": num(r.y_cm),
-             "z_units": num(r.z_units), "yaw_deg": num(r.yaw_deg), "flow_direction": r.flow_direction,
-             "hole_states": dict(sorted(r.hole_states.items()))}
-            for r in layout.rails
-        ],
+        "rails": [_rail_dict(r, num) for r in layout.rails],
         "parts": [
             {"id": p.id, "part_type": p.part_type, "x_cm": num(p.x_cm), "y_cm": num(p.y_cm),
              "z_units": num(p.z_units), **({"rotation_deg": p.rotation_deg} if p.rotation_deg else {})}
@@ -702,5 +757,18 @@ def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
              "target": {"component_id": l.target.component_id, "port": l.target.port}}
             for l in layout.route_links
         ],
-        "routing_query": {"source": {"component_id": "rail0", "port": "end_a"}},
+        "routing_query": {"source": {"component_id": source_rail, "port": "end_a"}},
+    }
+
+
+def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
+                        generator_info: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": "0.1",
+        "name": name,
+        "description": description,
+        "generator": dict(generator_info),
+        "metrics": dict(candidate.metrics),
+        "inventory_used": dict(candidate.usage),
+        **layout_to_dict(candidate.layout),
     }

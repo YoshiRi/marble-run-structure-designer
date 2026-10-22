@@ -31,7 +31,7 @@ inlets), so on a 60-degree lattice fewer block/direction combinations work.
 - Long curve: a column standing on the middle hole without a support below it
   is a balance risk. Score it as a penalty (risk), not as invalid.
 
-## Substituting curves for straights
+## Substituting curves for straights (implemented)
 
 Because end-hole positions coincide, a short straight can become a short curve,
 and a long center-hole rail used only at holes 0, 2, 4 can become an S-curve,
@@ -40,11 +40,12 @@ without changing any column or block.
 Measured on 200 v2 layouts (QD001+QD003+QD005): no rail is support-only (every
 rail carries the marble), and no short rail has blocks standing on both end
 holes. Substitution therefore only pays off on rails the marble rolls along,
-where the curve's end tangents are turned 30 deg from the straight's direction
-(the outlet that feeds it, or the block it lands from, is aligned with the old
-straight). Whether marbles still enter and leave cleanly is a physical question
-to confirm before allowing it. 64 long center-hole rails used only holes 0, 2, 4
-in those layouts, so S-curve substitution would trigger often once allowed.
+where the curve's end tangents are turned 30 deg from the straight's direction.
+User answer: blocks rotate freely and the track below is unaffected; a block
+standing directly on the rail must follow the curve's tangent, so the swap is
+impossible when that block turns the marble 90 deg elsewhere. Implemented in
+`substitution.py` with those rules, plus a build-time bias toward curve-ready
+holes (see docs/generator.md).
 
 ## Search heuristics and known patterns
 
