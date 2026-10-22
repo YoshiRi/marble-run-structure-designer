@@ -64,7 +64,7 @@ See [docs/model.md](docs/model.md) and [docs/parts.md](docs/parts.md) for the cu
 └── ui/
 ```
 
-The repository includes a Python layout validator and a schematic browser viewer. The generator, construction-assist UI, and full browser-side solver are planned. Part definitions distinguish measured observations from provisional assumptions.
+The repository includes a Python layout validator, a first cascade layout generator ([docs/generator.md](docs/generator.md)) and a schematic browser viewer. The construction-assist UI and a browser-side generator are planned. Part definitions distinguish measured observations from provisional assumptions.
 
 
 ## Viewer
