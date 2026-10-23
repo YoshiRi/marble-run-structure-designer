@@ -11,7 +11,7 @@
   const METRICS = [
     ["levels", "Levels"], ["rails", "Rails"], ["exits", "Exits"], ["random_branches", "Branches"],
     ["rolling_length_cm", "Roll cm"], ["min_exit_path_cm", "Shortest"], ["highest_exit", "Exit lvl"],
-    ["footprint_area_cm2", "Area cm²"],
+    ["footprint_area_cm2", "Area cm²"], ["dead_area_cm2", "Unused cm²"], ["braces", "Braces"],
     ["curves", "Curves"], ["twists", "Twists"], ["columns_on_rails", "On rails"], ["parts", "Parts"],
   ];
 
