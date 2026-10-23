@@ -83,10 +83,15 @@ Review 3 refinements:
 - **weak towers**: 5+ blocks whose rails at or above half the stack's height
   all run along one axis (a rail near the ground hardly braces the top);
   -6 points each.
-- **free-standing stacks** (input block, twist entry block) must stand between
-  their rail's two supports (assembly reason `free_stack_cantilevered`), and
-  their mass now loads that rail in the statics. This caught the S-curve and
-  overhang cases from the review.
+- **support reactions**: the statics take moments about each rail's two
+  supports with everything resting on it, now including free-standing stacks
+  (input block, twist entry block). The lighter support must keep at least
+  `min_support_reaction_g` (20 g); a block may overhang the supports if the
+  rest balances it. When a rail falls short, `balance()` adds counterweight
+  blocks on free holes the marble does not roll over (user idea); if none
+  helps, the candidate is dropped. Support pairs that put a rail's own center
+  of mass within 3 cm of a support (center hole plus an end) are no longer
+  chosen: such a rail balances on a point (the S-curve case).
 - **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
   (a long rail held up by an extra column for a 3 cm roll).
 - **exclude_parts** (`--exclude`): parts the user does not have; the gallery

@@ -224,3 +224,30 @@ def test_excluded_parts_are_never_used():
                      attempts=60, seed=11, keep=10)
     assert found
     assert all(c.usage.get("red_right_angle", 0) == 0 for c in found)
+
+
+def test_every_rail_support_keeps_pressing():
+    """Review 3: moments about each rail's supports; the lighter support must
+    keep at least min_support_reaction_g (counterweights may be added)."""
+    from quadrilla_solver.generator import support_reactions_g
+
+    for c in _run(11):
+        reactions = support_reactions_g(c.layout, CATALOG)
+        assert reactions and min(reactions.values()) >= GeneratorConfig().min_support_reaction_g - 1e-6
+
+
+def test_balance_rejects_an_overhang_it_cannot_counter():
+    from dataclasses import replace
+
+    from quadrilla_solver.generator import balance, support_reactions_g
+    from quadrilla_solver.model import PlacedPart, SupportLink, load_layout, rail_hole_world
+
+    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
+    # A blue alone on the feed rail's overhanging hole 3 nearly unloads hole 0's support.
+    x, y, _ = rail_hole_world(layout.rail_map()["feed"], CATALOG, 3)
+    heavy = replace(layout, parts=layout.parts + (PlacedPart("lone", "blue", x, y, 9),),
+                    supports=layout.supports + (SupportLink(None, None, ("lone",), "feed", 3, name="lone"),))
+    assert support_reactions_g(heavy, CATALOG)["feed"] < 20
+    # Every other feed hole lies under the rolling marble: no place for a counterweight.
+    assert balance(heavy, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) is None
+    assert balance(layout, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) == layout

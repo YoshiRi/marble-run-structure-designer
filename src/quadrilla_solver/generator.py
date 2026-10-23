@@ -40,7 +40,7 @@ from .catalog import PartCatalog
 from .collision import Solid, penetration_cm, rail_solids
 from .geometry import valid_support_pairs
 from .inventory import load_inventory
-from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink
+from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink, rail_hole_world
 from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, substitute
 from .validation import validate_layout
 
@@ -138,6 +138,11 @@ class GeneratorConfig:
     # for a short roll are handled by the idle-rail penalty instead.
     min_roll_cm: float = 1.0
     exclude_parts: tuple[str, ...] = ()  # parts the user does not have (now)
+    # Every rail support must keep pressing with at least this much (grams):
+    # a rail whose lighter support is nearly unloaded tips easily (user review
+    # 3: a block on the overhanging end). Counterweight blocks are added on
+    # free holes to get there.
+    min_support_reaction_g: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -201,6 +206,10 @@ class _State:
         return f"{prefix}{n}"
 
 
+def _com(spec) -> float:
+    return spec.com_cm if spec.com_cm is not None else spec.length_cm / 2.0
+
+
 class CascadeGenerator:
     def __init__(self, catalog: PartCatalog, budget: Budget, config: GeneratorConfig,
                  rng: random.Random):
@@ -223,9 +232,14 @@ class CascadeGenerator:
         self.entry_blocks = self._side_to_bottom_inlets()
         self.work = 0  # rail placements left in the current build
         self.filler_blocks = [t for t in _FILLER_PREFERENCE if self.heights.get(t) == 4]
+        # Support pairs whose span keeps the rail's own center of mass at least
+        # 3 cm inside: a rail resting with its COM on one support (center hole
+        # plus an end) balances on a point and tips (user review 3, S-curve).
         self.support_pairs = {
             kind: {tuple(sorted((spec.holes_cm.index(p.hole_a_cm), spec.holes_cm.index(p.hole_b_cm))))
-                   for p in valid_support_pairs(spec)}
+                   for p in valid_support_pairs(spec)
+                   if min(_com(spec) - min(p.hole_a_cm, p.hole_b_cm),
+                          max(p.hole_a_cm, p.hole_b_cm) - _com(spec)) >= 3.0}
             for kind, spec in catalog.rails.items()
         }
 
@@ -731,11 +745,6 @@ class CascadeGenerator:
         rail wastes columns)."""
         state = state.copy()
         drop = next(c for c in state.columns.values() if c.top_rail == top.id and c.top_hole == stop)
-        # Free-standing, it must stand between its rail's supports.
-        lower = self.catalog.rails[state.rails[drop.base_rail].rail_type]
-        xs = [lower.holes_cm[c.top_hole] for c in state.columns.values() if c.top_rail == drop.base_rail]
-        if not min(xs) - 1e-6 <= lower.holes_cm[drop.base_hole] <= max(xs) + 1e-6:
-            return None
         for cid in [c.id for c in state.columns.values() if c.top_rail == top.id and c.id != drop.id]:
             del state.columns[cid]
         state.columns[drop.id] = replace(drop, top_rail=None, top_hole=None)
@@ -1036,6 +1045,9 @@ def generate(
         paths = result.connectivity.paths
         solids = generator._solids(state)
         layout = add_curves(layout, catalog, budget, rng, source, sinks)
+        layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
+        if layout is None:
+            continue
         usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
         if config.max_thin_towers is not None and metrics["thin_towers"] > config.max_thin_towers:
@@ -1050,6 +1062,68 @@ def generate(
         if signature not in found or found[signature].score < candidate.score:
             found[signature] = candidate
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]
+
+
+def support_reactions_g(layout: Layout, catalog: PartCatalog) -> dict[str, float] | None:
+    """Smaller support reaction of each rail in grams (moments about its two
+    supports, loads from everything above), or None if not evaluable."""
+    from .layout_stability import analyze_layout_statics
+
+    result = analyze_layout_statics(layout, catalog)
+    if not result.evaluable or result.statics is None:
+        return None
+    return {rid: min(r.force_n for r in rs.reactions) / 9.80665 * 1000.0
+            for rid, rs in result.statics.rails.items()}
+
+
+def balance(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRef,
+            sinks: Sequence[PortRef], min_g: float, max_weights: int = 3) -> Layout | None:
+    """Add counterweight blocks (free-standing, on free rail holes the marble
+    does not roll over) until every rail support keeps at least `min_g`.
+    None if that cannot be reached. User idea (review 3): a block on the
+    other side balances an overhanging load."""
+    reactions = support_reactions_g(layout, catalog)
+    if reactions is None:
+        return None
+    usage = Counter(layout_usage(layout))
+    weights = [t for t in _FILLER_PREFERENCE if (catalog.height_units(t) or 0) >= 4]
+    for n in range(max_weights + 1):
+        weak = sorted((g, rid) for rid, g in reactions.items() if g < min_g)
+        if not weak:
+            return layout
+        if n == max_weights:
+            return None
+        _, rid = weak[0]
+        rail = layout.rail_map()[rid]
+        spec = catalog.rails[rail.rail_type]
+        used = {s.upper_hole_index for s in layout.supports if s.upper_rail_id == rid}
+        used |= {s.lower_hole_index for s in layout.supports if s.lower_rail_id == rid}
+        best = None
+        for hole in range(len(spec.holes_cm)):
+            if hole in used or rail.hole_states.get(hole) == "block_connected":
+                continue
+            block = next((t for t in weights if budget.counts[t] - usage[t] > 0), None)
+            if block is None:
+                return None
+            x, y, _ = rail_hole_world(rail, catalog, hole)
+            pid = f"cw{n}_{block}"
+            part = PlacedPart(pid, block, x, y, rail.z_units + spec.hole_level(hole) + spec.height_units)
+            trial = replace(layout, parts=layout.parts + (part,),
+                            supports=layout.supports + (SupportLink(None, None, (pid,), rid, hole,
+                                                                    name=f"cw{n}"),))
+            got = support_reactions_g(trial, catalog)
+            if got is None or got[rid] <= reactions[rid]:
+                continue
+            result = validate_layout(trial, catalog, source=source, sinks=sinks)
+            if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
+                continue
+            if best is None or got[rid] > best[0][rid]:
+                best = (got, trial, block)
+        if best is None:
+            return None
+        reactions, layout, block = best
+        usage[block] += 1
+    return layout
 
 
 def _rail_dict(r: PlacedRail, num) -> dict[str, Any]:

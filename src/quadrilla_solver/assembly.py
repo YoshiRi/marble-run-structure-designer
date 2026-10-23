@@ -200,25 +200,6 @@ def validate_assembly(
         ):
             reasons.append(f"no_stable_support_pair:{rail_id}")
 
-    # A free-standing stack has no load above to hold it down: it must stand
-    # between its rail's two supports, not on the overhanging end (user review 3).
-    span: dict[str, list[float]] = {}
-    for support in layout.supports:
-        rail = rails.get(support.upper_rail_id) if support.upper_rail_id is not None else None
-        spec = catalog.rails.get(rail.rail_type) if rail is not None else None
-        if spec is not None and 0 <= support.upper_hole_index < len(spec.holes_cm):
-            span.setdefault(rail.id, []).append(spec.holes_cm[support.upper_hole_index])
-    for i, support in enumerate(layout.supports):
-        if support.upper_rail_id is not None or support.lower_rail_id not in span:
-            continue
-        spec = catalog.rails[rails[support.lower_rail_id].rail_type]
-        hole = support.lower_hole_index
-        if hole is None or not 0 <= hole < len(spec.holes_cm):
-            continue
-        xs = span[support.lower_rail_id]
-        if not min(xs) - 1e-6 <= spec.holes_cm[hole] <= max(xs) + 1e-6:
-            reasons.append(f"free_stack_cantilevered:{support.name or f'support_{i}'}")
-
     # The twist's funnel always empties through its center hole.
     for rail in layout.rails:
         spec = catalog.rails.get(rail.rail_type)
