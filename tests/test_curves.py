@@ -195,3 +195,22 @@ def test_free_standing_stack_loads_its_rail_and_sits_on_its_hole():
     assert any(load.source == "exit:point:weight" for load in exit_rail.applied_loads)
     off = replace(loaded, parts=tuple(replace(p, z_units=3) if p.id == "w" else p for p in loaded.parts))
     assert any(r.startswith("stack_z_mismatch:weight:w") for r in validate_assembly(off, CATALOG).reasons)
+
+
+def test_long_rails_used_for_nothing_become_short():
+    """Review of the dense-stack sample: two long rails a short one replaces."""
+    import yaml
+    from quadrilla_solver.generator import Budget, layout_sinks, layout_source, resolve_set_paths, shorten_rails
+
+    path = ROOT / "tests" / "fixtures" / "dense-stack-long-rails.yaml"
+    data = yaml.safe_load(path.read_text())
+    layout = load_layout(path)
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005"]))
+    short = shorten_rails(layout, CATALOG, budget, layout_source(data), layout_sinks(data))
+    changed = {r.id for r, s in zip(layout.rails, short.rails) if r.rail_type != s.rail_type}
+    assert changed == {"rail6", "rail7"}
+    assert all(s.rail_type == "straight_short" for s in short.rails if s.id in changed)
+    result = validate_layout(short, CATALOG, source=layout_source(data), sinks=layout_sinks(data))
+    assert result.valid
+    # Everything else stays where it was.
+    assert short.parts == layout.parts
