@@ -1,7 +1,7 @@
 schema_version: '0.1'
-layout_id: mr-bdf46b5a
-name: mr-bdf46b5a
-description: Gallery candidate (more-curves, seed 3).
+layout_id: mr-7328e197
+name: mr-7328e197
+description: Gallery candidate (more-twists, seed 1).
 generator:
   sets:
   - QD001
@@ -10,16 +10,16 @@ generator:
   - QDE6008AB05
   exclude:
   - red_right_angle
-  config: more-curves
-  seed: 3
-  score: 129.3
+  config: more-twists
+  seed: 1
+  score: 127.7
 metrics:
   levels: 6
   rails: 6
-  rolling_length_cm: 199.5
-  min_exit_path_cm: 199.5
+  rolling_length_cm: 212.5
+  min_exit_path_cm: 212.5
   exit_paths_cm:
-  - 199.5
+  - 212.5
   exit_levels:
   - 2
   exits: 1
@@ -27,64 +27,50 @@ metrics:
   block_exits: 0
   random_branches: 0
   columns_on_rails: 4
-  footprint_area_cm2: 4402
-  dead_area_cm2: 225
+  footprint_area_cm2: 5289
+  dead_area_cm2: 174
   thin_towers: 0
   braces: 1
   weak_towers: 0
-  idle_rail_cm: 64.5
-  covers: 7
-  parts: 47
-  curved_rails: 2
+  idle_rail_cm: 51.5
+  covers: 13
+  parts: 41
+  curved_rails: 0
   twists: 1
 inventory_used:
-  blue: 1
-  cover: 7
-  curved_short: 1
-  cyan: 3
-  green: 2
+  cover: 13
+  cyan: 5
+  green: 4
   natural_drop: 8
   orange_vertical: 5
-  purple_drop: 18
-  s_curve: 1
+  purple_drop: 9
   spiral: 1
-  straight_long: 2
-  straight_short: 1
+  straight_long_center: 3
+  straight_short: 2
   wooden_foundation: 10
 bill_of_materials:
   used:
-    blue: 1
-    cover: 7
-    curved_short: 1
-    cyan: 3
-    green: 2
+    cover: 13
+    cyan: 5
+    green: 4
     natural_drop: 8
     orange_vertical: 5
-    purple_drop: 18
-    s_curve: 1
+    purple_drop: 9
     spiral: 1
-    straight_long: 2
-    straight_short: 1
+    straight_long_center: 3
+    straight_short: 2
     wooden_foundation: 10
   check:
-  - part: blue
-    needed: 1
-    available: 10
-    short: 0
   - part: cover
-    needed: 7
+    needed: 13
     available: 18
     short: 0
-  - part: curved_short
-    needed: 1
-    available: 5
-    short: 0
   - part: cyan
-    needed: 3
+    needed: 5
     available: 5
     short: 0
   - part: green
-    needed: 2
+    needed: 4
     available: 5
     short: 0
   - part: natural_drop
@@ -96,23 +82,19 @@ bill_of_materials:
     available: 5
     short: 0
   - part: purple_drop
-    needed: 18
+    needed: 9
     available: 32
-    short: 0
-  - part: s_curve
-    needed: 1
-    available: 2
     short: 0
   - part: spiral
     needed: 1
     available: 6
     short: 0
   - part: straight_long
-    needed: 2
+    needed: 3
     available: 4
     short: 0
   - part: straight_short
-    needed: 1
+    needed: 2
     available: 7
     short: 0
   - part: wooden_foundation
@@ -121,428 +103,396 @@ bill_of_materials:
     short: 0
 rails:
 - id: rail1
-  rail_type: s_curve
-  x_cm: 24.686418
-  y_cm: 19.0739994
-  yaw_deg: 214.9822417
-  turn: right
-  z_units: 19
-  flow_direction: a_to_b
-  hole_states:
-    2: block_connected
-- id: rail2
-  rail_type: curved_short
-  x_cm: -24.0739994
-  y_cm: 19.686418
-  yaw_deg: -55.0177583
-  turn: right
-  z_units: 12
-  flow_direction: a_to_b
-  hole_states:
-    1: block_connected
-- id: rail3
-  rail_type: straight_long
-  x_cm: -20.75
-  y_cm: -5
+  rail_type: straight_short
+  x_cm: 11
+  y_cm: 0
   yaw_deg: 0
-  z_units: 8
+  z_units: 18
+  flow_direction: a_to_b
+  hole_states:
+    2: covered
+    3: block_connected
+- id: rail2
+  rail_type: straight_long_center
+  x_cm: 36
+  y_cm: -7
+  yaw_deg: 90
+  z_units: 13
+  flow_direction: a_to_b
+  hole_states:
+    2: covered
+    3: covered
+    4: block_connected
+- id: rail3
+  rail_type: straight_long_center
+  x_cm: 33.75
+  y_cm: 41
+  yaw_deg: 180
+  z_units: 9
   flow_direction: a_to_b
   hole_states:
     0: covered
     1: covered
     2: covered
     3: covered
+    4: covered
 - id: rail4
   rail_type: spiral
-  x_cm: 31.5
-  y_cm: -3.5
+  x_cm: -18.5
+  y_cm: 42.5
   yaw_deg: 270.0
   turn: left
-  z_units: 5
+  z_units: 6
   flow_direction: a_to_b
   hole_states:
-    1: block_connected
+    1: covered
+    2: block_connected
 - id: rail5
-  rail_type: straight_long
-  x_cm: 29.25
-  y_cm: -28
-  yaw_deg: 180
+  rail_type: straight_long_center
+  x_cm: -18.5
+  y_cm: 15.75
+  yaw_deg: 270
   z_units: 1
   flow_direction: a_to_b
   hole_states:
     0: covered
     1: covered
     2: covered
-    3: open
+    3: covered
+    4: open
 - id: rail6
   rail_type: straight_short
-  x_cm: 0
+  x_cm: 18
   y_cm: 25
   yaw_deg: 270
-  z_units: 17
+  z_units: 16
   flow_direction: a_to_b
   hole_states: {}
 parts:
 - id: c10_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 31.5
-  y_cm: -28
+  x_cm: -18.5
+  y_cm: 18
   z_units: 0
-- id: c10_1_green
-  part_type: green
-  x_cm: 31.5
-  y_cm: -28
+- id: c10_1_purple_drop
+  part_type: purple_drop
+  x_cm: -18.5
+  y_cm: 18
   z_units: 1
-  rotation_deg: 90
+- id: c10_2_cyan
+  part_type: cyan
+  x_cm: -18.5
+  y_cm: 18
+  z_units: 2
+  rotation_deg: 180
 - id: c11_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: -13.75
-  y_cm: -28
+  x_cm: -18.5
+  y_cm: 8.75
   z_units: 0
 - id: c12_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 22.25
-  y_cm: -28
+  x_cm: -18.5
+  y_cm: -27.25
   z_units: 0
 - id: c13_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 0
-  y_cm: 18
+  x_cm: 18
+  y_cm: 0
   z_units: 0
 - id: c13_1_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 18
+  x_cm: 18
+  y_cm: 0
   z_units: 1
 - id: c13_2_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 18
+  x_cm: 18
+  y_cm: 0
   z_units: 5
 - id: c13_3_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 18
+  x_cm: 18
+  y_cm: 0
   z_units: 9
-- id: c13_4_natural_drop
-  part_type: natural_drop
-  x_cm: 0
-  y_cm: 18
+- id: c13_4_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 0
   z_units: 13
+- id: c13_5_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 0
+  z_units: 14
+- id: c13_6_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 0
+  z_units: 15
 - id: c14_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 0
-  y_cm: 5
+  x_cm: 18
+  y_cm: 18
   z_units: 0
 - id: c14_1_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 5
+  x_cm: 18
+  y_cm: 18
   z_units: 1
 - id: c14_2_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 5
+  x_cm: 18
+  y_cm: 18
   z_units: 5
 - id: c14_3_natural_drop
   part_type: natural_drop
-  x_cm: 0
-  y_cm: 5
+  x_cm: 18
+  y_cm: 18
   z_units: 9
-- id: c14_4_natural_drop
-  part_type: natural_drop
-  x_cm: 0
-  y_cm: 5
+- id: c14_4_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 18
   z_units: 13
+- id: c14_5_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 18
+  z_units: 14
+- id: c14_6_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 18
+  z_units: 15
 - id: c3_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: -23
-  y_cm: 18
+  x_cm: 36
+  y_cm: 0
   z_units: 0
-- id: c3_1_orange_vertical
-  part_type: orange_vertical
-  x_cm: -23
-  y_cm: 18
+- id: c3_1_natural_drop
+  part_type: natural_drop
+  x_cm: 36
+  y_cm: 0
   z_units: 1
 - id: c3_2_orange_vertical
   part_type: orange_vertical
-  x_cm: -23
-  y_cm: 18
+  x_cm: 36
+  y_cm: 0
   z_units: 5
-- id: c3_3_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: 18
+- id: c3_3_orange_vertical
+  part_type: orange_vertical
+  x_cm: 36
+  y_cm: 0
   z_units: 9
-- id: c3_4_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: 18
-  z_units: 10
-- id: c3_5_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: 18
-  z_units: 11
 - id: c5_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: -23
-  y_cm: -5
+  x_cm: 36
+  y_cm: 41
   z_units: 0
 - id: c5_1_orange_vertical
   part_type: orange_vertical
-  x_cm: -23
-  y_cm: -5
+  x_cm: 36
+  y_cm: 41
   z_units: 1
-- id: c5_2_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: -5
+- id: c5_2_orange_vertical
+  part_type: orange_vertical
+  x_cm: 36
+  y_cm: 41
   z_units: 5
-- id: c5_3_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: -5
-  z_units: 6
-- id: c5_4_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: -5
-  z_units: 7
-- id: c5_5_cyan
+- id: c5_3_cyan
   part_type: cyan
-  x_cm: -23
-  y_cm: -5
-  z_units: 8
-  rotation_deg: 270
+  x_cm: 36
+  y_cm: 41
+  z_units: 9
+  rotation_deg: 90
 - id: c6_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: -13.75
-  y_cm: -5
+  x_cm: 8.75
+  y_cm: 41
   z_units: 0
 - id: c6_1_orange_vertical
   part_type: orange_vertical
-  x_cm: -13.75
-  y_cm: -5
+  x_cm: 8.75
+  y_cm: 41
   z_units: 1
-- id: c6_2_purple_drop
-  part_type: purple_drop
-  x_cm: -13.75
-  y_cm: -5
+- id: c6_2_cyan
+  part_type: cyan
+  x_cm: 8.75
+  y_cm: 41
   z_units: 5
-- id: c6_3_purple_drop
-  part_type: purple_drop
-  x_cm: -13.75
-  y_cm: -5
-  z_units: 6
-- id: c6_4_purple_drop
-  part_type: purple_drop
-  x_cm: -13.75
-  y_cm: -5
-  z_units: 7
 - id: c7_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 22.25
-  y_cm: -5
+  x_cm: -9.25
+  y_cm: 41
   z_units: 0
-- id: c7_1_orange_vertical
-  part_type: orange_vertical
-  x_cm: 22.25
-  y_cm: -5
+- id: c7_1_cyan
+  part_type: cyan
+  x_cm: -9.25
+  y_cm: 41
   z_units: 1
-- id: c7_2_purple_drop
-  part_type: purple_drop
-  x_cm: 22.25
-  y_cm: -5
+- id: c7_2_cyan
+  part_type: cyan
+  x_cm: -9.25
+  y_cm: 41
   z_units: 5
-- id: c7_3_purple_drop
-  part_type: purple_drop
-  x_cm: 22.25
-  y_cm: -5
-  z_units: 6
-- id: c7_4_purple_drop
-  part_type: purple_drop
-  x_cm: 22.25
-  y_cm: -5
-  z_units: 7
 - id: c8_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 31.5
-  y_cm: -5
+  x_cm: -18.5
+  y_cm: 41
   z_units: 0
-- id: c8_1_cyan
-  part_type: cyan
-  x_cm: 31.5
-  y_cm: -5
-  z_units: 1
-- id: c8_2_purple_drop
-  part_type: purple_drop
-  x_cm: 31.5
-  y_cm: -5
-  z_units: 5
-- id: c8_3_purple_drop
-  part_type: purple_drop
-  x_cm: 31.5
-  y_cm: -5
-  z_units: 6
-- id: c8_4_purple_drop
-  part_type: purple_drop
-  x_cm: 31.5
-  y_cm: -5
-  z_units: 7
-- id: c9_0_green
+- id: c8_1_green
   part_type: green
-  x_cm: 31.5
-  y_cm: -5
-  z_units: 9
-- id: c4_0_blue
-  part_type: blue
-  x_cm: -23
-  y_cm: 18
-  z_units: 13
-  rotation_deg: 210
-- id: c4_1_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: 18
-  z_units: 17
-- id: c4_2_purple_drop
-  part_type: purple_drop
-  x_cm: -23
-  y_cm: 18
-  z_units: 18
+  x_cm: -18.5
+  y_cm: 41
+  z_units: 1
+- id: c8_2_green
+  part_type: green
+  x_cm: -18.5
+  y_cm: 41
+  z_units: 5
+- id: c9_0_natural_drop
+  part_type: natural_drop
+  x_cm: -18.5
+  y_cm: 41
+  z_units: 10
+  rotation_deg: 270
+- id: c4_0_green
+  part_type: green
+  x_cm: 36
+  y_cm: 0
+  z_units: 14
 - id: c1_0_purple_drop
   part_type: purple_drop
-  x_cm: 0
-  y_cm: 18
-  z_units: 18
-- id: c2_0_cyan
-  part_type: cyan
-  x_cm: 0
-  y_cm: 18
-  z_units: 20
-  rotation_deg: 60
+  x_cm: 18
+  y_cm: 0
+  z_units: 17
+- id: c2_0_green
+  part_type: green
+  x_cm: 18
+  y_cm: 0
+  z_units: 19
+  rotation_deg: 270
+- id: c2_1_purple_drop
+  part_type: purple_drop
+  x_cm: 18
+  y_cm: 0
+  z_units: 23
 supports:
 - name: c10
   upper_rail_id: rail4
-  upper_hole_index: 1
+  upper_hole_index: 2
   stack_part_ids:
   - c10_0_wooden_foundation
-  - c10_1_green
+  - c10_1_purple_drop
+  - c10_2_cyan
 - name: c11
   upper_rail_id: rail5
-  upper_hole_index: 2
+  upper_hole_index: 1
   stack_part_ids:
   - c11_0_wooden_foundation
 - name: c12
   upper_rail_id: rail5
-  upper_hole_index: 1
+  upper_hole_index: 3
   stack_part_ids:
   - c12_0_wooden_foundation
 - name: c13
   upper_rail_id: rail6
-  upper_hole_index: 1
+  upper_hole_index: 3
   stack_part_ids:
   - c13_0_wooden_foundation
   - c13_1_natural_drop
   - c13_2_natural_drop
   - c13_3_natural_drop
-  - c13_4_natural_drop
+  - c13_4_purple_drop
+  - c13_5_purple_drop
+  - c13_6_purple_drop
 - name: c14
   upper_rail_id: rail6
-  upper_hole_index: 2
+  upper_hole_index: 1
   stack_part_ids:
   - c14_0_wooden_foundation
   - c14_1_natural_drop
   - c14_2_natural_drop
   - c14_3_natural_drop
-  - c14_4_natural_drop
+  - c14_4_purple_drop
+  - c14_5_purple_drop
+  - c14_6_purple_drop
 - name: c3
   upper_rail_id: rail2
-  upper_hole_index: 0
+  upper_hole_index: 1
   stack_part_ids:
   - c3_0_wooden_foundation
-  - c3_1_orange_vertical
+  - c3_1_natural_drop
   - c3_2_orange_vertical
-  - c3_3_purple_drop
-  - c3_4_purple_drop
-  - c3_5_purple_drop
+  - c3_3_orange_vertical
 - name: c5
   upper_rail_id: rail2
-  upper_hole_index: 1
+  upper_hole_index: 4
   stack_part_ids:
   - c5_0_wooden_foundation
   - c5_1_orange_vertical
-  - c5_2_purple_drop
-  - c5_3_purple_drop
-  - c5_4_purple_drop
-  - c5_5_cyan
+  - c5_2_orange_vertical
+  - c5_3_cyan
 - name: c6
-  upper_rail_id: rail3
-  upper_hole_index: 1
-  stack_part_ids:
-  - c6_0_wooden_foundation
-  - c6_1_orange_vertical
-  - c6_2_purple_drop
-  - c6_3_purple_drop
-  - c6_4_purple_drop
-- name: c7
   upper_rail_id: rail3
   upper_hole_index: 2
   stack_part_ids:
+  - c6_0_wooden_foundation
+  - c6_1_orange_vertical
+  - c6_2_cyan
+- name: c7
+  upper_rail_id: rail3
+  upper_hole_index: 3
+  stack_part_ids:
   - c7_0_wooden_foundation
-  - c7_1_orange_vertical
-  - c7_2_purple_drop
-  - c7_3_purple_drop
-  - c7_4_purple_drop
+  - c7_1_cyan
+  - c7_2_cyan
 - name: c8
   upper_rail_id: rail4
   upper_hole_index: 0
   stack_part_ids:
   - c8_0_wooden_foundation
-  - c8_1_cyan
-  - c8_2_purple_drop
-  - c8_3_purple_drop
-  - c8_4_purple_drop
+  - c8_1_green
+  - c8_2_green
 - name: c9
   upper_rail_id: null
   upper_hole_index: null
   stack_part_ids:
-  - c9_0_green
+  - c9_0_natural_drop
   lower_rail_id: rail4
   lower_hole_index: 0
 - name: c4
   upper_rail_id: rail1
-  upper_hole_index: 2
+  upper_hole_index: 3
   stack_part_ids:
-  - c4_0_blue
-  - c4_1_purple_drop
-  - c4_2_purple_drop
+  - c4_0_green
   lower_rail_id: rail2
-  lower_hole_index: 0
+  lower_hole_index: 1
 - name: c1
   upper_rail_id: rail1
   upper_hole_index: 1
   stack_part_ids:
   - c1_0_purple_drop
   lower_rail_id: rail6
-  lower_hole_index: 1
+  lower_hole_index: 3
 - name: c2
   upper_rail_id: null
   upper_hole_index: null
   stack_part_ids:
-  - c2_0_cyan
+  - c2_0_green
+  - c2_1_purple_drop
   lower_rail_id: rail1
   lower_hole_index: 1
 route_links:
 - source:
-    component_id: c5_5_cyan
+    component_id: c5_3_cyan
     port: front
   target:
     component_id: rail3
     port: end_a
 - source:
-    component_id: c10_1_green
+    component_id: c10_2_cyan
     port: front
   target:
     component_id: rail5
@@ -551,12 +501,12 @@ route_links:
     component_id: rail3
     port: end_b
   target:
-    component_id: c9_0_green
-    port: left
+    component_id: c9_0_natural_drop
+    port: front
 routing_query:
   source:
-    component_id: c2_0_cyan
+    component_id: c2_1_purple_drop
     port: top
   sinks:
   - component_id: rail5
-    port: hole:3
+    port: hole:4
