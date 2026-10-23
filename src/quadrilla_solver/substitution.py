@@ -95,3 +95,91 @@ def substitute(layout: Layout, catalog: PartCatalog, rail_id: str, turn: str) ->
     )
     rails = tuple(new_rail if r.id == rail.id else r for r in layout.rails)
     return replace(layout, rails=rails, parts=parts, supports=tuple(supports))
+
+
+# ---------------------------------------------------------------------------
+# Shorter rails (user review: long rails used where a short one would do take
+# space for nothing).
+
+_SHORTER = {"straight_long": "straight_short", "straight_long_center": "straight_short"}
+
+
+def shorten(layout: Layout, catalog: PartCatalog, rail_id: str) -> list[Layout]:
+    """Candidate layouts with long straight `rail_id` replaced by a short one
+    laid along the same line, so that every hole in use (supports, blocks on
+    it, drop/dive holes, covers) and every linked end lands on the short
+    rail's matching hole or end. Holes the marble now rolls over get covers.
+    The caller validates each candidate."""
+    rail = layout.rail_map()[rail_id]
+    if rail.rail_type not in _SHORTER or rail.flow_direction != "a_to_b":
+        return []
+    long_spec = catalog.rails[rail.rail_type]
+    short_type = _SHORTER[rail.rail_type]
+    short = catalog.rails[short_type]
+    holes = long_spec.holes_cm
+    used = {s.upper_hole_index for s in layout.supports if s.upper_rail_id == rail_id}
+    standing = {s.lower_hole_index for s in layout.supports if s.lower_rail_id == rail_id}
+    used |= standing
+    used |= {int(i) for i, state in rail.hole_states.items() if state != "covered"}
+    ends = {link.source.port for link in layout.route_links if link.source.component_id == rail_id}
+    ends |= {link.target.port for link in layout.route_links if link.target.component_id == rail_id}
+    stops = [holes[int(i)] for i, st in rail.hole_states.items() if st in ("block_connected", "open")]
+    # The stretch the marble rolls: from the linked end or just past a block
+    # standing on the rail, to the stop hole or end B.
+    half = 2.25
+    start = 0.0 if "end_a" in ends else min((holes[i] + half for i in standing), default=0.0)
+    end = min(stops) if stops else long_spec.length_cm
+    covered = {holes[int(i)] for i, st in rail.hole_states.items() if st == "covered"}
+    if covered:
+        start = min(start, min(covered))
+        end = max(end, max(covered))
+
+    offsets = {round(holes[i] - x, 6) for i in used for x in short.holes_cm} if used else {0.0}
+    if "end_a" in ends:
+        offsets = {o for o in offsets if abs(o) < 1e-6}
+    if "end_b" in ends:
+        offsets = {o for o in offsets if abs(o + short.length_cm - long_spec.length_cm) < 1e-6}
+    out = []
+    for o in sorted(offsets):
+        if o < -1e-6 or o + short.length_cm > long_spec.length_cm + 1e-6:
+            continue
+        index = {}
+        for i in used:
+            j = next((j for j, x in enumerate(short.holes_cm) if abs(x + o - holes[i]) < 1e-6), None)
+            if j is None:
+                break
+            index[i] = j
+        else:
+            if start < o - 1e-6 or end > o + short.length_cm + 1e-6:
+                continue  # the marble would roll off the shorter rail
+            states = {}
+            for i, st in rail.hole_states.items():
+                if int(i) in index:
+                    states[index[int(i)]] = st
+            for j, x in enumerate(short.holes_cm):
+                if j not in states and start < x + o < end:
+                    states[j] = "covered"
+            heading = radians(rail.yaw_deg)
+            new = replace(rail, rail_type=short_type,
+                          x_cm=rail.x_cm + o * _cos(heading), y_cm=rail.y_cm + o * _sin(heading),
+                          hole_states=dict(sorted(states.items())))
+            supports = tuple(
+                replace(s,
+                        upper_hole_index=index[s.upper_hole_index] if s.upper_rail_id == rail_id else s.upper_hole_index,
+                        lower_hole_index=index[s.lower_hole_index] if s.lower_rail_id == rail_id else s.lower_hole_index)
+                for s in layout.supports)
+            rails = tuple(new if r.id == rail_id else r for r in layout.rails)
+            out.append(replace(layout, rails=rails, supports=supports))
+    return out
+
+
+def _cos(a: float) -> float:
+    from math import cos
+    v = cos(a)
+    return 0.0 if abs(v) < 1e-12 else v
+
+
+def _sin(a: float) -> float:
+    from math import sin
+    v = sin(a)
+    return 0.0 if abs(v) < 1e-12 else v

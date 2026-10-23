@@ -126,7 +126,7 @@ whole build still validates.
 | --- | --- | --- |
 | trim input | remove the input rail and its columns; marble goes into the top block | review 2 |
 | brace | lay a marble-free rail across a weak tower | review 3 |
-| shorten | long straight -> short straight when nothing changes | dense-stack review (PR #14) |
+| shorten | long straight -> short straight when nothing changes | dense-stack review |
 | curves | straight -> curve on the same holes | user idea |
 | balance | counterweight blocks for overhanging loads | review 3 |
 

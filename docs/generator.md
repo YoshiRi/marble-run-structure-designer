@@ -66,6 +66,58 @@ An earlier "hook" entry (a rail into a blue/green/natural block on a chute
 hole, dropping from its bottom) was removed: the marble falls straight through
 the chute hole into the block below (user review of mr-c61a3513).
 
+## Input and towers
+
+The marble is put straight into the top block (user review 2: an input rail
+only wastes columns). The build still starts from a top rail with a drop
+column under it, but the first drop must land on a lower rail; then the top
+rail and the columns that only held it are removed, and the drop column stays
+as a free-standing stack on its rail. Its top part is the source
+(`routing_query.source`, e.g. `c1_0_blue:top`); the viewer lists it as an
+input. `trim_input_rail: false` keeps the old input rail.
+
+A **weak tower** is a stack at one spot with 5 or more blocks (4u parts;
+purple 1u pieces and foundations not counted) whose upper half is braced in
+one direction only: every rail touching it at or above half its height runs
+along one axis (a rail near the ground hardly braces the top). It topples
+easily (user reviews 2 and 3). This is one rule and a penalty, -15 points each
+(user decision, `generator-design.md`); an earlier "thin tower" filter was
+merged into it.
+
+Review 3 refinements:
+
+- **support reactions**: the statics take moments about each rail's two
+  supports with everything resting on it, now including free-standing stacks
+  (input block, twist entry block). A rail carrying a load **outside** its
+  supports must keep its lighter support pressing with at least
+  `min_support_reaction_g` (20 g); `balance()` adds counterweight blocks on
+  free holes the marble does not roll over (user idea), or the candidate is
+  dropped. A rail resting with its own center of mass on one support (center
+  hole plus an end) is accepted: review 3 rated such builds buildable.
+- **brace rails** (`brace_towers`, user's choice after review 3): for each
+  weak tower, a straight rail carrying no marble is laid across it in its
+  upper half, at right angles to the rails it holds; the tower's column is
+  split at one of the brace's holes and the other support is another crossed
+  column or a new short one. Bracing roughly tripled the candidates that
+  passed the former thin-tower filter. Brace rails stay straight (no curve substitution).
+- **unused area** (`dead_area_cm2`, user definition): top-view area taken by
+  rails and columns where no marble rolls (1 cm grid; rolled rail stretches
+  at full rail width and twist funnels count as used); 0.02 point per cm2.
+- **shorter rails** (`shorten_rails`, review of the dense-stack sample): a
+  long straight is swapped for a short one laid along the same line when every
+  hole in use and every linked end lands on the short rail's matching hole or
+  end and the marble's stretch fits; holes it now rolls over get covers. Each
+  swap is validated. About a quarter of long rails shrink; the dense-stack
+  sample lost two (rail6, rail7).
+- **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
+  (a long rail held up by an extra column for a 3 cm roll).
+- **exclude_parts** (`--exclude`): parts the user does not have; the gallery
+  excludes the right-angle splitter (`red_right_angle`).
+
+Effect: with two exits, no right-angle splitter and no thin towers, builds are
+small (4-6 rails, mostly one exit). Growing them needs bracing (perpendicular
+rails at tall stacks) and longer horizontal runs per level.
+
 ## Exits
 
 `exit_style: contained` (default, user rule) ends a branch only where a marble
@@ -108,7 +160,7 @@ were valued; high drops, very short branches and sprawling builds were not):
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
 - 1.5 x sum of exit levels (units) - 0.002 x footprint bounding-box area (cm2)
-- 12 x thin towers - 6 x weak towers - 0.05 x idle rail length (cm)
+- 15 x weak towers - 0.05 x idle rail length (cm)
 - 0.02 x unused top-view area (cm2)
 ```
 

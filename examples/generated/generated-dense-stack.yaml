@@ -1,7 +1,8 @@
 schema_version: '0.1'
 name: generated-dense-stack
 description: 'Dense stack: 12 rails with 11 columns standing on lower rails; three
-  outcomes. Generated cascade from sets QD001, QD003, QD005 (seed 4, rank 1).'
+  outcomes. Generated cascade from sets QD001, QD003, QD005 (seed 4, rank 1). Long
+  rails used for nothing were swapped for short ones (shorten_rails).'
 generator:
   sets:
   - QD001
@@ -44,8 +45,8 @@ rails:
   rail_type: straight_short
   x_cm: 13.5
   y_cm: 0
-  z_units: 24
   yaw_deg: 180
+  z_units: 24
   flow_direction: a_to_b
   hole_states:
     0: covered
@@ -56,8 +57,8 @@ rails:
   rail_type: straight_long_center
   x_cm: 13.5
   y_cm: 0
-  z_units: 19
   yaw_deg: 180
+  z_units: 19
   flow_direction: a_to_b
   hole_states:
     3: block_connected
@@ -65,8 +66,8 @@ rails:
   rail_type: straight_long
   x_cm: -29.5
   y_cm: -7
-  z_units: 14
   yaw_deg: 90
+  z_units: 14
   flow_direction: a_to_b
   hole_states:
     2: block_connected
@@ -74,8 +75,8 @@ rails:
   rail_type: straight_long_center
   x_cm: -31.5
   y_cm: 36
-  z_units: 7
   yaw_deg: 0
+  z_units: 7
   flow_direction: a_to_b
   hole_states:
     1: covered
@@ -86,8 +87,8 @@ rails:
   rail_type: straight_short
   x_cm: 14.25
   y_cm: 36
-  z_units: 3
   yaw_deg: 180
+  z_units: 3
   flow_direction: a_to_b
   hole_states:
     0: covered
@@ -98,36 +99,39 @@ rails:
   rail_type: straight_short
   x_cm: -11.5
   y_cm: 2.25
-  z_units: 19
   yaw_deg: 90
+  z_units: 19
   flow_direction: a_to_b
   hole_states:
     0: covered
     1: block_connected
 - id: rail6
-  rail_type: straight_long_center
+  rail_type: straight_short
   x_cm: -18.5
   y_cm: 9.25
+  yaw_deg: 0
   z_units: 14
-  yaw_deg: 0
   flow_direction: a_to_b
   hole_states:
-    2: block_connected
+    2: covered
+    3: block_connected
 - id: rail7
-  rail_type: straight_long_center
-  x_cm: -36.5
+  rail_type: straight_short
+  x_cm: -13.5
   y_cm: 9.25
-  z_units: 9
   yaw_deg: 0
+  z_units: 9
   flow_direction: a_to_b
   hole_states:
-    4: block_connected
+    1: covered
+    2: covered
+    3: block_connected
 - id: rail8
   rail_type: straight_long
   x_cm: -11.5
   y_cm: 7
-  z_units: 15
   yaw_deg: 270
+  z_units: 15
   flow_direction: a_to_b
   hole_states:
     0: covered
@@ -136,8 +140,8 @@ rails:
   rail_type: straight_short
   x_cm: -31.5
   y_cm: 0
-  z_units: 10
   yaw_deg: 0
+  z_units: 10
   flow_direction: a_to_b
   hole_states:
     3: block_connected
@@ -145,8 +149,8 @@ rails:
   rail_type: straight_short
   x_cm: -6.5
   y_cm: 2.25
-  z_units: 6
   yaw_deg: 90
+  z_units: 6
   flow_direction: a_to_b
   hole_states:
     0: covered
@@ -155,8 +159,8 @@ rails:
   rail_type: straight_short
   x_cm: -6.5
   y_cm: 29.25
-  z_units: 1
   yaw_deg: 270
+  z_units: 1
   flow_direction: a_to_b
   hole_states:
     3: covered
@@ -519,14 +523,14 @@ supports:
   - c10_6_purple_drop
 - name: c13
   upper_rail_id: rail7
-  upper_hole_index: 2
+  upper_hole_index: 0
   stack_part_ids:
   - c13_0_wooden_foundation
   - c13_1_orange_vertical
   - c13_2_orange_vertical
 - name: c15
   upper_rail_id: rail7
-  upper_hole_index: 4
+  upper_hole_index: 3
   stack_part_ids:
   - c15_0_wooden_foundation
   - c15_1_orange_vertical
@@ -626,14 +630,14 @@ supports:
   stack_part_ids:
   - c11_0_blue
   lower_rail_id: rail7
-  lower_hole_index: 2
+  lower_hole_index: 0
 - name: c14
   upper_rail_id: rail6
-  upper_hole_index: 2
+  upper_hole_index: 3
   stack_part_ids:
   - c14_0_yellow
   lower_rail_id: rail7
-  lower_hole_index: 3
+  lower_hole_index: 2
 - name: c18
   upper_rail_id: rail8
   upper_hole_index: 1
