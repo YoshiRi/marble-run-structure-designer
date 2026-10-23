@@ -31,6 +31,16 @@
   function railGeometry(catalog, type) {
     const straight = catalog.rails?.[type];
     if (straight) return { ...straight, shape: "straight" };
+    const special = catalog.special_rails?.[type];
+    if (special?.shape === "twist") {
+      // Two-level rail from the chute tip (end A) to the funnel center.
+      return {
+        ...special, shape: "twist",
+        length_cm: Number(special.centerline_length_cm),
+        hole_positions_cm: special.hole_positions_cm || [],
+        hole_levels: special.hole_mount_levels_units || [],
+      };
+    }
     const curved = catalog.curved_rails?.[type];
     if (!curved) return null;
     const radius = geometryValue(curved.hole_circle_radius_cm, 23);
@@ -42,6 +52,17 @@
       ...curved, shape: "arc", radius_cm: radius, segments,
       length_cm: length, hole_positions_cm: curved.hole_arc_positions_cm || [],
     };
+  }
+
+  // Mount level of a hole relative to rail.z_units (non-zero only on the twist).
+  function holeLevel(spec, index) {
+    return Number(spec?.hole_levels?.[index] || 0);
+  }
+
+  function endLevel(spec, port) {
+    const levels = spec?.hole_levels || [];
+    if (!levels.length) return 0;
+    return Number(port === "end_a" ? levels[0] : levels[levels.length - 1]);
   }
 
   // [x, y, heading radians] on the centerline, s cm from end A. Mirrors
@@ -84,7 +105,7 @@
       const distance = ref.port === "end_a" ? 0 : Number(spec.length_cm);
       const [px, py, angle] = railPose(catalog, rail, distance);
       return {
-        position: [px, py, (Number(rail.z_units) + Number(spec.height || 1)) * scale],
+        position: [px, py, (Number(rail.z_units) + endLevel(spec, ref.port) + Number(spec.height || 1)) * scale],
         normal: [dir * Math.cos(angle), dir * Math.sin(angle), 0],
       };
     }
@@ -123,6 +144,16 @@
       normal: [normal[0] * c - normal[1] * sn,
                normal[0] * sn + normal[1] * c, normal[2]],
     };
+  }
+
+  // Mirror of _twist_entry_node: where a marble dropped into a twist's
+  // chute hole (index 0) continues.
+  function twistEntryNode(catalog, rail, hole) {
+    if (!rail || Number(hole) !== 0) return null;
+    const spec = railGeometry(catalog, rail.rail_type);
+    if (!spec || spec.shape !== "twist") return null;
+    if (rail.flow_direction === "b_to_a") return "end_a";
+    return (spec.hole_positions_cm || []).length > 1 ? "hole:1" : "end_b";
   }
 
   function supportsFlow(layout, catalog, ref, output) {
@@ -300,7 +331,7 @@
       }
       const [holeX, holeY] = railPose(catalog, rail, Number(railSpec.hole_positions_cm[index]));
       if (Math.hypot(Number(part.x_cm) - holeX, Number(part.y_cm) - holeY) > 0.35 ||
-          Math.abs(Number(part.z_units) + Number(partHeight) - Number(rail.z_units)) > 0.1) {
+          Math.abs(Number(part.z_units) + Number(partHeight) - Number(rail.z_units) - holeLevel(railSpec, index)) > 0.1) {
         reasons.push("block_connected_geometry_mismatch:" + rail.id + ":" + index + ":" + part.id);
         continue;
       }
@@ -334,6 +365,12 @@
         }
       }
       if (!stack.length || support.lower_rail_id == null) continue;
+      // A block standing on a twist's chute hole drops into the chute.
+      const entry = twistEntryNode(catalog, rails.get(support.lower_rail_id), support.lower_hole_index);
+      if (entry) {
+        if (hasPort(stack[0], "bottom")) edge(stack[0] + ":bottom", support.lower_rail_id + ":" + entry);
+        continue;
+      }
       const below = columnsByUpperHole.get(support.lower_rail_id + ":" + support.lower_hole_index);
       if (!below || !parts.has(below.stack_part_ids.at(-1))) continue;
       const belowTop = below.stack_part_ids.at(-1);
@@ -351,13 +388,13 @@
       const rail = rails.get(support.lower_rail_id);
       const part = parts.get(support.stack_part_ids[0]);
       const railSpec = rail && railGeometry(catalog, rail.rail_type);
-      if (!rail || !part || !railSpec) continue;
+      if (!rail || !part || !railSpec || railSpec.shape === "twist") continue;
       const hole = Number(support.lower_hole_index);
       if (!Number.isInteger(hole) || hole < 0 || hole >= (railSpec.hole_positions_cm || []).length) continue;
       // Direction of the rail where the block stands (tangent on a curve).
       const theta = railPose(catalog, rail, Number(railSpec.hole_positions_cm[hole]))[2];
       const axis = [Math.cos(theta), Math.sin(theta)];
-      const railTopCm = (Number(rail.z_units) + Number(railSpec.height || 1)) * unitCm;
+      const railTopCm = (Number(rail.z_units) + holeLevel(railSpec, hole) + Number(railSpec.height || 1)) * unitCm;
       const outputs = new Set();
       for (const route of partSpec(catalog, part.part_type)?.routes || []) {
         if (route.from == null) continue;
@@ -485,15 +522,33 @@
         const state = rail.hole_states?.[index] ?? "open";
         const key = rail.id + ":hole:" + index;
         if (state !== "block_connected" || !(graph.edges[key] || []).length) continue;
+        const level = Number(rail.z_units) + holeLevel(spec, index) + Number(spec.height || 1);
         candidates.push({
           key,
           rail_id: rail.id,
           hole_index: index,
-          level_units: Number(rail.z_units) + Number(spec.height || 1),
-          label: rail.id + " · hole " + index + " · level " +
-            (Number(rail.z_units) + Number(spec.height || 1)) + "u",
+          level_units: level,
+          label: rail.id + " · hole " + index + " · level " + level + "u",
         });
       }
+    }
+    // The top of a free-standing stack (it holds up no rail) is an input too:
+    // the marble can be put straight into the top block (generated layouts
+    // have no input rail).
+    const parts = new Map((layout.parts || []).map(part => [part.id, part]));
+    for (const support of layout.supports || []) {
+      if (support.upper_rail_id != null || !support.stack_part_ids?.length) continue;
+      if (twistEntryNode(catalog, (layout.rails || []).find(r => r.id === support.lower_rail_id),
+        support.lower_hole_index)) continue;  // a twist's entry block is fed from the side
+      const part = parts.get(support.stack_part_ids.at(-1));
+      const key = part && part.id + ":top";
+      if (!part || !(graph.edges[key] || []).length) continue;
+      const level = Number(part.z_units) + Number(partSpec(catalog, part.part_type)?.height || 0);
+      candidates.push({
+        key, part_id: part.id, level_units: level,
+        rail_id: "", hole_index: -1,
+        label: part.id + " · top · level " + level + "u",
+      });
     }
     return candidates.sort((a, b) =>
       b.level_units - a.level_units ||
@@ -677,5 +732,5 @@
     return { path, exit: null, complete: false, reason: "step_limit:" + node };
   }
 
-  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose };
+  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose, holeLevel };
 });
