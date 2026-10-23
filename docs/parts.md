@@ -280,19 +280,20 @@ The historical Twist set lists a large and a small spiral, but the user's two
 pieces are the same size, so all twists are treated as this size for now.
 
 Modeled as a rail (`special_rails.spiral`) with a level difference of 3: end A
-at the chute tip, heading straight to the funnel center (top view); holes at
-1.5 cm (chute) and 24.5 cm (center), mounted 3 units and 0 units above the
-placement level.
+at the chute tip, heading straight to the funnel center (top view). Holes at
+1.5 and 6.5 cm (the two chute holes) and 24.5 cm (center): with the funnel hole
+on one end hole of a short rail, the chute holes sit on its other two holes
+(user-confirmed). Chute holes mount 3 units above the placement level, the
+center hole at 0.
 
-Entry (user-described): a block stands on the chute hole and drops the marble
-from its **bottom** outlet into the chute. Recommended blocks are blue (rear
-notch), green (left notch) and natural (front/rear notch), turned so the notch
-faces the incoming rail; the rail arrives from the **right** of the twist's
-heading, a hook-shaped route. A block standing there carries no rail, so it is
-a free-standing support (`upper_rail_id: null`). Side outlets do not land on
-the chute. The marble rolls down the chute, veers right at the rim and circles
-the funnel counter-clockwise (seen from above) into the center hole, which
-drops it into the column below (the center hole may not be covered). Collision uses
+The chute is a plain rail (user): it is fed like one, by a block standing on a
+chute hole whose side outlet lands the marble along it, or by a block outlet at
+its tip. A block's bottom outlet on a chute hole drops the marble straight
+through the hole into the column below, as on any rail; it does not enter the
+chute (user review of mr-c61a3513). Holes between the entry and the funnel are
+covered. The marble rolls down the
+chute, circles the funnel and drops through the center hole into the column
+below (the center hole may not be covered). Collision uses
 the chute (flat at the mount hole, then sloping) and a square around the funnel.
 Funnel depth, the exact inlet position and the mass (150 g) are estimates.
 

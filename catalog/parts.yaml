@@ -346,10 +346,17 @@ special_rails:
     overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
     chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
     funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
-    hole_positions_cm: [1.5, 24.5]   # chute hole near the tip; funnel center (outlet)
-    hole_mount_levels_units: [3, 0]  # user-observed level difference of 3
-    entry: { hole: 0, via: block_bottom, recommended_blocks: [blue, green, natural_drop],
-             feed_from: right_of_heading, source: user_description }
+    # Two chute holes (user-confirmed): with the funnel hole on one end hole of
+    # a short rail, the chute holes sit on the short rail's other two holes
+    # (23 and 18 cm from the funnel center). Funnel center = outlet.
+    hole_positions_cm: [1.5, 6.5, 24.5]
+    hole_mount_levels_units: [3, 3, 0]  # user-observed level difference of 3
+    # The chute is a plain rail (user): it is fed like one, by a block standing
+    # on a chute hole whose side outlet lands the marble along it, or from a
+    # block outlet at its tip. A block's bottom outlet on a chute hole drops
+    # the marble straight through the hole into the column below, like on
+    # any rail (user review: mr-c61a3513 anti-pattern).
+    entry: { holes: [0, 1], via: [landing, rail_end], source: user_description }
     centerline_length_cm: 24.5       # routing ends at the funnel center
     com_cm: 21.0                     # mostly the funnel; provisional
     mass_g:

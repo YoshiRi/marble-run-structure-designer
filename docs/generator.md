@@ -48,66 +48,19 @@ score. Curves also save covers: a curve has no holes between its end holes.
 
 ## Twist
 
-The twist (QD005 lists 3; the user's two are the same size) is entered with a
-hook (user-described): a rail runs into the side inlet of an entry block
-standing on the twist's chute hole (blue rear, green left or natural front/rear
-notch, facing back up the rail), the block drops the marble from its bottom
-into the chute, and the twist heads to the **right** of the incoming rail, so
-the marble arrives from the twist's right side. It rolls down the chute,
-circles the funnel and drops through the center hole into a new drop column.
-Side outlets do not land on the chute. The chute hole mounts 3 units above the
-center hole, so the feeding rail sits at the chute's level and the entry block
-is free-standing (a support with no upper rail). `twist_probability` (default
-0.5) is the chance to try a twist first, mid-cascade or at a branch end; about
-a third of builds with the default sets contain one, two thirds at 0.9.
+The twist (QD005 lists 3; the user's two are the same size) has two chute
+holes and a funnel center hole; its chute is a plain rail. The generator
+feeds it like one:
 
-## Input and thin towers
+- **landing**: a drop block stands on a chute hole and lands the marble along
+  the chute (also the input block)
+- **tip**: a block outlet feeds the chute's tip
 
-The marble is put straight into the top block (user review 2: an input rail
-only wastes columns). The build still starts from a top rail with a drop
-column under it, but the first drop must land on a lower rail; then the top
-rail and the columns that only held it are removed, and the drop column stays
-as a free-standing stack on its rail. Its top part is the source
-(`routing_query.source`, e.g. `c1_0_blue:top`); the viewer lists it as an
-input. `trim_input_rail: false` keeps the old input rail.
-
-A **thin tower** is a stack at one spot with 5 or more blocks (4u parts;
-purple 1u pieces and foundations not counted) whose rails all run along one
-axis: braced in one direction only, it topples easily (user review 2).
-Candidates with more than `max_thin_towers` (default 0) are dropped, and each
-one costs 12 points when allowed. This shrinks the builds: the best now have
-5-10 rails and 30-80 parts, where tall towers were the easy way up.
-
-Review 3 refinements:
-
-- **weak towers**: 5+ blocks whose rails at or above half the stack's height
-  all run along one axis (a rail near the ground hardly braces the top);
-  -6 points each.
-- **support reactions**: the statics take moments about each rail's two
-  supports with everything resting on it, now including free-standing stacks
-  (input block, twist entry block). A rail carrying a load **outside** its
-  supports must keep its lighter support pressing with at least
-  `min_support_reaction_g` (20 g); `balance()` adds counterweight blocks on
-  free holes the marble does not roll over (user idea), or the candidate is
-  dropped. A rail resting with its own center of mass on one support (center
-  hole plus an end) is accepted: review 3 rated such builds buildable.
-- **brace rails** (`brace_towers`, user's choice after review 3): for each
-  weak tower, a straight rail carrying no marble is laid across it in its
-  upper half, at right angles to the rails it holds; the tower's column is
-  split at one of the brace's holes and the other support is another crossed
-  column or a new short one. Bracing roughly triples the candidates that pass
-  the thin-tower filter. Brace rails stay straight (no curve substitution).
-- **unused area** (`dead_area_cm2`, user definition): top-view area taken by
-  rails and columns where no marble rolls (1 cm grid; rolled rail stretches
-  at full rail width and twist funnels count as used); 0.02 point per cm2.
-- **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
-  (a long rail held up by an extra column for a 3 cm roll).
-- **exclude_parts** (`--exclude`): parts the user does not have; the gallery
-  excludes the right-angle splitter (`red_right_angle`).
-
-Effect: with two exits, no right-angle splitter and no thin towers, builds are
-small (4-6 rails, mostly one exit). Growing them needs bracing (perpendicular
-rails at tall stacks) and longer horizontal runs per level.
+The funnel then drops the marble through its center hole into a new drop
+column. `twist_probability` (default 0.5) is the chance to try a twist first.
+An earlier "hook" entry (a rail into a blue/green/natural block on a chute
+hole, dropping from its bottom) was removed: the marble falls straight through
+the chute hole into the block below (user review of mr-c61a3513).
 
 ## Exits
 

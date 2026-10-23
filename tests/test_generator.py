@@ -171,29 +171,22 @@ def test_exits_are_contained_and_capped():
     assert max(len(c.sinks) for c in three) <= 3
 
 
-def test_twists_are_entered_with_a_hook_from_the_right():
-    from math import cos, radians, sin
+def test_twists_are_fed_like_rails():
+    """Review (mr-c61a3513): a bottom outlet on a chute hole drops through it,
+    so twists are entered only by landing on the chute or at its tip."""
+    from quadrilla_solver.connectivity import build_routing_graph
 
     found = generate(CATALOG, _budget(), config=GeneratorConfig(twist_probability=0.9),
                      attempts=80, seed=5, keep=10)
     twisted = [c for c in found if c.metrics["twists"]]
     assert twisted
     for c in twisted:
-        rails, parts = c.layout.rail_map(), c.layout.part_map()
-        for s in c.layout.supports:
-            if s.lower_rail_id in rails and rails[s.lower_rail_id].rail_type == "spiral" \
-                    and s.lower_hole_index == 0:
-                assert s.upper_rail_id is None
-                entry = parts[s.stack_part_ids[0]]
-                assert entry.part_type in ("blue", "green", "natural_drop")
-                feed = next(l.source.component_id for l in c.layout.route_links
-                            if l.target.component_id == entry.id)
-                h = radians(rails[s.lower_rail_id].yaw_deg)
-                d = radians(rails[feed].yaw_deg)
-                # The feed travels toward the twist's left: it comes from the right.
-                assert abs(cos(d) - cos(h + radians(90))) < 1e-9
-                assert abs(sin(d) - sin(h + radians(90))) < 1e-9
-
+        edges = build_routing_graph(c.layout, CATALOG).edges
+        twists = {r.id for r in c.layout.rails if r.rail_type == "spiral"}
+        into = [(src, dst) for src, dsts in edges.items() for dst in dsts
+                if dst.split(":")[0] in twists and src.split(":")[0] not in twists]
+        assert into
+        assert all(not src.endswith(":bottom") for src, _ in into)
 
 def test_input_goes_straight_into_a_block_standing_on_a_rail():
     """No input rail: the marble is put into the top of a free-standing stack
@@ -244,15 +237,16 @@ def test_balance_rejects_an_overhang_it_cannot_counter():
     from quadrilla_solver.model import PlacedPart, SupportLink, load_layout, rail_hole_world
 
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
-    # A blue alone on the feed rail's overhanging hole 3 nearly unloads hole 0's support.
-    x, y, _ = rail_hole_world(layout.rail_map()["feed"], CATALOG, 3)
-    heavy = replace(layout, parts=layout.parts + (PlacedPart("lone", "blue", x, y, 9),),
-                    supports=layout.supports + (SupportLink(None, None, ("lone",), "feed", 3, name="lone"),))
-    assert support_reactions_g(heavy, CATALOG, overhang_only=True)["feed"] < 20
-    assert "feed" not in support_reactions_g(layout, CATALOG, overhang_only=True)
-    # Every other feed hole lies under the rolling marble: no place for a counterweight.
-    assert balance(heavy, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) is None
-    assert balance(layout, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) == layout
+    # A blue alone on the exit rail's overhanging hole 0 nearly unloads hole 3's support.
+    x, y, _ = rail_hole_world(layout.rail_map()["exit"], CATALOG, 0)
+    heavy = replace(layout, parts=layout.parts + (PlacedPart("lone", "blue", x, y, 2),),
+                    supports=layout.supports + (SupportLink(None, None, ("lone",), "exit", 0, name="lone"),))
+    assert support_reactions_g(heavy, CATALOG, overhang_only=True)["exit"] < 20
+    assert "exit" not in support_reactions_g(layout, CATALOG, overhang_only=True)
+    # Every other exit hole lies under the rolling marble: no place for a counterweight.
+    source, sinks = PortRef("upper", "end_a"), (PortRef("exit", "end_b"),)
+    assert balance(heavy, CATALOG, _budget(), source, sinks, 20) is None
+    assert balance(layout, CATALOG, _budget(), source, sinks, 20) == layout
 
 
 def test_weak_towers_get_brace_rails():

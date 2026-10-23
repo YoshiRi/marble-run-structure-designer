@@ -146,16 +146,6 @@
     };
   }
 
-  // Mirror of _twist_entry_node: where a marble dropped into a twist's
-  // chute hole (index 0) continues.
-  function twistEntryNode(catalog, rail, hole) {
-    if (!rail || Number(hole) !== 0) return null;
-    const spec = railGeometry(catalog, rail.rail_type);
-    if (!spec || spec.shape !== "twist") return null;
-    if (rail.flow_direction === "b_to_a") return "end_a";
-    return (spec.hole_positions_cm || []).length > 1 ? "hole:1" : "end_b";
-  }
-
   function supportsFlow(layout, catalog, ref, output) {
     const rail = (layout.rails || []).find(r => r.id === ref.component_id);
     if (rail) {
@@ -365,12 +355,6 @@
         }
       }
       if (!stack.length || support.lower_rail_id == null) continue;
-      // A block standing on a twist's chute hole drops into the chute.
-      const entry = twistEntryNode(catalog, rails.get(support.lower_rail_id), support.lower_hole_index);
-      if (entry) {
-        if (hasPort(stack[0], "bottom")) edge(stack[0] + ":bottom", support.lower_rail_id + ":" + entry);
-        continue;
-      }
       const below = columnsByUpperHole.get(support.lower_rail_id + ":" + support.lower_hole_index);
       if (!below || !parts.has(below.stack_part_ids.at(-1))) continue;
       const belowTop = below.stack_part_ids.at(-1);
@@ -388,7 +372,7 @@
       const rail = rails.get(support.lower_rail_id);
       const part = parts.get(support.stack_part_ids[0]);
       const railSpec = rail && railGeometry(catalog, rail.rail_type);
-      if (!rail || !part || !railSpec || railSpec.shape === "twist") continue;
+      if (!rail || !part || !railSpec) continue;
       const hole = Number(support.lower_hole_index);
       if (!Number.isInteger(hole) || hole < 0 || hole >= (railSpec.hole_positions_cm || []).length) continue;
       // Direction of the rail where the block stands (tangent on a curve).
@@ -538,8 +522,6 @@
     const parts = new Map((layout.parts || []).map(part => [part.id, part]));
     for (const support of layout.supports || []) {
       if (support.upper_rail_id != null || !support.stack_part_ids?.length) continue;
-      if (twistEntryNode(catalog, (layout.rails || []).find(r => r.id === support.lower_rail_id),
-        support.lower_hole_index)) continue;  // a twist's entry block is fed from the side
       const part = parts.get(support.stack_part_ids.at(-1));
       const key = part && part.id + ":top";
       if (!part || !(graph.edges[key] || []).length) continue;
