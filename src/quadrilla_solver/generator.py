@@ -661,17 +661,14 @@ class CascadeGenerator:
                 return ended, []
         can_continue = len(state.rails) < self.config.max_rails
         options = [(z, kind) for z in (outlet.floor_z - 1, outlet.floor_z - 2) for kind in _RAIL_KINDS]
-        if self._twists_left(state):
-            # A twist fed at its tip like any rail: its chute runs at its
-            # placement level + 3.
-            spiral = self.catalog.rails["spiral"]
-            options += [(z - spiral.end_level("end_a"), "spiral")
-                        for z in (outlet.floor_z - 1, outlet.floor_z - 2)]
         self.rng.shuffle(options)
+        if self._twists_left(state) and self.rng.random() < self.config.twist_probability:
+            # Try a twist first, fed at its tip like any rail: its chute runs
+            # at its placement level + 3.
+            spiral = self.catalog.rails["spiral"]
+            options = [(z - spiral.end_level("end_a"), "spiral")
+                       for z in (outlet.floor_z - 1, outlet.floor_z - 2)] + options
         plans: list[str] = ["drop", "end"] if can_continue else ["end"]
-        if any(kind == "spiral" for _, kind in options) and self.rng.random() < self.config.twist_probability:
-            # Try the twist first: fed at its tip from this outlet.
-            options.sort(key=lambda o: o[1] != "spiral")
         for plan in plans:
             for z, kind in options:
                 spec = self.catalog.rails[kind]
