@@ -65,6 +65,11 @@ def validate_assembly(
 
     for i, support in enumerate(layout.supports):
         label = support.name or f"support_{i}"
+        if support.upper_rail_id is None:
+            # Free-standing stack on a rail hole (e.g. a twist's entry block).
+            reasons.extend(_free_stack_reasons(support, label, layout, catalog, used_stack_parts,
+                                               xy_tolerance_cm, z_tolerance_units))
+            continue
         upper = rails.get(support.upper_rail_id)
         if upper is None:
             reasons.append(f"unknown_upper_rail:{label}:{support.upper_rail_id}")
@@ -116,7 +121,8 @@ def validate_assembly(
                     f"lower=({lx:.6g},{ly:.6g})"
                 )
             lower_xy = (lx, ly)
-            base_z = lower.z_units + lower_spec.height_units
+            base_z = (lower.z_units + lower_spec.hole_level(support.lower_hole_index)
+                      + lower_spec.height_units)
             is_ground = False
 
         expected_z = base_z
@@ -160,10 +166,11 @@ def validate_assembly(
 
             expected_z += height
 
-        if abs(upper.z_units - expected_z) > z_tolerance_units:
+        upper_z = upper.z_units + upper_spec.hole_level(support.upper_hole_index)
+        if abs(upper_z - expected_z) > z_tolerance_units:
             reasons.append(
                 f"upper_rail_z_mismatch:{label}:{upper.id}:"
-                f"expected={expected_z:.6g}:actual={upper.z_units:.6g}"
+                f"expected={expected_z:.6g}:actual={upper_z:.6g}"
             )
 
         # A ground support with no column means the rail itself lies on ground.
@@ -193,6 +200,13 @@ def validate_assembly(
         ):
             reasons.append(f"no_stable_support_pair:{rail_id}")
 
+    # The twist's funnel always empties through its center hole.
+    for rail in layout.rails:
+        spec = catalog.rails.get(rail.rail_type)
+        if spec is not None and spec.shape == "twist":
+            if rail.hole_states.get(len(spec.holes_cm) - 1, "open") == "covered":
+                reasons.append(f"twist_center_hole_covered:{rail.id}")
+
     # Curved rails tip on their own: they are stable only with load above,
     # i.e. at least one column standing on them (user-confirmed).
     loaded = {s.lower_rail_id for s in layout.supports if s.lower_rail_id and s.stack_part_ids}
@@ -215,3 +229,41 @@ def validate_assembly(
         reasons=tuple(dict.fromkeys(reasons)),
         warnings=tuple(dict.fromkeys(warnings)),
     )
+
+
+def _free_stack_reasons(support, label, layout, catalog, used_stack_parts,
+                        xy_tolerance_cm, z_tolerance_units) -> list[str]:
+    """A stack that holds up no rail: it must stand on a real rail hole."""
+    reasons: list[str] = []
+    rails, parts = layout.rail_map(), layout.part_map()
+    lower = rails.get(support.lower_rail_id) if support.lower_rail_id is not None else None
+    if lower is None or not support.stack_part_ids:
+        return [f"free_stack_needs_lower_rail:{label}"]
+    spec = catalog.rails.get(lower.rail_type)
+    hole = support.lower_hole_index
+    if spec is None or hole is None or not 0 <= hole < len(spec.holes_cm):
+        return [f"invalid_lower_hole:{label}:{hole}"]
+    x, y, _ = rail_hole_world(lower, catalog, hole)
+    expected_z = lower.z_units + spec.hole_level(hole) + spec.height_units
+    for part_id in support.stack_part_ids:
+        part = parts.get(part_id)
+        if part is None:
+            reasons.append(f"unknown_stack_part:{label}:{part_id}")
+            continue
+        if part_id in used_stack_parts:
+            reasons.append(f"stack_part_reused:{part_id}:{used_stack_parts[part_id]}:{label}")
+        else:
+            used_stack_parts[part_id] = label
+        height = catalog.height_units(part.part_type)
+        if height is None:
+            reasons.append(f"unknown_stack_height:{label}:{part_id}:{part.part_type}")
+            continue
+        if hypot(part.x_cm - x, part.y_cm - y) > xy_tolerance_cm:
+            reasons.append(f"stack_xy_mismatch:{label}:{part_id}")
+        if abs(part.z_units - expected_z) > z_tolerance_units:
+            reasons.append(f"stack_z_mismatch:{label}:{part_id}:"
+                           f"expected={expected_z:.6g}:actual={part.z_units:.6g}")
+        if part.part_type == "wooden_foundation":
+            reasons.append(f"foundation_not_ground_base:{label}:{part_id}")
+        expected_z += height
+    return reasons

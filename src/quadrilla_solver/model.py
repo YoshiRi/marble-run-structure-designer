@@ -65,10 +65,14 @@ class SupportLink:
 
     If lower_rail_id is None, the stack starts at ground z=0.
     Otherwise it starts on top of lower_rail_id at lower_hole_index.
+
+    upper_rail_id None marks a free-standing stack that carries no rail, e.g.
+    the entry block standing on a twist's chute hole. It must stand on a
+    lower rail.
     """
 
-    upper_rail_id: str
-    upper_hole_index: int
+    upper_rail_id: str | None
+    upper_hole_index: int | None
     stack_part_ids: tuple[str, ...]
     lower_rail_id: str | None = None
     lower_hole_index: int | None = None
@@ -154,7 +158,7 @@ def rail_hole_world(
             f"{rail.id}: hole index {hole_index} outside {rail.rail_type}"
         )
     x, y, _ = rail_pose(rail, spec, spec.holes_cm[hole_index])
-    return x, y, rail.z_units
+    return x, y, rail.z_units + spec.hole_level(hole_index)
 
 
 def rail_com_world(
@@ -162,7 +166,8 @@ def rail_com_world(
     catalog: PartCatalog,
 ) -> tuple[float, float, float]:
     spec = catalog.rails[rail.rail_type]
-    x, y, _ = rail_pose(rail, spec, spec.length_cm / 2.0)
+    com = spec.com_cm if spec.com_cm is not None else spec.length_cm / 2.0
+    x, y, _ = rail_pose(rail, spec, com)
     return x, y, rail.z_units + spec.height_units / 2.0
 
 
@@ -213,8 +218,12 @@ def load_layout(path: str | Path) -> Layout:
 
     supports = tuple(
         SupportLink(
-            upper_rail_id=str(x["upper_rail_id"]),
-            upper_hole_index=int(x["upper_hole_index"]),
+            upper_rail_id=(
+                str(x["upper_rail_id"]) if x.get("upper_rail_id") is not None else None
+            ),
+            upper_hole_index=(
+                int(x["upper_hole_index"]) if x.get("upper_hole_index") is not None else None
+            ),
             stack_part_ids=tuple(str(v) for v in x.get("stack_part_ids", ())),
             lower_rail_id=(
                 str(x["lower_rail_id"])

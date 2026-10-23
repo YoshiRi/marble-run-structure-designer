@@ -39,6 +39,11 @@ upper rail hole
 
 `stack_part_ids` are ordered bottom-to-top.
 
+A stack that holds up no rail is **free-standing**: `upper_rail_id: null` and
+`upper_hole_index: null`, standing on `lower_rail_id`/`lower_hole_index` (e.g.
+the entry block on a twist's chute hole). Its parts must sit on that hole's
+axis and stack from the hole's mount level; it does not count as a rail support.
+
 The Assembly Validator checks:
 
 - both rail-hole references exist
@@ -104,6 +109,9 @@ Bottom outlets drop straight down the support column (physically confirmed):
   hole into the `top` of the column standing under the same hole
 - the drop ends at a part without a `top` opening; a stack on the ground ends at
   its foundation
+- the bottom part of a stack standing on a twist's chute hole drops into the
+  chute instead (user-described): its `bottom` feeds the twist's center hole
+  node; the twist is never entered by landing from a side outlet
 
 A block standing directly on a rail can **land** the marble on that rail
 (physically confirmed): if the bottom part of a support stack stands on a rail

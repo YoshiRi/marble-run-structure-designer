@@ -30,17 +30,17 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field, replace
-from math import pi, radians
+from math import cos, pi, radians, sin
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import yaml
 
 from .catalog import PartCatalog
-from .collision import Solid, penetration_cm, rail_solid
+from .collision import Solid, penetration_cm, rail_solids
 from .geometry import valid_support_pairs
 from .inventory import load_inventory
-from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink
+from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink, rail_hole_world
 from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, substitute
 from .validation import validate_layout
 
@@ -56,7 +56,13 @@ _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
 # Inventory pool each rail kind draws from (presets do not list center holes
 # separately); `straight_unspecified` is a wildcard for any straight rail.
 _RAIL_POOL = {"straight_short": "straight_short", "straight_long": "straight_long",
-              "straight_long_center": "straight_long"}
+              "straight_long_center": "straight_long", "spiral": "spiral"}
+# The twist may be listed as one pool or by size; all are treated as one size.
+_SPIRAL_POOLS = ("spiral", "spiral_large", "spiral_small")
+
+
+def _spiral_capacity(counts: Mapping[str, int]) -> int:
+    return sum(counts.get(k, 0) for k in _SPIRAL_POOLS)
 # Holes a straight can be swapped to a curve on (substitution.py): building on
 # them keeps rails curve-ready.
 _CURVE_READY = {"straight_short": {0, 3}, "straight_long_center": {0, 2, 4}}
@@ -112,6 +118,33 @@ class GeneratorConfig:
     landing_probability: float = 0.6
     max_rails: int = 12
     curve_ready_bias: float = 0.5  # chance to try curve-ready holes first
+    twist_probability: float = 0.5  # chance to end a rail in a twist instead of an exit
+    # How a branch may end. "contained" (default, user rule): the marble leaves
+    # through a block's centered side outlet or dives through an open rail
+    # hole; rails never just roll off their end. "any" also allows rail ends.
+    exit_style: str = "contained"
+    max_exits: int = 2               # branch outputs (catching the marble limits this)
+    block_exit_probability: float = 0.3  # chance to end a low branch at a block outlet
+    block_exit_max_level: int = 6    # highest outlet floor (units) ended on purpose
+    # The marble can be put straight into the top block: no input rail (and
+    # no columns built only to hold one up) when that block stands on a rail.
+    trim_input_rail: bool = True
+    # Stacks of 5+ blocks braced along one axis only topple easily (user
+    # review); candidates with more of them than this are dropped.
+    max_thin_towers: int | None = 0
+    # The marble rolls at least this far on a rail it lands on before the next
+    # drop or dive. Short hops (block on hole 20, drop at hole 25) make the
+    # compact stacked towers, so the default stays small; long rails held up
+    # for a short roll are handled by the idle-rail penalty instead.
+    min_roll_cm: float = 1.0
+    exclude_parts: tuple[str, ...] = ()  # parts the user does not have (now)
+    # A rail carrying a load outside its supports must keep its lighter
+    # support pressing with at least this much (grams), or it tips (user
+    # review 3: a block on the overhanging end). Counterweight blocks are
+    # added on free holes to get there.
+    min_support_reaction_g: float = 20.0
+    # Tie weak towers with brace rails across them (user idea, review 3).
+    brace_towers: bool = True
 
 
 @dataclass(frozen=True)
@@ -122,9 +155,9 @@ class Column:
     base_rail: str | None      # None = ground
     base_hole: int | None
     base_z: int                # level of the surface the column stands on
-    top_rail: str
-    top_hole: int
-    top_z: int                 # level of the rail bottom it holds up
+    top_rail: str | None       # None: free-standing (a twist's entry block)
+    top_hole: int | None
+    top_z: int                 # level of the rail bottom it holds up (or its own top)
     top_types: tuple[str, ...] = ()   # bottom -> top, e.g. (drop block, pass parts)
     block_rotation: int = 0           # rotation of top_types[0]
 
@@ -155,16 +188,20 @@ class _State:
     columns: dict[str, Column] = field(default_factory=dict)
     corridors: dict[str, Solid] = field(default_factory=dict)
     route_links: list[tuple[str, str, str]] = field(default_factory=list)  # (column id, port, rail id)
+    feeds: list[tuple[str, str, str]] = field(default_factory=list)  # (rail id, column id, port)
     leaves: list[str] = field(default_factory=list)
     dangling: list[tuple[str, str]] = field(default_factory=list)  # (column id, port)
     covers: int = 0
     max_depth: int = 0
     counters: dict[str, int] = field(default_factory=dict)
+    input_column: str | None = None  # free-standing column the marble is put into
+    braces: list[str] = field(default_factory=list)  # rails that only brace towers
 
     def copy(self) -> "_State":
         return _State(dict(self.rails), dict(self.columns), dict(self.corridors),
-                      list(self.route_links), list(self.leaves), list(self.dangling),
-                      self.covers, self.max_depth, dict(self.counters))
+                      list(self.route_links), list(self.feeds), list(self.leaves),
+                      list(self.dangling), self.covers, self.max_depth, dict(self.counters),
+                      self.input_column, list(self.braces))
 
     def new_id(self, prefix: str) -> str:
         n = self.counters.get(prefix, 0)
@@ -176,6 +213,9 @@ class CascadeGenerator:
     def __init__(self, catalog: PartCatalog, budget: Budget, config: GeneratorConfig,
                  rng: random.Random):
         self.catalog = catalog
+        budget = budget.copy()
+        for part in config.exclude_parts:
+            budget.counts[part] = 0
         self.budget = budget
         self.config = config
         self.rng = rng
@@ -188,6 +228,7 @@ class CascadeGenerator:
             if isinstance(spec, Mapping) and spec.get("height") is not None
         }
         self.drop_blocks = self._drop_block_outlets()
+        self.entry_blocks = self._side_to_bottom_inlets()
         self.work = 0  # rail placements left in the current build
         self.filler_blocks = [t for t in _FILLER_PREFERENCE if self.heights.get(t) == 4]
         self.support_pairs = {
@@ -208,6 +249,18 @@ class CascadeGenerator:
                 targets = ([route["to"]] if route.get("to") else []) + list(route.get("to_any_of") or ())
                 if targets and all(t in _PORT_ROTATION_OFFSET for t in targets):
                     out[name] = tuple(targets)
+        return out
+
+    def _side_to_bottom_inlets(self) -> list[tuple[str, str]]:
+        """(block, side inlet) pairs that drop a marble out of the bottom:
+        the entry blocks a twist's chute hole takes (blue, green, natural)."""
+        out = []
+        for name, spec in (self.catalog.raw.get("routing_blocks") or {}).items():
+            if spec.get("height") != 4:
+                continue
+            for route in spec.get("routes") or ():
+                if route.get("to") == "bottom" and route.get("from") in _PORT_ROTATION_OFFSET:
+                    out.append((name, route["from"]))
         return out
 
     @staticmethod
@@ -234,7 +287,7 @@ class CascadeGenerator:
         return abs(solid.center_xy[0]) + hx <= hw + 1e-9 and abs(solid.center_xy[1]) + hy <= hd + 1e-9
 
     def _solids(self, state: _State) -> list[Solid]:
-        solids = [rail_solid(r, self.catalog) for r in state.rails.values()]
+        solids = [piece for r in state.rails.values() for piece in rail_solids(r, self.catalog)]
         solids += [c.solid(self.half) for c in state.columns.values()]
         return solids
 
@@ -258,6 +311,8 @@ class CascadeGenerator:
         used: Counter = Counter()
         for rail in state.rails.values():
             used[_RAIL_POOL[rail.rail_type]] += 1
+        if used["spiral"] > _spiral_capacity(counts):
+            return False
         wildcard_needed = sum(max(0, used[p] - counts[p]) for p in ("straight_short", "straight_long"))
         if wildcard_needed > counts["straight_unspecified"]:
             return False
@@ -285,9 +340,13 @@ class CascadeGenerator:
     def _valid_pair(self, kind: str, holes: Sequence[int]) -> bool:
         return len(holes) == 2 and tuple(sorted(holes)) in self.support_pairs[kind]
 
+    def _level(self, rail: PlacedRail, hole: int) -> int:
+        """Mount level of a rail hole (the twist's chute hole sits 3 higher)."""
+        return int(rail.z_units) + self.catalog.rails[rail.rail_type].hole_level(hole)
+
     def _plain_column(self, state: _State, rail: PlacedRail, hole: int) -> Column:
         x, y = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[hole])
-        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, int(rail.z_units))
+        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, self._level(rail, hole))
 
     def _split_crossed_columns(self, state: _State, rail: PlacedRail,
                                corridor: Solid | None) -> list[int] | None:
@@ -297,22 +356,22 @@ class CascadeGenerator:
         the rail hits anything that cannot be split.
         """
         spec = self.catalog.rails[rail.rail_type]
-        body = rail_solid(rail, self.catalog)
-        hits = set(self._hits(state, [body] + ([corridor] if corridor else [])))
+        body = rail_solids(rail, self.catalog)
+        hits = set(self._hits(state, body + ([corridor] if corridor else [])))
         split_holes = []
         for hit in sorted(hits):
             column = state.columns.get(hit)
-            if column is None:
-                return None
+            if column is None or column.top_rail is None:
+                return None  # rails, corridors and free-standing entry blocks stay whole
             hole = next((i for i, hx in enumerate(spec.holes_cm)
                          if abs(self._point(rail, hx)[0] - column.x) < _AXIS_TOL_CM
                          and abs(self._point(rail, hx)[1] - column.y) < _AXIS_TOL_CM), None)
             if hole is None:
                 return None
+            level = self._level(rail, hole)
             lower = replace(column, id=state.new_id("c"), top_rail=rail.id, top_hole=hole,
-                            top_z=int(rail.z_units), top_types=(), block_rotation=0)
-            upper = replace(column, base_rail=rail.id, base_hole=hole,
-                            base_z=int(rail.z_units) + 1)
+                            top_z=level, top_types=(), block_rotation=0)
+            upper = replace(column, base_rail=rail.id, base_hole=hole, base_z=level + 1)
             if lower.filler_units(self.heights) < (0 if lower.base_rail is None else 1):
                 return None
             if upper.top_z - upper.base_z < 1 or upper.filler_units(self.heights) < 0:
@@ -325,11 +384,13 @@ class CascadeGenerator:
 
     # ---- placing rails ---------------------------------------------------------
     def _place_rail(self, state: _State, kind: str, x: float, y: float, z: int, direction: int,
-                    entry_x: float, stop: int | None, keep_free: Sequence[int] = ()) -> PlacedRail | None:
+                    entry_x: float, stop: int | None, keep_free: Sequence[int] = (),
+                    dive: bool = False, brace: bool = False) -> PlacedRail | None:
         """Add a rail whose marble enters at local entry_x and stops at `stop`
         (None: rolls off end B). Adds splits and plain supports so that the
         rail ends with exactly two supports (the drop column at `stop` is
-        added later by the caller and counts as one)."""
+        added later by the caller and counts as one). With `dive`, the stop
+        hole stays open and empty: the marble drops through it and leaves."""
         if self.work <= 0:
             return None
         self.work -= 1
@@ -338,34 +399,48 @@ class CascadeGenerator:
         end_x = holes[stop] if stop is not None else spec.length_cm
         if end_x <= entry_x + 1e-6 or z < 1:
             return None
-        covered = [i for i, hx in enumerate(holes) if entry_x < hx < end_x]
+        covered = [] if brace else [i for i, hx in enumerate(holes) if entry_x < hx < end_x]
         states = {i: "covered" for i in covered}
         if stop is not None:
-            states[stop] = "block_connected"
+            states[stop] = "open" if dive else "block_connected"
         rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=90.0 * direction,
                           flow_direction="a_to_b", hole_states=states)
-        body = rail_solid(rail, self.catalog)
-        corridor = self._corridor(rail, entry_x, end_x)
-        if not self._in_footprint(body):
+        body = rail_solids(rail, self.catalog)
+        # The twist's marble path runs inside its own funnel: no corridor.
+        corridor = None if spec.shape == "twist" or brace else self._corridor(rail, entry_x, end_x)
+        if not all(self._in_footprint(piece) for piece in body):
             return None
+        fall = None
+        if dive:  # nothing may stand under the hole the marble drops through
+            hx, hy = self._point(rail, holes[stop])
+            r = _MARBLE_DIAMETER_CM / 2.0
+            fall = Solid(f"{rail.id}#dive#marble", (hx, hy), (r, r), 0.0, 0.0, z * _UNIT_CM)
+            if self._hits(state, [fall]):
+                return None
         split = self._split_crossed_columns(state, rail, corridor)
         if split is None or (stop is not None and stop in split):
             return None
+        if brace and not split:
+            return None  # a brace must tie into at least one existing column
         if any(h in keep_free for h in split):
             return None
         state.rails[rail.id] = rail
-        state.corridors[rail.id] = corridor
+        if corridor is not None:
+            state.corridors[rail.id] = corridor
+        if fall is not None:
+            state.corridors[fall.id] = fall
         state.covers += len(covered)
 
-        needed = 2 - len(split) - (1 if stop is not None else 0)
-        fixed = list(split) + ([stop] if stop is not None else [])
+        supported_stop = stop is not None and not dive
+        needed = 2 - len(split) - (1 if supported_stop else 0)
+        fixed = list(split) + ([stop] if supported_stop else [])
         if needed < 0:
             return None
         if needed == 0:
             if not self._valid_pair(kind, fixed):
                 return None
         else:
-            options = [h for h in range(len(holes)) if h not in fixed]
+            options = [h for h in range(len(holes)) if h not in fixed and not (dive and h == stop)]
             # Prefer a column right under a block standing on this rail (tower),
             # then holes that keep the rail curve-ready.
             self.rng.shuffle(options)
@@ -381,7 +456,7 @@ class CascadeGenerator:
                 return None
             for column in new_columns:
                 state.columns[column.id] = column
-        if self._hits(state, [corridor], ignore={rail.id}):
+        if corridor is not None and self._hits(state, [corridor], ignore={rail.id}):
             return None
         return rail if self._feasible(state) else None
 
@@ -402,16 +477,20 @@ class CascadeGenerator:
         return [name for _, name in sorted(keyed, reverse=True)]
 
     def _drop(self, state: _State, rail: PlacedRail, hole: int, incoming: int,
-              depth: int) -> tuple[_State, list[_Outlet]] | None:
+              depth: int, modes: Sequence[str] | None = None) -> tuple[_State, list[_Outlet]] | None:
         """Place a drop block under the stop hole; returns new state + outlets."""
         hx, hy = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[hole])
-        modes = ["landing", "ground"] if self.rng.random() < self.config.landing_probability \
-            else ["ground", "landing"]
+        if modes is None:
+            modes = ["landing", "ground"] if self.rng.random() < self.config.landing_probability \
+                else ["ground", "landing"]
+        room = self.config.max_exits - self._branches(state)
         for mode in modes:
             for block in self._block_order():
                 outlets = self.drop_blocks[block]
+                if len(outlets) - 1 > room:
+                    continue  # would exceed the branch outputs allowed
                 top_types = self._drop_types(block)
-                block_z = int(rail.z_units) - sum(self.heights[t] for t in top_types)
+                block_z = self._level(rail, hole) - sum(self.heights[t] for t in top_types)
                 for turn in self.rng.sample(range(4), 4):
                     first = (incoming + turn) % 4
                     rotation = (90 * first + _PORT_ROTATION_OFFSET[outlets[0]]) % 360
@@ -429,7 +508,7 @@ class CascadeGenerator:
             return None
         trial = state.copy()
         column = Column(trial.new_id("c"), hx, hy, None, None, 0, rail.id, hole,
-                        int(rail.z_units), top_types, rotation)
+                        self._level(rail, hole), top_types, rotation)
         if self._hits(trial, [column.solid(self.half)]):
             return None
         trial.columns[column.id] = column
@@ -446,31 +525,39 @@ class CascadeGenerator:
         # Other outlets must not face back against the landing rail's flow.
         if any(dirs[p] == (d + 2) % 4 for p in ports if p != land_port):
             return None
-        rail_z = block_z - 1
-        if rail_z < 1:
-            return None
-        for kind in self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS)):
+        kinds = self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS))
+        for kind in kinds:
             spec = self.catalog.rails[kind]
             ready = self._curve_ready(kind)
             order = self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
             order.sort(key=lambda h: h not in ready)
             for k in order:
+                # The block stands on hole k: the rail's placement level sits
+                # below it by one unit plus that hole's mount level.
+                rail_z = block_z - 1 - spec.hole_level(k)
+                if rail_z < 1:
+                    continue
                 landing = spec.holes_cm[k] + self.half
-                downstream = [i for i, hx_ in enumerate(spec.holes_cm) if hx_ > landing + 1.0]
+                downstream = [i for i, hx_ in enumerate(spec.holes_cm)
+                              if hx_ > landing + self.config.min_roll_cm]
                 preferred = [i for i in downstream if i in ready] or downstream
-                stops = ([self.rng.choice(preferred)] if downstream else []) + [None]
-                if len(state.rails) >= self.config.max_rails:
-                    stops = [None]
-                for stop in stops:
+                can_continue = len(state.rails) < self.config.max_rails
+                stops = [("drop", self.rng.choice(preferred))] if downstream and can_continue else []
+                ends = self._terminal_stops(spec, downstream, rail_z)
+                if can_continue and rail_z > 4 and self.rng.random() < self.config.twist_probability:
+                    stops = [("twist", None)] + stops + ends
+                else:
+                    stops = stops + ends + ([("twist", None)] if can_continue and rail_z > 4 else [])
+                for how, stop in stops:
                     trial = state.copy()
                     sx = hx - spec.holes_cm[k] * _DIRS[d][0]
                     sy = hy - spec.holes_cm[k] * _DIRS[d][1]
                     lower = self._place_rail(trial, kind, sx, sy, rail_z, d, landing, stop,
-                                             keep_free=(k,))
+                                             keep_free=(k,), dive=how == "dive")
                     if lower is None:
                         continue
-                    column = Column(trial.new_id("c"), hx, hy, lower.id, k, rail_z + 1, rail.id, hole,
-                                    int(rail.z_units), top_types, rotation)
+                    column = Column(trial.new_id("c"), hx, hy, lower.id, k, block_z, rail.id, hole,
+                                    self._level(rail, hole), top_types, rotation)
                     if column.filler_units(self.heights) < 0 or self._hits(trial, [column.solid(self.half)]):
                         continue
                     trial.columns[column.id] = column
@@ -485,13 +572,104 @@ class CascadeGenerator:
                         outlets.append(self._outlet(column, port, pd, block_z, depth))
                     else:
                         trial.max_depth = max(trial.max_depth, depth + 1)
-                        if stop is None:
-                            trial.leaves.append(f"{lower.id}:end_b")
-                            return trial, outlets
+                        if how != "drop":
+                            end = self._finish(trial, lower, how, stop, d, depth + 1)
+                            if end is None:
+                                continue
+                            return end[0], outlets + end[1]
                         sub = self._drop(trial, lower, stop, d, depth + 1)
                         if sub is not None:
                             next_state, more = sub
                             return next_state, outlets + more
+        return None
+
+    # ---- rail ends and the twist --------------------------------------------
+    def _terminal_stops(self, spec, holes: Sequence[int], z: int) -> list[tuple[str, int | None]]:
+        """Ways a rail may end a branch: dive through an open hole (farthest
+        holes first, for a longer roll) or, with exit_style "any", its end."""
+        dives = [("dive", i) for i in sorted(holes, key=lambda i: -spec.holes_cm[i])[:2]]
+        return dives + ([("end", None)] if self.config.exit_style == "any" else [])
+
+    def _branches(self, state: _State) -> int:
+        """Branch outputs so far: one, plus one per extra block outlet."""
+        return 1 + sum(len(self.drop_blocks.get(c.top_types[0], ("",))) - 1
+                       for c in state.columns.values() if c.top_types)
+
+    def _finish(self, state: _State, rail: PlacedRail, how: str, stop: int | None, d: int,
+                depth: int) -> tuple[_State, list[_Outlet]] | None:
+        """End a rail: into a twist, as a dive through an open hole, or off
+        its end B (exit_style "any")."""
+        if how == "twist":
+            return self._twist_end(state, rail, d, depth)
+        if how == "dive":
+            state.leaves.append(f"{rail.id}:hole:{stop}")
+        else:
+            state.leaves.append(f"{rail.id}:end_b")
+        return state, []
+
+    def _block_exit(self, state: _State, outlet: _Outlet) -> _State | None:
+        """End a branch at a block's centered side outlet if the marble has a
+        clear path out and down to the ground."""
+        r = _MARBLE_DIAMETER_CM / 2.0
+        reach = 4.0
+        dx, dy = _DIRS[outlet.direction]
+        cx, cy = outlet.x_cm + dx * reach / 2, outlet.y_cm + dy * reach / 2
+        hx, hy = (reach / 2, r) if dx else (r, reach / 2)
+        out = Solid(f"{outlet.block_column}#{outlet.port}#exit#marble", (cx, cy), (hx, hy), 0.0,
+                    0.0, outlet.floor_z * _UNIT_CM + _MARBLE_DIAMETER_CM)
+        if not self._in_footprint(out) or self._hits(state, [out], ignore={outlet.block_column}):
+            return None
+        state = state.copy()
+        state.corridors[out.id] = out
+        state.dangling.append((outlet.block_column, outlet.port))
+        return state
+
+    def _twist_end(self, state: _State, rail: PlacedRail, d: int,
+                   depth: int) -> tuple[_State, list[_Outlet]] | None:
+        """End the rail in a twist, hook-shaped (user-described):
+
+        the rail runs into the side inlet of an entry block (blue, green or
+        natural) standing on the twist's chute hole, which drops the marble
+        from its bottom into the chute. The twist heads to the right of the
+        rail, so the marble arrives from the twist's right side; the funnel
+        then drops it through its center hole into a new drop column.
+        """
+        if "spiral" not in self.catalog.rails or not self.entry_blocks:
+            return None
+        used = sum(1 for r in state.rails.values() if r.rail_type == "spiral")
+        if used >= _spiral_capacity(self.budget.counts) or len(state.rails) >= self.config.max_rails:
+            return None
+        spec = self.catalog.rails["spiral"]
+        feed = self.catalog.rails[rail.rail_type]
+        block_z = int(rail.z_units) + 1          # side inlet notch at the rail's groove
+        twist_z = block_z - 1 - spec.hole_level(0)
+        if twist_z < 1:
+            return None
+        ex, ey = self._point(rail, feed.length_cm + self.half)
+        h = (d - 1) % 4                           # turn right: marble comes from the right
+        sx = ex - spec.holes_cm[0] * _DIRS[h][0]
+        sy = ey - spec.holes_cm[0] * _DIRS[h][1]
+        trial = state.copy()
+        twist = self._place_rail(trial, "spiral", sx, sy, twist_z, h, spec.holes_cm[0],
+                                 len(spec.holes_cm) - 1, keep_free=(0,))
+        if twist is None:
+            return None
+        back = (d + 2) % 4                        # the inlet faces back up the rail
+        for block, port in self.rng.sample(self.entry_blocks, len(self.entry_blocks)):
+            rotation = (90 * back + _PORT_ROTATION_OFFSET[port]) % 360
+            attempt = trial.copy()
+            column = Column(attempt.new_id("c"), ex, ey, twist.id, 0, block_z, None, None,
+                            block_z + self.heights[block], (block,), rotation)
+            if self._hits(attempt, [column.solid(self.half)]):
+                continue
+            attempt.columns[column.id] = column
+            if not self._feasible(attempt):
+                continue
+            attempt.feeds.append((rail.id, column.id, port))
+            attempt.max_depth = max(attempt.max_depth, depth + 1)
+            sub = self._drop(attempt, twist, len(spec.holes_cm) - 1, h, depth + 1)
+            if sub is not None:
+                return sub
         return None
 
     def _curve_ready(self, kind: str) -> set[int]:
@@ -511,31 +689,106 @@ class CascadeGenerator:
                 and abs(fy) + abs(_DIRS[d][0]) * self.half <= hd + 1e-9)
 
     # ---- growing ------------------------------------------------------------
-    def _grow(self, state: _State, outlet: _Outlet) -> tuple[_State, list[_Outlet]]:
-        """Attach a rail to a block outlet (exact level or drop-one)."""
+    def _grow(self, state: _State, outlet: _Outlet) -> tuple[_State, list[_Outlet]] | None:
+        """Attach a rail to a block outlet (exact level or drop-one), or end
+        the branch there. None if the branch cannot end physically."""
+        if (outlet.floor_z <= self.config.block_exit_max_level
+                and self.rng.random() < self.config.block_exit_probability):
+            ended = self._block_exit(state, outlet)
+            if ended is not None:
+                return ended, []
         can_continue = len(state.rails) < self.config.max_rails
         options = [(z, kind) for z in (outlet.floor_z - 1, outlet.floor_z - 2) for kind in _RAIL_KINDS]
         self.rng.shuffle(options)
-        for continuing in ((True, False) if can_continue else (False,)):
+        plans: list[str] = ["drop", "end"] if can_continue else ["end"]
+        if can_continue and self.rng.random() < self.config.twist_probability:
+            plans.insert(0, "twist")
+        for plan in plans:
             for z, kind in options:
                 spec = self.catalog.rails[kind]
-                stops = [i for i in range(len(spec.holes_cm)) if spec.holes_cm[i] > 5.0] if continuing else [None]
-                stop = self.rng.choice(stops)
-                trial = state.copy()
-                rail = self._place_rail(trial, kind, outlet.x_cm, outlet.y_cm, z, outlet.direction, 0.0, stop)
-                if rail is None:
-                    continue
-                trial.route_links.append((outlet.block_column, outlet.port, rail.id))
-                trial.max_depth = max(trial.max_depth, outlet.depth + 1)
-                if stop is None:
-                    trial.leaves.append(f"{rail.id}:end_b")
-                    return trial, []
-                sub = self._drop(trial, rail, stop, outlet.direction, outlet.depth + 1)
-                if sub is not None:
-                    return sub
+                if plan == "twist":
+                    if z <= 4:
+                        continue
+                    stops = [("twist", None)]
+                elif plan == "drop":
+                    stops = [("drop", self.rng.choice([i for i in range(len(spec.holes_cm))
+                                                         if spec.holes_cm[i] > 5.0]))]
+                else:
+                    stops = self._terminal_stops(spec, [i for i in range(len(spec.holes_cm))
+                                                       if spec.holes_cm[i] > 5.0], z)
+                for how, stop in stops:
+                    trial = state.copy()
+                    rail = self._place_rail(trial, kind, outlet.x_cm, outlet.y_cm, z, outlet.direction,
+                                            0.0, stop, dive=how == "dive")
+                    if rail is None:
+                        continue
+                    trial.route_links.append((outlet.block_column, outlet.port, rail.id))
+                    trial.max_depth = max(trial.max_depth, outlet.depth + 1)
+                    if how == "drop":
+                        sub = self._drop(trial, rail, stop, outlet.direction, outlet.depth + 1)
+                    else:
+                        sub = self._finish(trial, rail, how, stop, outlet.direction, outlet.depth + 1)
+                    if sub is not None:
+                        return sub
+        # Nothing attaches: the marble leaves the block here, if it can.
+        ended = self._block_exit(state, outlet)
+        return (ended, []) if ended is not None else None
+
+    def _trim_input(self, state: _State, top: PlacedRail, stop: int) -> _State | None:
+        """Drop the input rail: the marble goes straight into the top of the
+        drop column, which stays as a free-standing stack on its lower rail.
+        Columns that only held the input rail go too (user review: an input
+        rail wastes columns)."""
         state = state.copy()
-        state.dangling.append((outlet.block_column, outlet.port))
-        return state, []
+        drop = next(c for c in state.columns.values() if c.top_rail == top.id and c.top_hole == stop)
+        for cid in [c.id for c in state.columns.values() if c.top_rail == top.id and c.id != drop.id]:
+            del state.columns[cid]
+        state.columns[drop.id] = replace(drop, top_rail=None, top_hole=None)
+        state.covers -= sum(1 for v in top.hole_states.values() if v == "covered")
+        del state.rails[top.id]
+        state.corridors.pop(top.id, None)
+        state.input_column = drop.id
+        return state
+
+    def brace(self, state: _State, spots: Sequence[Mapping[str, Any]]) -> _State:
+        """Tie weak towers with brace rails (user idea, review 3): a straight
+        rail carrying no marble, laid across the tower in its upper half and
+        at right angles to the rails it already holds. The tower's column is
+        split at one of the brace's holes; the other support is another
+        column the brace crosses, or a new short column. Nothing changes
+        where no brace fits."""
+        for spot in spots:
+            self.work = 400
+            heading = spot["axes"][0] if spot["axes"] else 0.0
+            # World directions roughly perpendicular to the tower's rails.
+            dirs = [d for d in range(4)
+                    if abs(cos(d * pi / 2 - heading)) < 0.5]
+            levels = list(range(int(spot["top"]) - 2, int(-(-spot["top"] // 2)) - 1, -1))
+            placed = False
+            for level in levels:
+                for kind in ("straight_short", "straight_long"):
+                    spec = self.catalog.rails[kind]
+                    for d in self.rng.sample(dirs, len(dirs)):
+                        for h in self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm)):
+                            sx = spot["x"] - spec.holes_cm[h] * _DIRS[d][0]
+                            sy = spot["y"] - spec.holes_cm[h] * _DIRS[d][1]
+                            trial = state.copy()
+                            rail = self._place_rail(trial, kind, sx, sy, level, d, 0.0, None, brace=True)
+                            if rail is None:
+                                continue
+                            ties = {c.top_hole for c in trial.columns.values() if c.top_rail == rail.id}
+                            if h not in ties:
+                                continue  # the brace must hold this tower
+                            trial.braces.append(rail.id)
+                            state, placed = trial, True
+                            break
+                        if placed:
+                            break
+                    if placed:
+                        break
+                if placed:
+                    break
+        return state
 
     def build_once(self, work: int = 400) -> _State | None:
         self.work = work
@@ -550,13 +803,27 @@ class CascadeGenerator:
         if top is None:
             return None
         state.max_depth = 1
-        result = self._drop(state, top, stop, direction, 1)
+        result = None
+        if self.config.trim_input_rail:
+            # The input block must stand on a rail: alone on the ground it
+            # would be a free tower (user review: thin towers topple).
+            for _ in range(12):
+                result = self._drop(state, top, stop, direction, 1, modes=("landing",))
+                trimmed = self._trim_input(result[0], top, stop) if result is not None else None
+                result = (trimmed, result[1]) if trimmed is not None else None
+                if result is not None:
+                    break
+        if result is None:
+            result = self._drop(state, top, stop, direction, 1)
         if result is None:
             return None
         state, queue = result
         while queue:
             outlet = queue.pop(self.rng.randrange(len(queue)))
-            state, more = self._grow(state, outlet)
+            grown = self._grow(state, outlet)
+            if grown is None:
+                return None
+            state, more = grown
             queue.extend(more)
         return state
 
@@ -568,6 +835,7 @@ class CascadeGenerator:
         parts: list[PlacedPart] = []
         supports: list[SupportLink] = []
         block_ids: dict[str, str] = {}
+        top_parts: dict[str, str] = {}
         for column in sorted(state.columns.values(), key=lambda c: (c.base_z, c.id)):
             fill = column.filler_units(self.heights)
             sequence = ["wooden_foundation"] if column.base_rail is None else []
@@ -591,14 +859,19 @@ class CascadeGenerator:
                     block_ids[column.id] = pid
                 ids.append(pid)
                 z += self.heights[part_type]
+            top_parts[column.id] = ids[-1]
             supports.append(SupportLink(column.top_rail, column.top_hole, tuple(ids),
                                         column.base_rail, column.base_hole, name=column.id))
         links = tuple(RouteLink(PortRef(block_ids[col], port), PortRef(rail, "end_a"))
                       for col, port, rail in state.route_links)
+        links += tuple(RouteLink(PortRef(rail, "end_b"), PortRef(block_ids[col], port))
+                       for rail, col, port in state.feeds)
         layout = Layout(name, rails=tuple(state.rails.values()), parts=tuple(parts),
                         supports=tuple(supports), route_links=links)
         usage = Counter(r.rail_type for r in layout.rails) + Counter(p.part_type for p in parts)
         usage["cover"] = state.covers
+        self.source = (PortRef(top_parts[state.input_column], "top") if state.input_column
+                       else PortRef(min(state.rails, key=lambda r: int(r[4:])), "end_a"))
         return layout, dict(sorted(usage.items())), block_ids
 
 
@@ -612,20 +885,30 @@ class Candidate:
     score: float
     metrics: Mapping[str, Any]
     usage: Mapping[str, int]
+    sinks: tuple[PortRef, ...] = ()  # the exits: rail holes/ends and block outlets
+    source: PortRef = PortRef("rail0", "end_a")  # where the marble is put in
 
 
 def score(metrics: Mapping[str, Any]) -> float:
-    """Levels and rolling length, then branches and exits (user priorities);
-    small bonuses for columns standing on rails (stacked, compact builds) and
-    for curved rails (variety)."""
+    """What the user rewards in reviews: many levels and a long roll on every
+    branch; branches and stacked columns next; curves and twists for variety.
+    Penalized: a marble leaving high above the ground, a very short branch,
+    a sprawling footprint (place taken for little run), thin towers, and rail
+    length the marble never rolls on (a shorter rail would do)."""
     return (
         10.0 * metrics["levels"]
-        + 0.1 * metrics["rolling_length_cm"]
-        + 6.0 * metrics["rail_exits"]
+        + 0.2 * metrics["rolling_length_cm"]
+        + 0.15 * metrics.get("min_exit_path_cm", 0.0)
         + 4.0 * metrics["random_branches"]
         + 2.0 * metrics["columns_on_rails"]
         + 3.0 * metrics.get("curved_rails", 0)
-        - 8.0 * metrics["open_block_outlets"]
+        + 5.0 * metrics.get("twists", 0)
+        - 1.5 * sum(metrics.get("exit_levels", ()))
+        - 12.0 * metrics.get("thin_towers", 0)
+        - 6.0 * metrics.get("weak_towers", 0)
+        - 0.05 * metrics.get("idle_rail_cm", 0.0)
+        - 0.002 * metrics.get("footprint_area_cm2", 0.0)
+        - 0.02 * metrics.get("dead_area_cm2", 0.0)
     )
 
 
@@ -641,7 +924,10 @@ def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
     overflow = max(0, short - counts.get("straight_short", 0)) + max(0, long_ - counts.get("straight_long", 0))
     if overflow > counts.get("straight_unspecified", 0):
         return False
-    return all(n <= counts.get(part, 0) for part, n in usage.items() if not part.startswith("straight_"))
+    if usage.get("spiral", 0) > _spiral_capacity(counts):
+        return False
+    return all(n <= counts.get(part, 0) for part, n in usage.items()
+               if not part.startswith("straight_") and part != "spiral")
 
 
 def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random.Random,
@@ -662,19 +948,148 @@ def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random
     return layout
 
 
-def _metrics(state: _State, layout: Layout, catalog: PartCatalog) -> dict[str, Any]:
-    rolling = sum(c.half_extents_xy[0] * 2 for c in state.corridors.values())
+# Rough rolling distance inside a twist: down the chute and about 1.75 turns
+# around the funnel (estimate; the real count depends on speed).
+_TWIST_ROLL_CM = 60.0
+
+
+def _roll_lengths(state: _State, catalog: PartCatalog) -> dict[str, float]:
+    out = {rid: c.half_extents_xy[0] * 2 for rid, c in state.corridors.items() if rid in state.rails}
+    for rid, rail in state.rails.items():
+        if catalog.rails[rail.rail_type].shape == "twist":
+            out[rid] = _TWIST_ROLL_CM
+    return out
+
+
+def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
+                upper_half: bool = False) -> int:
+    return len(tower_spots(layout, catalog, min_blocks, upper_half))
+
+
+def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
+                upper_half: bool = False) -> list[dict[str, Any]]:
+    """Stacks at one spot with at least `min_blocks` blocks (4u parts) braced
+    in one direction only: every rail touching the stack runs along one axis
+    (within 45 deg). Such towers topple easily (user review 2). With
+    `upper_half`, only rails touching at or above half the stack's height
+    count: a rail near the ground hardly braces its top (review 3)."""
+    from .model import rail_pose
+
+    rails, parts = layout.rail_map(), layout.part_map()
+    towers: dict[tuple[float, float], dict[str, Any]] = {}
+    for s in layout.supports:
+        if not s.stack_part_ids:
+            continue
+        base = parts[s.stack_part_ids[0]]
+        t = towers.setdefault((round(base.x_cm, 2), round(base.y_cm, 2)),
+                              {"blocks": 0, "top": 0.0, "contacts": []})
+        t["blocks"] += sum(1 for pid in s.stack_part_ids
+                           if (catalog.height_units(parts[pid].part_type) or 0) >= 4)
+        top = parts[s.stack_part_ids[-1]]
+        t["top"] = max(t["top"], top.z_units + (catalog.height_units(top.part_type) or 0))
+        for rid, hole in ((s.upper_rail_id, s.upper_hole_index), (s.lower_rail_id, s.lower_hole_index)):
+            if rid is None:
+                continue
+            rail = rails[rid]
+            spec = catalog.rails[rail.rail_type]
+            heading = rail_pose(rail, spec, spec.holes_cm[hole])[2]
+            t["contacts"].append((rail.z_units + spec.hole_level(hole), heading % pi))
+    spots = []
+    for (x, y), t in towers.items():
+        if t["blocks"] < min_blocks:
+            continue
+        axes = [a for z, a in t["contacts"] if not upper_half or z >= t["top"] / 2]
+        spread = max((min(abs(a - b), pi - abs(a - b)) for a in axes for b in axes), default=0.0)
+        if spread < pi / 4:
+            spots.append({"x": x, "y": y, "top": t["top"], "axes": axes})
+    return spots
+
+
+def _footprint_area(solids: Sequence[Solid]) -> float:
+    xs, ys = [], []
+    for solid in solids:
+        (cx, cy), (hx, hy), a = solid.center_xy, solid.half_extents_xy, solid.angle_rad
+        ex = abs(hx * cos(a)) + abs(hy * sin(a))
+        ey = abs(hx * sin(a)) + abs(hy * cos(a))
+        xs += [cx - ex, cx + ex]
+        ys += [cy - ey, cy + ey]
+    return (max(xs) - min(xs)) * (max(ys) - min(ys)) if xs else 0.0
+
+
+def _cells(solid: Solid, half_width: float | None = None) -> set[tuple[int, int]]:
+    """1 cm grid cells whose centers lie in a solid's top-view rectangle
+    (optionally widened/narrowed to `half_width` across its long axis)."""
+    (cx, cy), (hx, hy), a = solid.center_xy, solid.half_extents_xy, solid.angle_rad
+    if half_width is not None:
+        hy = half_width
+    c, s_ = cos(a), sin(a)
+    ex, ey = abs(hx * c) + abs(hy * s_), abs(hx * s_) + abs(hy * c)
+    out = set()
+    for i in range(int((cx - ex) // 1), int((cx + ex) // 1) + 1):
+        for j in range(int((cy - ey) // 1), int((cy + ey) // 1) + 1):
+            dx, dy = i + 0.5 - cx, j + 0.5 - cy
+            if abs(dx * c + dy * s_) <= hx and abs(-dx * s_ + dy * c) <= hy:
+                out.add((i, j))
+    return out
+
+
+def _dead_area(state: _State, catalog: PartCatalog, solids: Sequence[Solid]) -> float:
+    """Top-view area (cm2) taken by parts where no marble rolls (user
+    definition of space inefficiency): rails and columns minus the rolled
+    stretches of rail (full rail width) and the twist funnels."""
+    used: set[tuple[int, int]] = set()
+    for solid in solids:
+        used |= _cells(solid)
+    rolled: set[tuple[int, int]] = set()
+    for rid, corridor in state.corridors.items():
+        if rid in state.rails:
+            rolled |= _cells(corridor, half_width=2.25)
+    for rail in state.rails.values():
+        if catalog.rails[rail.rail_type].shape == "twist":
+            rolled |= {c for piece in rail_solids(rail, catalog) for c in _cells(piece)}
+    return float(len(used - rolled))
+
+
+def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
+             paths: Mapping[str, Sequence[str]], solids: Sequence[Solid],
+             block_ids: Mapping[str, str]) -> dict[str, Any]:
+    roll = _roll_lengths(state, catalog)
     splits = sum(1 for c in state.columns.values()
                  if len(c.top_types) and c.top_types[0] in ("red_random_split", "red_right_angle"))
+    # Rolling distance from the start to each exit, and the exit height.
+    exit_paths, exit_levels = [], []
+    parts = layout.part_map()
+    for leaf in state.leaves:
+        rid = leaf.split(":", 1)[0]
+        exit_levels.append(int(state.rails[rid].z_units) + 1)
+        exit_paths.append(leaf)
+    for col, port in state.dangling:
+        exit_levels.append(int(parts[block_ids[col]].z_units) + 1)
+        exit_paths.append(f"{block_ids[col]}:{port}")
+    per_exit = []
+    for key in exit_paths:
+        rails_on_path = dict.fromkeys(n.split(":", 1)[0] for n in paths.get(key, ()))
+        per_exit.append(round(sum(roll.get(r, 0.0) for r in rails_on_path), 1))
     return {
         "levels": state.max_depth,
         "rails": len(state.rails),
-        "rolling_length_cm": round(rolling, 1),
+        "rolling_length_cm": round(sum(roll.values()), 1),
+        "min_exit_path_cm": min(per_exit) if per_exit else 0.0,
+        "exit_paths_cm": per_exit,
+        "exit_levels": exit_levels,
         "exits": len(state.leaves) + len(state.dangling),
         "rail_exits": len(state.leaves),
-        "open_block_outlets": len(state.dangling),
+        "block_exits": len(state.dangling),
         "random_branches": splits,
         "columns_on_rails": sum(1 for c in state.columns.values() if c.base_rail is not None),
+        "footprint_area_cm2": round(_footprint_area(solids)),
+        "dead_area_cm2": round(_dead_area(state, catalog, solids)),
+        "thin_towers": thin_towers(layout, catalog),
+        "braces": len(state.braces),
+        "weak_towers": thin_towers(layout, catalog, upper_half=True),
+        "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(rid, 0.0)
+                                  for rid, r in state.rails.items()
+                                  if catalog.rails[r.rail_type].shape != "twist"), 1),
         "covers": state.covers,
         "parts": len(layout.parts),
     }
@@ -697,25 +1112,114 @@ def generate(
         if state is None or len(state.rails) < 2:
             continue
         layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
+        if config.brace_towers:
+            spots = tower_spots(layout, catalog, upper_half=True)
+            if spots:
+                state = generator.brace(state, spots)
+                layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
         sinks = tuple(PortRef(*leaf.split(":", 1)) for leaf in state.leaves)
         sinks += tuple(PortRef(block_ids[col], port) for col, port in state.dangling)
         if not sinks:
             continue
-        result = validate_layout(layout, catalog, source=PortRef("rail0", "end_a"), sinks=sinks)
+        source = generator.source
+        result = validate_layout(layout, catalog, source=source, sinks=sinks)
         if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
             continue
-        layout = add_curves(layout, catalog, budget, rng, PortRef("rail0", "end_a"), sinks)
+        paths = result.connectivity.paths
+        solids = generator._solids(state)
+        layout = add_curves(layout, catalog, budget, rng, source, sinks)
+        layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
+        if layout is None:
+            continue
         usage = layout_usage(layout)
-        metrics = _metrics(state, layout, catalog)
+        metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
+        if config.max_thin_towers is not None and metrics["thin_towers"] > config.max_thin_towers:
+            continue
         metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
+        metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
         metrics["covers"] = usage.get("cover", 0)
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
                      metrics["curved_rails"],
                      tuple(sorted(Counter(p.part_type for p in layout.parts).items())))
-        candidate = Candidate(layout, score(metrics), metrics, usage)
+        candidate = Candidate(layout, score(metrics), metrics, usage, sinks, source)
         if signature not in found or found[signature].score < candidate.score:
             found[signature] = candidate
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]
+
+
+def support_reactions_g(layout: Layout, catalog: PartCatalog,
+                        overhang_only: bool = False) -> dict[str, float] | None:
+    """Smaller support reaction of each rail in grams (moments about its two
+    supports, loads from everything above), or None if not evaluable.
+
+    With `overhang_only`, only rails carrying a load outside their supports
+    are listed: a rail resting with its own center of mass on one support
+    (center hole plus an end) is fine in practice (user review 3 rated such
+    builds buildable); a block on the overhang is not (mr-d758cb5d)."""
+    from .layout_stability import analyze_layout_statics
+
+    result = analyze_layout_statics(layout, catalog)
+    if not result.evaluable or result.statics is None:
+        return None
+    out = {}
+    for rid, rs in result.statics.rails.items():
+        xs = [r.support.x_cm for r in rs.reactions]
+        if overhang_only and not any(
+                not load.source.endswith(":self") and not min(xs) - 1e-6 <= load.x_cm <= max(xs) + 1e-6
+                for load in rs.applied_loads):
+            continue
+        out[rid] = min(r.force_n for r in rs.reactions) / 9.80665 * 1000.0
+    return out
+
+
+def balance(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRef,
+            sinks: Sequence[PortRef], min_g: float, max_weights: int = 3) -> Layout | None:
+    """Add counterweight blocks (free-standing, on free rail holes the marble
+    does not roll over) until every rail support keeps at least `min_g`.
+    None if that cannot be reached. User idea (review 3): a block on the
+    other side balances an overhanging load."""
+    reactions = support_reactions_g(layout, catalog, overhang_only=True)
+    if reactions is None:
+        return None
+    usage = Counter(layout_usage(layout))
+    weights = [t for t in _FILLER_PREFERENCE if (catalog.height_units(t) or 0) >= 4]
+    for n in range(max_weights + 1):
+        weak = sorted((g, rid) for rid, g in reactions.items() if g < min_g)
+        if not weak:
+            return layout
+        if n == max_weights:
+            return None
+        _, rid = weak[0]
+        rail = layout.rail_map()[rid]
+        spec = catalog.rails[rail.rail_type]
+        used = {s.upper_hole_index for s in layout.supports if s.upper_rail_id == rid}
+        used |= {s.lower_hole_index for s in layout.supports if s.lower_rail_id == rid}
+        best = None
+        for hole in range(len(spec.holes_cm)):
+            if hole in used or rail.hole_states.get(hole) == "block_connected":
+                continue
+            block = next((t for t in weights if budget.counts[t] - usage[t] > 0), None)
+            if block is None:
+                return None
+            x, y, _ = rail_hole_world(rail, catalog, hole)
+            pid = f"cw{n}_{block}"
+            part = PlacedPart(pid, block, x, y, rail.z_units + spec.hole_level(hole) + spec.height_units)
+            trial = replace(layout, parts=layout.parts + (part,),
+                            supports=layout.supports + (SupportLink(None, None, (pid,), rid, hole,
+                                                                    name=f"cw{n}"),))
+            got = support_reactions_g(trial, catalog, overhang_only=True)
+            if got is None or got.get(rid, min_g) <= reactions[rid]:
+                continue
+            result = validate_layout(trial, catalog, source=source, sinks=sinks)
+            if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
+                continue
+            if best is None or got.get(rid, min_g) > best[0].get(rid, min_g):
+                best = (got, trial, block)
+        if best is None:
+            return None
+        reactions, layout, block = best
+        usage[block] += 1
+    return layout
 
 
 def _rail_dict(r: PlacedRail, num) -> dict[str, Any]:
@@ -729,7 +1233,8 @@ def _rail_dict(r: PlacedRail, num) -> dict[str, Any]:
     return out
 
 
-def layout_to_dict(layout: Layout, source_rail: str = "rail0") -> dict[str, Any]:
+def layout_to_dict(layout: Layout, source: PortRef = PortRef("rail0", "end_a"),
+                   sinks: Sequence[PortRef] = ()) -> dict[str, Any]:
     """Layout YAML structure (rails, parts, supports, links, routing query)."""
 
     def num(v: float) -> float | int:
@@ -757,18 +1262,59 @@ def layout_to_dict(layout: Layout, source_rail: str = "rail0") -> dict[str, Any]
              "target": {"component_id": l.target.component_id, "port": l.target.port}}
             for l in layout.route_links
         ],
-        "routing_query": {"source": {"component_id": source_rail, "port": "end_a"}},
+        "routing_query": {"source": {"component_id": source.component_id, "port": source.port},
+                          **({"sinks": [{"component_id": s.component_id, "port": s.port} for s in sinks]}
+                             if sinks else {})},
     }
+
+
+def layout_id(layout: Layout) -> str:
+    """Stable short ID derived from the layout's structure only.
+
+    Rails, parts, supports and route links (canonically rounded and sorted)
+    are hashed, so the same build always gets the same ID regardless of its
+    name, description or metrics, and any change to the build changes it.
+    """
+    import hashlib
+    import json
+
+    data = layout_to_dict(layout)
+    canonical = {
+        "rails": sorted(data["rails"], key=lambda r: r["id"]),
+        "parts": sorted(data["parts"], key=lambda p: p["id"]),
+        "supports": sorted(data["supports"], key=lambda s: (s["upper_rail_id"] or "", s["upper_hole_index"] or -1,
+                                                           s["name"])),
+        "route_links": sorted(data["route_links"], key=lambda l: json.dumps(l, sort_keys=True)),
+    }
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return "mr-" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
 
 
 def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
                         generator_info: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": "0.1",
+        "layout_id": layout_id(candidate.layout),
         "name": name,
         "description": description,
         "generator": dict(generator_info),
         "metrics": dict(candidate.metrics),
         "inventory_used": dict(candidate.usage),
-        **layout_to_dict(candidate.layout),
+        **layout_to_dict(candidate.layout, source=candidate.source, sinks=candidate.sinks),
     }
+
+
+def layout_sinks(data: Mapping[str, Any]) -> tuple[PortRef, ...]:
+    """Exits of a layout YAML mapping: routing_query.sinks when given, else
+    the end B of every rail that does not drop into a block (older files)."""
+    query = (data.get("routing_query") or {}).get("sinks")
+    if query:
+        return tuple(PortRef(str(s["component_id"]), str(s["port"])) for s in query)
+    return tuple(PortRef(str(r["id"]), "end_b") for r in data.get("rails", ())
+                 if "block_connected" not in (r.get("hole_states") or {}).values())
+
+
+def layout_source(data: Mapping[str, Any]) -> PortRef:
+    """Where the marble is put in: routing_query.source, else rail0's end A."""
+    src = (data.get("routing_query") or {}).get("source") or {"component_id": "rail0", "port": "end_a"}
+    return PortRef(str(src["component_id"]), str(src["port"]))

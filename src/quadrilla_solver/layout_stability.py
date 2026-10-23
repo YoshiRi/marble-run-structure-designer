@@ -6,7 +6,7 @@ from typing import Iterable
 
 from .catalog import PartCatalog
 from .model import Layout, part_com_world, rail_com_world, rail_hole_world
-from .statics import RailBody, StructureStatics, SupportConnection, analyze_structure
+from .statics import PointMass, RailBody, StructureStatics, SupportConnection, analyze_structure
 
 
 @dataclass(frozen=True)
@@ -231,6 +231,24 @@ def analyze_layout_statics(
         if support.upper_rail_id in by_upper:
             by_upper[support.upper_rail_id].append(support)
 
+    # A free-standing stack (it holds up no rail) is a point load on the rail
+    # it stands on, e.g. the input block or a twist's entry block.
+    point_masses: dict[str, list[PointMass]] = {rail.id: [] for rail in layout.rails}
+    for i, support in enumerate(layout.supports):
+        if support.upper_rail_id is not None or support.lower_rail_id not in point_masses:
+            continue
+        lower = rails[support.lower_rail_id]
+        lower_spec = catalog.rails.get(lower.rail_type)
+        hole = support.lower_hole_index
+        if lower_spec is None or hole is None or not 0 <= hole < len(lower_spec.holes_cm):
+            continue
+        masses = [catalog.mass_g(parts[pid].part_type) for pid in support.stack_part_ids if pid in parts]
+        if any(m is None for m in masses):
+            reasons.append(f"unknown_mass:{support.name or f'support_{i}'}")
+            continue
+        point_masses[lower.id].append(
+            PointMass(support.name or f"free_stack_{i}", lower_spec.holes_cm[hole], float(sum(masses))))
+
     bodies: dict[str, RailBody] = {}
 
     for rail in layout.rails:
@@ -315,6 +333,8 @@ def analyze_layout_statics(
                 length_cm=spec.length_cm,
                 mass_g=spec.mass_g,
                 supports=(converted[0], converted[1]),
+                com_cm=spec.com_cm,
+                point_masses=tuple(point_masses.get(rail.id, ())),
             )
 
     if reasons or len(bodies) != len(layout.rails):

@@ -87,12 +87,41 @@ def _strip_solids(rail: PlacedRail, catalog: PartCatalog, start: float, end: flo
     return solids
 
 
+def _twist_solids(rail: PlacedRail, catalog: PartCatalog, unit: float, width: float) -> list[Solid]:
+    """Chute box (sloping, so it spans two units) plus a square around the funnel."""
+    spec = catalog.rails[rail.rail_type]
+    raw = catalog.raw.get("special_rails", {}).get(rail.rail_type, {})
+    rim = raw.get("funnel_rim_diameter_cm", 23)
+    rim = float(rim.get("value", 23) if isinstance(rim, dict) else rim)
+    center = spec.holes_cm[-1]
+    chute_end = center - rim / 2.0
+    z0 = rail.z_units * unit
+    top = spec.hole_levels[0] if spec.hole_levels else 3
+    # Flat around the chute mount hole, then sloping one unit down to the rim.
+    flat_end = spec.holes_cm[0] + width / 2.0
+    solids = _strip_solids(rail, catalog, 0.0, flat_end, width / 2.0,
+                           z0 + top * unit, z0 + (top + 1) * unit, rail.id)
+    pieces = 4
+    for i in range(pieces):
+        s0 = flat_end + (chute_end - flat_end) * i / pieces
+        s1 = flat_end + (chute_end - flat_end) * (i + 1) / pieces
+        drop_hi = (s1 - flat_end) / (chute_end - flat_end)  # fraction of a unit
+        drop_lo = (s0 - flat_end) / (chute_end - flat_end)
+        solids += _strip_solids(rail, catalog, s0, s1, width / 2.0,
+                                z0 + (top - drop_hi) * unit, z0 + (top + 1 - drop_lo) * unit, rail.id)
+    cx, cy, heading = rail_pose(rail, spec, center)
+    solids.append(Solid(rail.id, (cx, cy), (rim / 2.0, rim / 2.0), heading, z0, z0 + top * unit))
+    return solids
+
+
 def rail_solids(rail: PlacedRail, catalog: PartCatalog) -> list[Solid]:
     spec = catalog.rails.get(rail.rail_type)
     if spec is None:
         return []
     unit = _geometry(catalog, "height_unit", 1.5)
     width = _geometry(catalog, "rail_width_cm", 4.5)
+    if spec.shape == "twist":
+        return _twist_solids(rail, catalog, unit, width)
     return _strip_solids(rail, catalog, 0.0, spec.length_cm, width / 2.0,
                          rail.z_units * unit, (rail.z_units + spec.height_units) * unit, rail.id)
 
@@ -223,8 +252,8 @@ def marble_clearance_conflicts(
     reasons = []
     for rail_id, xs in sorted(reached.items()):
         start, end = min(xs), max(xs)
-        if end - start <= 0:
-            continue
+        if end - start <= 0 or catalog.rails[rails[rail_id].rail_type].shape == "twist":
+            continue  # the twist's path runs inside its own funnel
         corridor = marble_corridor(rails[rail_id], catalog, start, end, marble_diameter_cm)
         for solid in solids:
             if solid.id == rail_id:

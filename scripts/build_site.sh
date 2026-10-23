@@ -9,11 +9,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 node --check "$ROOT/viewer/app.js"
 node --check "$ROOT/viewer/routing.js"
+node --check "$ROOT/viewer/gallery.js"
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 cp "$ROOT/viewer/index.html" "$OUT_DIR/index.html"
 cp "$ROOT/viewer/app.js" "$ROOT/viewer/routing.js" "$ROOT/viewer/styles.css" "$OUT_DIR/"
+cp "$ROOT/viewer/gallery.html" "$ROOT/viewer/gallery.js" "$OUT_DIR/"
 cp -r "$ROOT/catalog" "$ROOT/examples" "$OUT_DIR/"
 # Serve files as-is; skip Jekyll processing on the gh-pages branch.
 touch "$OUT_DIR/.nojekyll"

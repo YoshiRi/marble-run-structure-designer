@@ -136,7 +136,7 @@ def build_routing_graph(
         x, y, _ = rail_hole_world(rail, catalog, support.upper_hole_index)
         if (
             hypot(part.x_cm - x, part.y_cm - y) > 0.35
-            or abs(part.z_units + height - rail.z_units) > 0.1
+            or abs(part.z_units + height - rail.z_units - spec.hole_level(support.upper_hole_index)) > 0.1
         ):
             reasons.append(
                 f"block_connected_geometry_mismatch:"
@@ -173,6 +173,14 @@ def build_routing_graph(
             if "bottom" in part_ports.get(upper_id, set()) and "top" in part_ports.get(lower_id, set()):
                 _add_edge(graph, f"{upper_id}:bottom", f"{lower_id}:top")
         if not stack or support.lower_rail_id is None:
+            continue
+        # A block standing on a twist's chute hole drops the marble from its
+        # bottom outlet into the chute (user-confirmed); it rolls on into the
+        # funnel and out through the center hole.
+        entry = _twist_entry_node(rails.get(support.lower_rail_id), catalog, support.lower_hole_index)
+        if entry is not None:
+            if "bottom" in part_ports.get(stack[0], set()):
+                _add_edge(graph, f"{stack[0]}:bottom", _rail_node(support.lower_rail_id, entry))
             continue
         below = columns_by_upper_hole.get((support.lower_rail_id, support.lower_hole_index))
         if below is None or below.stack_part_ids[-1] not in parts:
@@ -231,6 +239,23 @@ def build_routing_graph(
     )
 
 
+def _twist_entry_node(rail, catalog, hole) -> str | None:
+    """Rail node a marble reaches when dropped into a twist's chute hole.
+
+    The chute hole is the twist's first hole (index 0); the marble rolls
+    from it to the next station in flow order. None if this is not a twist
+    chute hole.
+    """
+    if rail is None or hole != 0:
+        return None
+    spec = catalog.rails.get(rail.rail_type)
+    if spec is None or spec.shape != "twist":
+        return None
+    if rail.flow_direction == "a_to_b":
+        return "hole:1" if len(spec.holes_cm) > 1 else "end_b"
+    return "end_a"
+
+
 def _landing_edges(layout, catalog, support, explicit_sources):
     """Edges from the side outlets of a stack's bottom part onto its rail."""
     rail = layout.rail_map().get(support.lower_rail_id)
@@ -238,7 +263,8 @@ def _landing_edges(layout, catalog, support, explicit_sources):
     if rail is None or part is None:
         return []
     spec = catalog.rails.get(rail.rail_type)
-    if spec is None:
+    # The twist is entered through its chute hole only (see _twist_entry_node).
+    if spec is None or spec.shape == "twist":
         return []
     unit = catalog.raw.get("geometry_cm", {}).get("height_unit", {})
     unit = float(unit.get("value", 1.5)) if isinstance(unit, Mapping) else float(unit or 1.5)
@@ -248,7 +274,7 @@ def _landing_edges(layout, catalog, support, explicit_sources):
     # Direction of the rail where the block stands (tangent on a curve).
     _, _, theta = rail_pose(rail, spec, spec.holes_cm[hole])
     axis = (cos(theta), sin(theta))
-    rail_top_cm = (rail.z_units + spec.height_units) * unit
+    rail_top_cm = (rail.z_units + spec.hole_level(hole) + spec.height_units) * unit
     outputs = {target for _, target in catalog.internal_routes(part.part_type)}
     edges = []
     for port in sorted(outputs & {"front", "rear", "left", "right"}):

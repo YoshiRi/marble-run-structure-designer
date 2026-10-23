@@ -59,6 +59,8 @@ process.stdout.write(JSON.stringify({
         ("stack_drop", "upper:end_a", "blue_mid:front"),
         ("stack_drop_from_rear", "blue_mid:rear", "yellow_base:front"),
         ("landing_tower", "top:end_a", "exit:end_b"),
+        ("twist_drop", "feed:end_a", "exit:end_b"),
+        ("twist_landing_ignored", "feed:end_a", "exit:end_b"),
     ],
 )
 def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
@@ -69,6 +71,8 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     } else "two-level-supported.yaml")
     if case == "landing_tower":
         example = "landing-tower.yaml"
+    if case.startswith("twist_"):
+        example = "twist-drop.yaml"
     if case.startswith("stack_drop"):
         example = "stack-drop.yaml"
     with (ROOT / "tests" / "fixtures" / example).open() as f:
@@ -151,6 +155,10 @@ def test_browser_graph_and_path_match_python(case, source, sink, tmp_path):
     elif case == "side_exit_drop_two":
         # Two units below the hole floor: not a physical connection.
         next(r for r in layout_data["rails"] if r["id"] == "exit")["z_units"] = 0
+    elif case == "twist_landing_ignored":
+        # A yellow on the chute hole, front along the twist: no landing edge.
+        entry = next(p for p in layout_data["parts"] if p["id"] == "E")
+        entry.update(part_type="yellow", rotation_deg=0)
 
     layout_file = tmp_path / "layout.yaml"
     layout_file.write_text(yaml.safe_dump(layout_data))
