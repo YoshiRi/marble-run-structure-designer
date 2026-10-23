@@ -352,11 +352,11 @@ special_rails:
     hole_positions_cm: [1.5, 6.5, 24.5]
     hole_mount_levels_units: [3, 3, 0]  # user-observed level difference of 3
     # The chute is a plain rail (user): it is fed like one, by a block standing
-    # on it (side outlet landing, or a bottom outlet dropping in) or from a
-    # block outlet at its tip. A bottom-drop entry is fed from the LEFT of the
-    # twist's heading (user correction; blue, green or natural).
-    entry: { holes: [0, 1], via: [block_bottom, landing, rail_end], recommended_blocks: [blue, green, natural_drop],
-             feed_from: left_of_heading, source: user_description }
+    # on a chute hole whose side outlet lands the marble along it, or from a
+    # block outlet at its tip. A block's bottom outlet on a chute hole drops
+    # the marble straight through the hole into the column below, like on
+    # any rail (user review: mr-c61a3513 anti-pattern).
+    entry: { holes: [0, 1], via: [landing, rail_end], source: user_description }
     centerline_length_cm: 24.5       # routing ends at the funnel center
     com_cm: 21.0                     # mostly the funnel; provisional
     mass_g:
