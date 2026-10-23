@@ -51,6 +51,70 @@ inventory_used:
   straight_short: 2
   wooden_foundation: 10
   yellow: 1
+bill_of_materials:
+  used:
+    blue: 3
+    cover: 8
+    cyan: 5
+    green: 5
+    natural_drop: 8
+    orange_vertical: 5
+    purple_drop: 19
+    spiral: 1
+    straight_long: 2
+    straight_long_center: 1
+    straight_short: 2
+    wooden_foundation: 10
+    yellow: 1
+  check:
+  - part: blue
+    needed: 3
+    available: 10
+    short: 0
+  - part: cover
+    needed: 8
+    available: 18
+    short: 0
+  - part: cyan
+    needed: 5
+    available: 5
+    short: 0
+  - part: green
+    needed: 5
+    available: 5
+    short: 0
+  - part: natural_drop
+    needed: 8
+    available: 8
+    short: 0
+  - part: orange_vertical
+    needed: 5
+    available: 5
+    short: 0
+  - part: purple_drop
+    needed: 19
+    available: 32
+    short: 0
+  - part: spiral
+    needed: 1
+    available: 6
+    short: 0
+  - part: straight_long
+    needed: 3
+    available: 4
+    short: 0
+  - part: straight_short
+    needed: 2
+    available: 7
+    short: 0
+  - part: wooden_foundation
+    needed: 10
+    available: 16
+    short: 0
+  - part: yellow
+    needed: 1
+    available: 10
+    short: 0
 rails:
 - id: rail1
   rail_type: straight_long

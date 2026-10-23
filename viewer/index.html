@@ -31,6 +31,12 @@
           <input id="layoutFile" type="file" accept=".yaml,.yml,text/yaml">
         </label>
         <a class="toolbar-link" href="./gallery.html">Gallery</a>
+        <button id="buildToggle" type="button" aria-pressed="false" title="Step-by-step build instructions">Build</button>
+        <div id="buildBar" class="build-bar" hidden>
+          <button id="buildPrev" type="button" aria-label="Previous step">←</button>
+          <span id="buildBarStep" class="build-bar-step">Step 0 / 0</span>
+          <button id="buildNext" type="button" class="primary" aria-label="Next step">→</button>
+        </div>
         <button id="rollOneTop" type="button" class="primary" title="Drop a marble into the selected input hole">Roll a marble</button>
         <button id="resetCamera" type="button">Reset camera</button>
       </div>
@@ -48,9 +54,21 @@
           <label><input id="toggleGroundLevel" type="checkbox" checked> Ground level grid</label>
         </div>
         <div id="groundLevelLabel" class="ground-level-label" aria-live="polite">Ground level: z=0 (0 cm)</div>
+        <div id="partsBoard" class="parts-board" hidden></div>
       </section>
 
       <aside class="sidebar">
+        <section id="buildPanel" class="build-panel" hidden>
+          <h2 id="buildStepTitle">Build</h2>
+          <div class="build-nav">
+            <label class="build-done"><input id="buildDone" type="checkbox"> Done (go to next step)</label>
+          </div>
+          <div id="buildBody" class="build-body"></div>
+          <div class="build-foot">
+            <span id="buildProgress" class="muted small-note"></span>
+            <label class="muted small-note"><input id="buildGhost" type="checkbox"> Show later steps faintly</label>
+          </div>
+        </section>
         <section>
           <h2>Structure</h2>
           <dl id="summary" class="summary"></dl>
@@ -107,6 +125,7 @@
     </main>
   </div>
   <script src="./routing.js"></script>
+  <script src="./assembly.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

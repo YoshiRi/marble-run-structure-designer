@@ -188,3 +188,27 @@ in the browser (localStorage). **Copy review summary** produces lines such as
 `mr-9bb890c9: Buildable, Interesting — note` to paste into a chat or issue.
 Thumbnails are rendered with `scripts/render_gallery_thumbnails.js` (dev tool).
 
+
+## Build mode (assembly assist)
+
+`Build` in the toolbar (or `?mode=build&step=N`, or a gallery card's Build
+link) turns the viewer into step-by-step instructions, one rail per step from
+the bottom (`viewer/assembly.js`, mirrored by `quadrilla_solver.assembly_plan`):
+
+- step navigation (← Step n / N →) sits in the toolbar next to Build
+- step 0: a parts board over the 3D view (icon × count per part, shortfalls
+  in red) and the bill of materials, checked against the sets in the layout's
+  `bill_of_materials.check` (written by the generator; long rails with and
+  without the center hole share a count, wildcard straights fill shortfalls)
+- each rail step: the columns that hold it up (bottom to top, on the ground or
+  on a lower rail's hole), the rail with its covers / open dive holes / drop
+  holes, then blocks standing alone on it (input, twist entry, counterweights)
+- last step: everything placed; roll the marble
+
+The 3D view shows what is placed so far: the current step in color, parts
+placed in earlier steps dark gray (user request); it outlines the current step and draws
+arrows on blocks the marble passes through (green: outlets, blue: fed side
+notches); facing is also given in words relative to the step's rail. Blocks
+used only as structure are marked "any way round". Done ticks are kept per
+layout ID in the browser. The camera is framed once when Build mode opens and
+then stays where you leave it between steps (Reset camera reframes).
