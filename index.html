@@ -114,11 +114,12 @@
           <pre id="selection">Click a rail or block.</pre>
         </section>
         <section>
-          <h2>Browser solver status</h2>
-          <p class="muted">
-            Routing reachability and path tracing run in the browser using the
-            same graph rules as the Python solver. Full Assembly / local statics /
-            Inventory validation remains in Python.
+          <h2>Validation</h2>
+          <div id="validationStatus" class="validation-status" aria-live="polite">not run</div>
+          <p class="muted small-note">
+            Runs in the browser with the same rules as the Python validators
+            (assembly, collisions, global stability, per-rail statics, routing,
+            marble clearance); tests keep the two in step.
           </p>
         </section>
       </aside>
@@ -126,6 +127,7 @@
   </div>
   <script src="./routing.js"></script>
   <script src="./assembly.js"></script>
+  <script src="./validation.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
