@@ -96,7 +96,7 @@ Review 3 refinements:
   upper half, at right angles to the rails it holds; the tower's column is
   split at one of the brace's holes and the other support is another crossed
   column or a new short one. Bracing roughly triples the candidates that pass
-  the thin-tower filter.
+  the thin-tower filter. Brace rails stay straight (no curve substitution).
 - **unused area** (`dead_area_cm2`, user definition): top-view area taken by
   rails and columns where no marble rolls (1 cm grid; rolled rail stretches
   at full rail width and twist funnels count as used); 0.02 point per cm2.

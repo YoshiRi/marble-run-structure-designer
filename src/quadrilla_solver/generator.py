@@ -931,11 +931,14 @@ def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
 
 
 def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random.Random,
-               source: PortRef, sinks: Sequence[PortRef]) -> Layout:
-    """Swap eligible straights for curves while the layout stays valid."""
+               source: PortRef, sinks: Sequence[PortRef], keep_straight: Iterable[str] = ()) -> Layout:
+    """Swap eligible straights for curves while the layout stays valid.
+    Rails in `keep_straight` (brace rails) stay straight: a brace should
+    run square across its tower, and a curve needs load above to stand."""
     if not any(budget.counts[c] > 0 for c, _ in CURVE_FOR_STRAIGHT.values()):
         return layout
-    candidates = eligible_rails(layout)
+    keep = set(keep_straight)
+    candidates = [r for r in eligible_rails(layout) if r not in keep]
     rng.shuffle(candidates)
     for rail_id in candidates:
         for turn in rng.sample(("left", "right"), 2):
@@ -1127,7 +1130,7 @@ def generate(
             continue
         paths = result.connectivity.paths
         solids = generator._solids(state)
-        layout = add_curves(layout, catalog, budget, rng, source, sinks)
+        layout = add_curves(layout, catalog, budget, rng, source, sinks, keep_straight=state.braces)
         layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
         if layout is None:
             continue
