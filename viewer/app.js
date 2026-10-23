@@ -867,10 +867,10 @@
     return null;
   }
 
-  // Hook-shaped path through a twist (user-described): the marble drops into
-  // the chute at the chute hole, rolls down the chute to the rim, veers right
-  // and circles the funnel counter-clockwise (seen from above) into the
-  // center hole. Empty unless `to` is a twist's center hole.
+  // Path through a twist: the marble rolls down the chute from where it got
+  // on (a chute hole or the tip) to the rim, veers right and circles the
+  // funnel counter-clockwise (seen from above) into the center hole. Empty
+  // unless `to` is a twist's center hole.
   function twistPointsInto(from, to, lift) {
     const b = railNodeStation(to);
     if (!b || b.spec.shape !== "twist") return [];
