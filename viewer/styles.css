@@ -202,3 +202,7 @@ button, select, input { font: inherit; }
 .part-count { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .part-name { font-size: 12px; color: #cbd5e1; }
 .part-name .short { color: #fca5a5; }
+
+.validation-status { white-space: pre-wrap; font-size: 12px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); overflow-wrap: anywhere; }
+.validation-status.ok { border-color: #16a34a; color: #15803d; }
+.validation-status.bad { border-color: #dc2626; color: #b91c1c; }

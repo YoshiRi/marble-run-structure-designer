@@ -212,3 +212,20 @@ notches); facing is also given in words relative to the step's rail. Blocks
 used only as structure are marked "any way round". Done ticks are kept per
 layout ID in the browser. The camera is framed once when Build mode opens and
 then stays where you leave it between steps (Reset camera reframes).
+
+## Validation in the browser
+
+`viewer/validation.js` (`MarbleValidation.validateLayout`) ports the Python
+validators: assembly (stacks, supports, foundations, rotations, curve load,
+twist center hole), solid collisions, global stability (COM in the ground
+support hull), per-rail statics (moments about each rail's supports, loads
+passed down to lower rails, free-standing stacks as point loads), routing
+connectivity (via `routing.js`) and marble clearance. Reason strings are the
+same as in Python. `tests/test_validation_browser_parity.py` validates every
+gallery layout, sample and fixture plus broken variants of each (moved parts,
+intruding blocks, missing supports, shifted rails) with both and requires
+identical reasons and numbers to 1e-6. One validation of a gallery layout
+takes about 1.5 ms, fast enough to re-check on every edit.
+
+The sidebar's Validation box shows the result for the loaded layout (in Build
+mode: what is placed so far, without the route).

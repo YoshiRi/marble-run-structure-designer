@@ -1549,6 +1549,37 @@
     }
   }
 
+  // Full layout validation (viewer/validation.js mirrors the Python validators).
+  function updateValidation() {
+    const box = document.getElementById("validationStatus");
+    if (!box || !window.MarbleValidation) return;
+    const query = layout.routing_query || {};
+    const key = ref => (ref ? ref.component_id + ":" + ref.port : null);
+    const sinks = (query.sinks || []).map(key);
+    let result;
+    try {
+      // In Build mode only part is placed: check what stands, not the route.
+      result = MarbleValidation.validateLayout(layout, catalog,
+        !build.on && query.source && sinks.length ? { source: key(query.source), sinks } : {});
+    } catch (error) {
+      box.textContent = "Validation error: " + error.message;
+      return;
+    }
+    const reasons = [
+      ...result.assembly.reasons,
+      ...(result.global_stability.stable ? [] : result.global_stability.reasons.length
+        ? result.global_stability.reasons : ["global stability not evaluable"]),
+      ...result.local_statics.reasons,
+      ...(result.local_statics.statics?.reasons || []),
+      ...(result.connectivity?.reasons || []),
+      ...result.marble_clearance,
+    ];
+    box.className = "validation-status " + (result.valid ? "ok" : "bad");
+    box.textContent = result.valid
+      ? "Valid: assembly, stability, statics" + (result.connectivity ? ", routing" : "") + " and clearance pass."
+      : "Not valid:\n" + [...new Set(reasons)].slice(0, 12).join("\n");
+  }
+
   function updateSummary() {
     const summary = document.getElementById("summary");
     const rows = [
@@ -2025,6 +2056,7 @@
     renderRouting();
     renderComAndPolygon();
     updateSummary();
+    updateValidation();
     applyVisibility();
     if (build.on) decorateBuildStep();
     else if (build.reframe) { build.reframe = false; fitCamera(); }
