@@ -288,16 +288,21 @@
     groups.structure.push(groove);
 
     // Mount holes: outlet at the center, inlet near the chute tip.
-    const holes = [[0, z0 + 1], [spacing, z0 + rise + 1]];
-    for (const [d, zLevel] of holes) {
+    // Outlet at the center; chute holes (two, user-confirmed) toward the tip.
+    const center = Number(holePositions[holePositions.length - 1] ?? spacing);
+    const holes = [[0, z0 + 1], ...holePositions.slice(0, -1).map(x => [center - Number(x), z0 + rise + 1])];
+    const stateColor = { covered: "#f59e0b", block_connected: "#22d3ee", covered_slope: "#fb923c" };
+    holes.forEach(([d, zLevel], i) => {
+      const index = i === 0 ? holePositions.length - 1 : i - 1;
+      const state = rail?.hole_states?.[index];
       const ring = BABYLON.MeshBuilder.CreateTorus("twist-hole-" + part.id + "-" + d, {
-        diameter: HOLE_DIAMETER_CM + 0.25, thickness: 0.15, tessellation: 32,
+        diameter: HOLE_DIAMETER_CM + 0.25, thickness: state === "covered" ? 0.5 : 0.15, tessellation: 32,
       }, scene);
       ring.position = at(d, zLevel);
       ring.position.y += 0.1;
-      ring.material = material("holeRimMat", "#334155");
+      ring.material = material("holeRimMat", stateColor[state] || "#334155");
       groups.holes.push(ring);
-    }
+    });
     const info = {
       id: part.id, kind: "twist", type: part.part_type,
       solver_support: rail ? "rail_model" : "viewer_only",
@@ -862,10 +867,10 @@
     return null;
   }
 
-  // Hook-shaped path through a twist (user-described): the marble drops into
-  // the chute at the chute hole, rolls down the chute to the rim, veers right
-  // and circles the funnel counter-clockwise (seen from above) into the
-  // center hole. Empty unless `to` is a twist's center hole.
+  // Path through a twist: the marble rolls down the chute from where it got
+  // on (a chute hole or the tip) to the rim, veers right and circles the
+  // funnel counter-clockwise (seen from above) into the center hole. Empty
+  // unless `to` is a twist's center hole.
   function twistPointsInto(from, to, lift) {
     const b = railNodeStation(to);
     if (!b || b.spec.shape !== "twist") return [];
@@ -877,8 +882,20 @@
     const [cx, cy, heading] = MarbleRouting.railPose(catalog, b.rail, b.s);
     const up = new BABYLON.Vector3(0, lift, 0);
     const out = [];
-    // Chute: from the chute hole down to the rim, one unit lower.
-    const s0 = holes[0], s1 = b.s - rimR;
+    // Chute: from where the marble enters (a chute hole, or the tip) down to
+    // the rim, one unit lower.
+    const a = railNodeStation(from);
+    let s0 = a && a.rail === b.rail ? a.s : holes[0];
+    const fromPart = (layout.parts || []).find(p => p.id === from.slice(0, from.indexOf(":")));
+    if (fromPart) {
+      let best = Infinity;
+      for (const x of holes.slice(0, -1)) {
+        const p = railPoint(b.rail, x);
+        const dist = Math.hypot(p.x - Number(fromPart.x_cm), p.y - Number(fromPart.y_cm));
+        if (dist < best) { best = dist; s0 = x; }
+      }
+    }
+    const s1 = b.s - rimR;
     for (let i = 0; i <= 6; i++) {
       const s = s0 + (s1 - s0) * i / 6;
       const p = railPoint(b.rail, s);
