@@ -22,6 +22,8 @@ from quadrilla_solver.generator import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SETS = ["QD001", "QD003", "QD005", "QDE6008AB05"]
+# Parts the user does not have at the moment (review 3: no right-angle splitter).
+EXCLUDE = ("red_right_angle",)
 
 # (label, config overrides)
 CONFIGS = [
@@ -60,7 +62,7 @@ def main() -> None:
     budget = Budget.from_sets(resolve_set_paths(ROOT, SETS))
     pool: dict[str, tuple] = {}
     for label, overrides in CONFIGS:
-        config = GeneratorConfig(**overrides)
+        config = GeneratorConfig(exclude_parts=EXCLUDE, **overrides)
         for seed in range(1, args.seeds + 1):
             for candidate in generate(catalog, budget, config=config, attempts=args.attempts,
                                       seed=seed, keep=3):
@@ -104,7 +106,7 @@ def main() -> None:
         data = layout_to_yaml_dict(
             candidate, name=lid,
             description=f"Gallery candidate ({label}, seed {seed}).",
-            generator_info={"sets": SETS, "config": label, "seed": seed, "score": round(candidate.score, 1)},
+            generator_info={"sets": SETS, "exclude": list(EXCLUDE), "config": label, "seed": seed, "score": round(candidate.score, 1)},
         )
         assert data["layout_id"] == lid
         (out / f"{lid}.yaml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True),

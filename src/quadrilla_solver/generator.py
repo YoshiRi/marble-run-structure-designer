@@ -132,6 +132,12 @@ class GeneratorConfig:
     # Stacks of 5+ blocks braced along one axis only topple easily (user
     # review); candidates with more of them than this are dropped.
     max_thin_towers: int | None = 0
+    # The marble rolls at least this far on a rail it lands on before the next
+    # drop or dive. Short hops (block on hole 20, drop at hole 25) make the
+    # compact stacked towers, so the default stays small; long rails held up
+    # for a short roll are handled by the idle-rail penalty instead.
+    min_roll_cm: float = 1.0
+    exclude_parts: tuple[str, ...] = ()  # parts the user does not have (now)
 
 
 @dataclass(frozen=True)
@@ -199,6 +205,9 @@ class CascadeGenerator:
     def __init__(self, catalog: PartCatalog, budget: Budget, config: GeneratorConfig,
                  rng: random.Random):
         self.catalog = catalog
+        budget = budget.copy()
+        for part in config.exclude_parts:
+            budget.counts[part] = 0
         self.budget = budget
         self.config = config
         self.rng = rng
@@ -519,7 +528,8 @@ class CascadeGenerator:
                 if rail_z < 1:
                     continue
                 landing = spec.holes_cm[k] + self.half
-                downstream = [i for i, hx_ in enumerate(spec.holes_cm) if hx_ > landing + 1.0]
+                downstream = [i for i, hx_ in enumerate(spec.holes_cm)
+                              if hx_ > landing + self.config.min_roll_cm]
                 preferred = [i for i in downstream if i in ready] or downstream
                 can_continue = len(state.rails) < self.config.max_rails
                 stops = [("drop", self.rng.choice(preferred))] if downstream and can_continue else []
@@ -714,13 +724,18 @@ class CascadeGenerator:
         ended = self._block_exit(state, outlet)
         return (ended, []) if ended is not None else None
 
-    def _trim_input(self, state: _State, top: PlacedRail, stop: int) -> _State:
+    def _trim_input(self, state: _State, top: PlacedRail, stop: int) -> _State | None:
         """Drop the input rail: the marble goes straight into the top of the
         drop column, which stays as a free-standing stack on its lower rail.
         Columns that only held the input rail go too (user review: an input
         rail wastes columns)."""
         state = state.copy()
         drop = next(c for c in state.columns.values() if c.top_rail == top.id and c.top_hole == stop)
+        # Free-standing, it must stand between its rail's supports.
+        lower = self.catalog.rails[state.rails[drop.base_rail].rail_type]
+        xs = [lower.holes_cm[c.top_hole] for c in state.columns.values() if c.top_rail == drop.base_rail]
+        if not min(xs) - 1e-6 <= lower.holes_cm[drop.base_hole] <= max(xs) + 1e-6:
+            return None
         for cid in [c.id for c in state.columns.values() if c.top_rail == top.id and c.id != drop.id]:
             del state.columns[cid]
         state.columns[drop.id] = replace(drop, top_rail=None, top_hole=None)
@@ -747,9 +762,12 @@ class CascadeGenerator:
         if self.config.trim_input_rail:
             # The input block must stand on a rail: alone on the ground it
             # would be a free tower (user review: thin towers topple).
-            result = self._drop(state, top, stop, direction, 1, modes=("landing",))
-            if result is not None:
-                result = (self._trim_input(result[0], top, stop), result[1])
+            for _ in range(12):
+                result = self._drop(state, top, stop, direction, 1, modes=("landing",))
+                trimmed = self._trim_input(result[0], top, stop) if result is not None else None
+                result = (trimmed, result[1]) if trimmed is not None else None
+                if result is not None:
+                    break
         if result is None:
             result = self._drop(state, top, stop, direction, 1)
         if result is None:
@@ -830,7 +848,8 @@ def score(metrics: Mapping[str, Any]) -> float:
     """What the user rewards in reviews: many levels and a long roll on every
     branch; branches and stacked columns next; curves and twists for variety.
     Penalized: a marble leaving high above the ground, a very short branch,
-    a sprawling footprint (place taken for little run) and thin towers."""
+    a sprawling footprint (place taken for little run), thin towers, and rail
+    length the marble never rolls on (a shorter rail would do)."""
     return (
         10.0 * metrics["levels"]
         + 0.2 * metrics["rolling_length_cm"]
@@ -841,6 +860,8 @@ def score(metrics: Mapping[str, Any]) -> float:
         + 5.0 * metrics.get("twists", 0)
         - 1.5 * sum(metrics.get("exit_levels", ()))
         - 12.0 * metrics.get("thin_towers", 0)
+        - 6.0 * metrics.get("weak_towers", 0)
+        - 0.1 * metrics.get("idle_rail_cm", 0.0)
         - 0.005 * metrics.get("footprint_area_cm2", 0.0)
     )
 
@@ -894,10 +915,13 @@ def _roll_lengths(state: _State, catalog: PartCatalog) -> dict[str, float]:
     return out
 
 
-def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> int:
-    """Stacks at one spot with at least `min_blocks` blocks (4u parts) that
-    only touch rails running along one axis: braced in one direction only,
-    they topple easily (user review)."""
+def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
+                upper_half: bool = False) -> int:
+    """Stacks at one spot with at least `min_blocks` blocks (4u parts) braced
+    in one direction only: every rail touching the stack runs along one axis
+    (within 45 deg). Such towers topple easily (user review 2). With
+    `upper_half`, only rails touching at or above half the stack's height
+    count: a rail near the ground hardly braces its top (review 3)."""
     from .model import rail_pose
 
     rails, parts = layout.rail_map(), layout.part_map()
@@ -906,16 +930,28 @@ def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> in
         if not s.stack_part_ids:
             continue
         base = parts[s.stack_part_ids[0]]
-        t = towers.setdefault((round(base.x_cm, 2), round(base.y_cm, 2)), {"blocks": 0, "axes": set()})
+        t = towers.setdefault((round(base.x_cm, 2), round(base.y_cm, 2)),
+                              {"blocks": 0, "top": 0.0, "contacts": []})
         t["blocks"] += sum(1 for pid in s.stack_part_ids
                            if (catalog.height_units(parts[pid].part_type) or 0) >= 4)
+        top = parts[s.stack_part_ids[-1]]
+        t["top"] = max(t["top"], top.z_units + (catalog.height_units(top.part_type) or 0))
         for rid, hole in ((s.upper_rail_id, s.upper_hole_index), (s.lower_rail_id, s.lower_hole_index)):
             if rid is None:
                 continue
-            spec = catalog.rails[rails[rid].rail_type]
-            heading = rail_pose(rails[rid], spec, spec.holes_cm[hole])[2]
-            t["axes"].add(round(abs(cos(heading)), 3))
-    return sum(1 for t in towers.values() if t["blocks"] >= min_blocks and len(t["axes"]) <= 1)
+            rail = rails[rid]
+            spec = catalog.rails[rail.rail_type]
+            heading = rail_pose(rail, spec, spec.holes_cm[hole])[2]
+            t["contacts"].append((rail.z_units + spec.hole_level(hole), heading % pi))
+    count = 0
+    for t in towers.values():
+        if t["blocks"] < min_blocks:
+            continue
+        axes = [a for z, a in t["contacts"] if not upper_half or z >= t["top"] / 2]
+        spread = max((min(abs(a - b), pi - abs(a - b)) for a in axes for b in axes), default=0.0)
+        if spread < pi / 4:
+            count += 1
+    return count
 
 
 def _footprint_area(solids: Sequence[Solid]) -> float:
@@ -963,6 +999,10 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "columns_on_rails": sum(1 for c in state.columns.values() if c.base_rail is not None),
         "footprint_area_cm2": round(_footprint_area(solids)),
         "thin_towers": thin_towers(layout, catalog),
+        "weak_towers": thin_towers(layout, catalog, upper_half=True),
+        "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(rid, 0.0)
+                                  for rid, r in state.rails.items()
+                                  if catalog.rails[r.rail_type].shape != "twist"), 1),
         "covers": state.covers,
         "parts": len(layout.parts),
     }

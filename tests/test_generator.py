@@ -217,3 +217,10 @@ def test_thin_towers_are_counted_and_filtered():
     layout = load_layout(ROOT / "tests" / "fixtures" / "landing-tower.yaml")
     assert thin_towers(layout, CATALOG, min_blocks=1) >= 1
     assert thin_towers(layout, CATALOG, min_blocks=99) == 0
+
+
+def test_excluded_parts_are_never_used():
+    found = generate(CATALOG, _budget(), config=GeneratorConfig(exclude_parts=("red_right_angle",)),
+                     attempts=60, seed=11, keep=10)
+    assert found
+    assert all(c.usage.get("red_right_angle", 0) == 0 for c in found)

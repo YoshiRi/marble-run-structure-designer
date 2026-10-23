@@ -43,6 +43,7 @@ def main() -> None:
                         help="contained: exits are block side outlets or dives through open rail holes; "
                              "any: rails may also roll off their end")
     parser.add_argument("--twist-probability", type=float, default=0.5)
+    parser.add_argument("--exclude", default="", help="comma-separated parts you do not have, e.g. red_right_angle")
     parser.add_argument("--attempts", type=int, default=500)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--keep", type=int, default=3)
@@ -59,6 +60,7 @@ def main() -> None:
         split_probability=args.split_probability, max_rails=args.max_rails,
         curve_ready_bias=args.curve_bias, max_exits=args.max_exits, exit_style=args.exit_style,
         twist_probability=args.twist_probability,
+        exclude_parts=tuple(x.strip() for x in args.exclude.split(",") if x.strip()),
     )
     candidates = generate(catalog, budget, config=config, attempts=args.attempts,
                           seed=args.seed, keep=args.keep)

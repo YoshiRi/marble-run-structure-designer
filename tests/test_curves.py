@@ -185,3 +185,26 @@ def test_twist_center_hole_must_not_be_covered():
     rails = tuple(replace(r, hole_states={1: "covered"}) if r.id == "twist" else r for r in layout.rails)
     reasons = validate_assembly(replace(layout, rails=rails), CATALOG).reasons
     assert "twist_center_hole_covered:twist" in reasons
+
+
+def test_free_standing_stack_must_stand_between_its_rails_supports():
+    """Review 3: a block alone on the overhanging end of a rail tips it."""
+    from dataclasses import replace
+    from quadrilla_solver.model import PlacedPart, SupportLink
+
+    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
+    assert validate_assembly(layout, CATALOG).valid
+    # The feed rail is held at holes 0 and 2; its hole 3 overhangs.
+    x, y, _ = rail_hole_world(layout.rail_map()["feed"], CATALOG, 3)
+    block = PlacedPart("lone", "blue", x, y, 9)
+    support = SupportLink(None, None, ("lone",), "feed", 3, name="lone_stack")
+    bad = replace(layout, parts=layout.parts + (block,), supports=layout.supports + (support,))
+    assert "free_stack_cantilevered:lone_stack" in validate_assembly(bad, CATALOG).reasons
+
+
+def test_free_standing_stack_loads_its_rail_in_statics():
+    from quadrilla_solver.layout_stability import analyze_layout_statics
+
+    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
+    twist = analyze_layout_statics(layout, CATALOG).statics.rails["twist"]
+    assert any(load.source == "twist:point:twist_entry" for load in twist.applied_loads)

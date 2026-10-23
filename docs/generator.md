@@ -78,6 +78,24 @@ Candidates with more than `max_thin_towers` (default 0) are dropped, and each
 one costs 12 points when allowed. This shrinks the builds: the best now have
 5-10 rails and 30-80 parts, where tall towers were the easy way up.
 
+Review 3 refinements:
+
+- **weak towers**: 5+ blocks whose rails at or above half the stack's height
+  all run along one axis (a rail near the ground hardly braces the top);
+  -6 points each.
+- **free-standing stacks** (input block, twist entry block) must stand between
+  their rail's two supports (assembly reason `free_stack_cantilevered`), and
+  their mass now loads that rail in the statics. This caught the S-curve and
+  overhang cases from the review.
+- **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
+  (a long rail held up by an extra column for a 3 cm roll).
+- **exclude_parts** (`--exclude`): parts the user does not have; the gallery
+  excludes the right-angle splitter (`red_right_angle`).
+
+Effect: with two exits, no right-angle splitter and no thin towers, builds are
+small (4-6 rails, mostly one exit). Growing them needs bracing (perpendicular
+rails at tall stacks) and longer horizontal runs per level.
+
 ## Exits
 
 `exit_style: contained` (default, user rule) ends a branch only where a marble
@@ -120,7 +138,7 @@ were valued; high drops, very short branches and sprawling builds were not):
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
 - 1.5 x sum of exit levels (units) - 0.005 x footprint bounding-box area (cm2)
-- 12 x thin towers
+- 12 x thin towers - 6 x weak towers - 0.1 x idle rail length (cm)
 ```
 
 A twist counts as 60 cm of rolling (chute plus about 1.75 turns; estimate).
@@ -167,3 +185,10 @@ Reviews reported by ID feed the scoring and future pattern weights.
   the top input rail is unnecessary and wastes columns; stacks of 5+ blocks
   braced along one direction only are doubtful. Led to the trimmed input and
   the thin-tower filter.
+- Review 3 (gallery from commit cd9f871, no input rails or thin towers):
+  mostly Buildable; mr-dab9cd16 Interesting. Doubtful: mr-831dc67a (no
+  right-angle splitter at hand), mr-32de2d10 (S-curve balance), mr-d758cb5d
+  (block on the overhanging end of the top rail). Notes: a column only holding
+  the top block's rail (mr-dab9cd16), tower shape fragile (mr-aef20353), a
+  long rail where a short one would do (mr-58269e6d), space-inefficient
+  (mr-a86b7d93, mr-9554bf4c); compact is good (mr-2724d8e4).
