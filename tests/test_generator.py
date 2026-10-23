@@ -232,8 +232,9 @@ def test_every_rail_support_keeps_pressing():
     from quadrilla_solver.generator import support_reactions_g
 
     for c in _run(11):
-        reactions = support_reactions_g(c.layout, CATALOG)
-        assert reactions and min(reactions.values()) >= GeneratorConfig().min_support_reaction_g - 1e-6
+        reactions = support_reactions_g(c.layout, CATALOG, overhang_only=True)
+        assert reactions is not None
+        assert all(g >= GeneratorConfig().min_support_reaction_g - 1e-6 for g in reactions.values())
 
 
 def test_balance_rejects_an_overhang_it_cannot_counter():
@@ -247,7 +248,23 @@ def test_balance_rejects_an_overhang_it_cannot_counter():
     x, y, _ = rail_hole_world(layout.rail_map()["feed"], CATALOG, 3)
     heavy = replace(layout, parts=layout.parts + (PlacedPart("lone", "blue", x, y, 9),),
                     supports=layout.supports + (SupportLink(None, None, ("lone",), "feed", 3, name="lone"),))
-    assert support_reactions_g(heavy, CATALOG)["feed"] < 20
+    assert support_reactions_g(heavy, CATALOG, overhang_only=True)["feed"] < 20
+    assert "feed" not in support_reactions_g(layout, CATALOG, overhang_only=True)
     # Every other feed hole lies under the rolling marble: no place for a counterweight.
     assert balance(heavy, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) is None
     assert balance(layout, CATALOG, _budget(), PortRef("feed", "end_a"), (PortRef("exit", "end_b"),), 20) == layout
+
+
+def test_weak_towers_get_brace_rails():
+    """Review 3 (user's choice): tie tall stacks with rails across them."""
+    found = generate(CATALOG, _budget(), attempts=80, seed=1, keep=200)
+    braced = [c for c in found if c.metrics["braces"] > 0]
+    assert braced
+    unbraced = generate(CATALOG, _budget(), config=GeneratorConfig(brace_towers=False),
+                        attempts=80, seed=1, keep=200)
+    assert len(found) > len(unbraced)
+    for c in braced[:3]:
+        assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid
+        linked = {l.source.component_id for l in c.layout.route_links} | {l.target.component_id for l in c.layout.route_links}
+        braces = [r for r in c.layout.rails if not r.hole_states and r.id not in linked]
+        assert braces

@@ -47,6 +47,7 @@ BUCKETS = [
     ("stacked", lambda m: m["columns_on_rails"] >= 6),
     ("long roll", lambda m: m["min_exit_path_cm"] >= 200),
     ("compact", lambda m: m["footprint_area_cm2"] <= 2500),
+    ("braced", lambda m: m.get("braces", 0) >= 1),
 ]
 
 
@@ -124,7 +125,7 @@ def main() -> None:
             "tags": tags,
             "metrics": {k: m[k] for k in ("levels", "rails", "exits", "random_branches",
                                           "rolling_length_cm", "min_exit_path_cm", "columns_on_rails",
-                                          "footprint_area_cm2")}
+                                          "footprint_area_cm2", "dead_area_cm2", "braces")}
                        | {"curves": m.get("curved_rails", 0), "twists": m.get("twists", 0),
                           "highest_exit": max(m["exit_levels"], default=0),
                           "parts": len(candidate.layout.parts), "covers": candidate.usage.get("cover", 0)},

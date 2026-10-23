@@ -85,13 +85,21 @@ Review 3 refinements:
   -6 points each.
 - **support reactions**: the statics take moments about each rail's two
   supports with everything resting on it, now including free-standing stacks
-  (input block, twist entry block). The lighter support must keep at least
-  `min_support_reaction_g` (20 g); a block may overhang the supports if the
-  rest balances it. When a rail falls short, `balance()` adds counterweight
-  blocks on free holes the marble does not roll over (user idea); if none
-  helps, the candidate is dropped. Support pairs that put a rail's own center
-  of mass within 3 cm of a support (center hole plus an end) are no longer
-  chosen: such a rail balances on a point (the S-curve case).
+  (input block, twist entry block). A rail carrying a load **outside** its
+  supports must keep its lighter support pressing with at least
+  `min_support_reaction_g` (20 g); `balance()` adds counterweight blocks on
+  free holes the marble does not roll over (user idea), or the candidate is
+  dropped. A rail resting with its own center of mass on one support (center
+  hole plus an end) is accepted: review 3 rated such builds buildable.
+- **brace rails** (`brace_towers`, user's choice after review 3): for each
+  weak tower, a straight rail carrying no marble is laid across it in its
+  upper half, at right angles to the rails it holds; the tower's column is
+  split at one of the brace's holes and the other support is another crossed
+  column or a new short one. Bracing roughly triples the candidates that pass
+  the thin-tower filter.
+- **unused area** (`dead_area_cm2`, user definition): top-view area taken by
+  rails and columns where no marble rolls (1 cm grid; rolled rail stretches
+  at full rail width and twist funnels count as used); 0.02 point per cm2.
 - **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
   (a long rail held up by an extra column for a 3 cm roll).
 - **exclude_parts** (`--exclude`): parts the user does not have; the gallery
@@ -142,8 +150,9 @@ were valued; high drops, very short branches and sprawling builds were not):
 ```text
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
-- 1.5 x sum of exit levels (units) - 0.005 x footprint bounding-box area (cm2)
-- 12 x thin towers - 6 x weak towers - 0.1 x idle rail length (cm)
+- 1.5 x sum of exit levels (units) - 0.002 x footprint bounding-box area (cm2)
+- 12 x thin towers - 6 x weak towers - 0.05 x idle rail length (cm)
+- 0.02 x unused top-view area (cm2)
 ```
 
 A twist counts as 60 cm of rolling (chute plus about 1.75 turns; estimate).

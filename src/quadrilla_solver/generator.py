@@ -138,11 +138,13 @@ class GeneratorConfig:
     # for a short roll are handled by the idle-rail penalty instead.
     min_roll_cm: float = 1.0
     exclude_parts: tuple[str, ...] = ()  # parts the user does not have (now)
-    # Every rail support must keep pressing with at least this much (grams):
-    # a rail whose lighter support is nearly unloaded tips easily (user review
-    # 3: a block on the overhanging end). Counterweight blocks are added on
-    # free holes to get there.
+    # A rail carrying a load outside its supports must keep its lighter
+    # support pressing with at least this much (grams), or it tips (user
+    # review 3: a block on the overhanging end). Counterweight blocks are
+    # added on free holes to get there.
     min_support_reaction_g: float = 20.0
+    # Tie weak towers with brace rails across them (user idea, review 3).
+    brace_towers: bool = True
 
 
 @dataclass(frozen=True)
@@ -193,21 +195,18 @@ class _State:
     max_depth: int = 0
     counters: dict[str, int] = field(default_factory=dict)
     input_column: str | None = None  # free-standing column the marble is put into
+    braces: list[str] = field(default_factory=list)  # rails that only brace towers
 
     def copy(self) -> "_State":
         return _State(dict(self.rails), dict(self.columns), dict(self.corridors),
                       list(self.route_links), list(self.feeds), list(self.leaves),
                       list(self.dangling), self.covers, self.max_depth, dict(self.counters),
-                      self.input_column)
+                      self.input_column, list(self.braces))
 
     def new_id(self, prefix: str) -> str:
         n = self.counters.get(prefix, 0)
         self.counters[prefix] = n + 1
         return f"{prefix}{n}"
-
-
-def _com(spec) -> float:
-    return spec.com_cm if spec.com_cm is not None else spec.length_cm / 2.0
 
 
 class CascadeGenerator:
@@ -232,14 +231,9 @@ class CascadeGenerator:
         self.entry_blocks = self._side_to_bottom_inlets()
         self.work = 0  # rail placements left in the current build
         self.filler_blocks = [t for t in _FILLER_PREFERENCE if self.heights.get(t) == 4]
-        # Support pairs whose span keeps the rail's own center of mass at least
-        # 3 cm inside: a rail resting with its COM on one support (center hole
-        # plus an end) balances on a point and tips (user review 3, S-curve).
         self.support_pairs = {
             kind: {tuple(sorted((spec.holes_cm.index(p.hole_a_cm), spec.holes_cm.index(p.hole_b_cm))))
-                   for p in valid_support_pairs(spec)
-                   if min(_com(spec) - min(p.hole_a_cm, p.hole_b_cm),
-                          max(p.hole_a_cm, p.hole_b_cm) - _com(spec)) >= 3.0}
+                   for p in valid_support_pairs(spec)}
             for kind, spec in catalog.rails.items()
         }
 
@@ -391,7 +385,7 @@ class CascadeGenerator:
     # ---- placing rails ---------------------------------------------------------
     def _place_rail(self, state: _State, kind: str, x: float, y: float, z: int, direction: int,
                     entry_x: float, stop: int | None, keep_free: Sequence[int] = (),
-                    dive: bool = False) -> PlacedRail | None:
+                    dive: bool = False, brace: bool = False) -> PlacedRail | None:
         """Add a rail whose marble enters at local entry_x and stops at `stop`
         (None: rolls off end B). Adds splits and plain supports so that the
         rail ends with exactly two supports (the drop column at `stop` is
@@ -405,7 +399,7 @@ class CascadeGenerator:
         end_x = holes[stop] if stop is not None else spec.length_cm
         if end_x <= entry_x + 1e-6 or z < 1:
             return None
-        covered = [i for i, hx in enumerate(holes) if entry_x < hx < end_x]
+        covered = [] if brace else [i for i, hx in enumerate(holes) if entry_x < hx < end_x]
         states = {i: "covered" for i in covered}
         if stop is not None:
             states[stop] = "open" if dive else "block_connected"
@@ -413,7 +407,7 @@ class CascadeGenerator:
                           flow_direction="a_to_b", hole_states=states)
         body = rail_solids(rail, self.catalog)
         # The twist's marble path runs inside its own funnel: no corridor.
-        corridor = None if spec.shape == "twist" else self._corridor(rail, entry_x, end_x)
+        corridor = None if spec.shape == "twist" or brace else self._corridor(rail, entry_x, end_x)
         if not all(self._in_footprint(piece) for piece in body):
             return None
         fall = None
@@ -426,6 +420,8 @@ class CascadeGenerator:
         split = self._split_crossed_columns(state, rail, corridor)
         if split is None or (stop is not None and stop in split):
             return None
+        if brace and not split:
+            return None  # a brace must tie into at least one existing column
         if any(h in keep_free for h in split):
             return None
         state.rails[rail.id] = rail
@@ -754,6 +750,46 @@ class CascadeGenerator:
         state.input_column = drop.id
         return state
 
+    def brace(self, state: _State, spots: Sequence[Mapping[str, Any]]) -> _State:
+        """Tie weak towers with brace rails (user idea, review 3): a straight
+        rail carrying no marble, laid across the tower in its upper half and
+        at right angles to the rails it already holds. The tower's column is
+        split at one of the brace's holes; the other support is another
+        column the brace crosses, or a new short column. Nothing changes
+        where no brace fits."""
+        for spot in spots:
+            self.work = 400
+            heading = spot["axes"][0] if spot["axes"] else 0.0
+            # World directions roughly perpendicular to the tower's rails.
+            dirs = [d for d in range(4)
+                    if abs(cos(d * pi / 2 - heading)) < 0.5]
+            levels = list(range(int(spot["top"]) - 2, int(-(-spot["top"] // 2)) - 1, -1))
+            placed = False
+            for level in levels:
+                for kind in ("straight_short", "straight_long"):
+                    spec = self.catalog.rails[kind]
+                    for d in self.rng.sample(dirs, len(dirs)):
+                        for h in self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm)):
+                            sx = spot["x"] - spec.holes_cm[h] * _DIRS[d][0]
+                            sy = spot["y"] - spec.holes_cm[h] * _DIRS[d][1]
+                            trial = state.copy()
+                            rail = self._place_rail(trial, kind, sx, sy, level, d, 0.0, None, brace=True)
+                            if rail is None:
+                                continue
+                            ties = {c.top_hole for c in trial.columns.values() if c.top_rail == rail.id}
+                            if h not in ties:
+                                continue  # the brace must hold this tower
+                            trial.braces.append(rail.id)
+                            state, placed = trial, True
+                            break
+                        if placed:
+                            break
+                    if placed:
+                        break
+                if placed:
+                    break
+        return state
+
     def build_once(self, work: int = 400) -> _State | None:
         self.work = work
         state = _State()
@@ -870,8 +906,9 @@ def score(metrics: Mapping[str, Any]) -> float:
         - 1.5 * sum(metrics.get("exit_levels", ()))
         - 12.0 * metrics.get("thin_towers", 0)
         - 6.0 * metrics.get("weak_towers", 0)
-        - 0.1 * metrics.get("idle_rail_cm", 0.0)
-        - 0.005 * metrics.get("footprint_area_cm2", 0.0)
+        - 0.05 * metrics.get("idle_rail_cm", 0.0)
+        - 0.002 * metrics.get("footprint_area_cm2", 0.0)
+        - 0.02 * metrics.get("dead_area_cm2", 0.0)
     )
 
 
@@ -926,6 +963,11 @@ def _roll_lengths(state: _State, catalog: PartCatalog) -> dict[str, float]:
 
 def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
                 upper_half: bool = False) -> int:
+    return len(tower_spots(layout, catalog, min_blocks, upper_half))
+
+
+def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
+                upper_half: bool = False) -> list[dict[str, Any]]:
     """Stacks at one spot with at least `min_blocks` blocks (4u parts) braced
     in one direction only: every rail touching the stack runs along one axis
     (within 45 deg). Such towers topple easily (user review 2). With
@@ -952,15 +994,15 @@ def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
             spec = catalog.rails[rail.rail_type]
             heading = rail_pose(rail, spec, spec.holes_cm[hole])[2]
             t["contacts"].append((rail.z_units + spec.hole_level(hole), heading % pi))
-    count = 0
-    for t in towers.values():
+    spots = []
+    for (x, y), t in towers.items():
         if t["blocks"] < min_blocks:
             continue
         axes = [a for z, a in t["contacts"] if not upper_half or z >= t["top"] / 2]
         spread = max((min(abs(a - b), pi - abs(a - b)) for a in axes for b in axes), default=0.0)
         if spread < pi / 4:
-            count += 1
-    return count
+            spots.append({"x": x, "y": y, "top": t["top"], "axes": axes})
+    return spots
 
 
 def _footprint_area(solids: Sequence[Solid]) -> float:
@@ -972,6 +1014,40 @@ def _footprint_area(solids: Sequence[Solid]) -> float:
         xs += [cx - ex, cx + ex]
         ys += [cy - ey, cy + ey]
     return (max(xs) - min(xs)) * (max(ys) - min(ys)) if xs else 0.0
+
+
+def _cells(solid: Solid, half_width: float | None = None) -> set[tuple[int, int]]:
+    """1 cm grid cells whose centers lie in a solid's top-view rectangle
+    (optionally widened/narrowed to `half_width` across its long axis)."""
+    (cx, cy), (hx, hy), a = solid.center_xy, solid.half_extents_xy, solid.angle_rad
+    if half_width is not None:
+        hy = half_width
+    c, s_ = cos(a), sin(a)
+    ex, ey = abs(hx * c) + abs(hy * s_), abs(hx * s_) + abs(hy * c)
+    out = set()
+    for i in range(int((cx - ex) // 1), int((cx + ex) // 1) + 1):
+        for j in range(int((cy - ey) // 1), int((cy + ey) // 1) + 1):
+            dx, dy = i + 0.5 - cx, j + 0.5 - cy
+            if abs(dx * c + dy * s_) <= hx and abs(-dx * s_ + dy * c) <= hy:
+                out.add((i, j))
+    return out
+
+
+def _dead_area(state: _State, catalog: PartCatalog, solids: Sequence[Solid]) -> float:
+    """Top-view area (cm2) taken by parts where no marble rolls (user
+    definition of space inefficiency): rails and columns minus the rolled
+    stretches of rail (full rail width) and the twist funnels."""
+    used: set[tuple[int, int]] = set()
+    for solid in solids:
+        used |= _cells(solid)
+    rolled: set[tuple[int, int]] = set()
+    for rid, corridor in state.corridors.items():
+        if rid in state.rails:
+            rolled |= _cells(corridor, half_width=2.25)
+    for rail in state.rails.values():
+        if catalog.rails[rail.rail_type].shape == "twist":
+            rolled |= {c for piece in rail_solids(rail, catalog) for c in _cells(piece)}
+    return float(len(used - rolled))
 
 
 def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
@@ -1007,7 +1083,9 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "random_branches": splits,
         "columns_on_rails": sum(1 for c in state.columns.values() if c.base_rail is not None),
         "footprint_area_cm2": round(_footprint_area(solids)),
+        "dead_area_cm2": round(_dead_area(state, catalog, solids)),
         "thin_towers": thin_towers(layout, catalog),
+        "braces": len(state.braces),
         "weak_towers": thin_towers(layout, catalog, upper_half=True),
         "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(rid, 0.0)
                                   for rid, r in state.rails.items()
@@ -1034,6 +1112,11 @@ def generate(
         if state is None or len(state.rails) < 2:
             continue
         layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
+        if config.brace_towers:
+            spots = tower_spots(layout, catalog, upper_half=True)
+            if spots:
+                state = generator.brace(state, spots)
+                layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
         sinks = tuple(PortRef(*leaf.split(":", 1)) for leaf in state.leaves)
         sinks += tuple(PortRef(block_ids[col], port) for col, port in state.dangling)
         if not sinks:
@@ -1064,16 +1147,29 @@ def generate(
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]
 
 
-def support_reactions_g(layout: Layout, catalog: PartCatalog) -> dict[str, float] | None:
+def support_reactions_g(layout: Layout, catalog: PartCatalog,
+                        overhang_only: bool = False) -> dict[str, float] | None:
     """Smaller support reaction of each rail in grams (moments about its two
-    supports, loads from everything above), or None if not evaluable."""
+    supports, loads from everything above), or None if not evaluable.
+
+    With `overhang_only`, only rails carrying a load outside their supports
+    are listed: a rail resting with its own center of mass on one support
+    (center hole plus an end) is fine in practice (user review 3 rated such
+    builds buildable); a block on the overhang is not (mr-d758cb5d)."""
     from .layout_stability import analyze_layout_statics
 
     result = analyze_layout_statics(layout, catalog)
     if not result.evaluable or result.statics is None:
         return None
-    return {rid: min(r.force_n for r in rs.reactions) / 9.80665 * 1000.0
-            for rid, rs in result.statics.rails.items()}
+    out = {}
+    for rid, rs in result.statics.rails.items():
+        xs = [r.support.x_cm for r in rs.reactions]
+        if overhang_only and not any(
+                not load.source.endswith(":self") and not min(xs) - 1e-6 <= load.x_cm <= max(xs) + 1e-6
+                for load in rs.applied_loads):
+            continue
+        out[rid] = min(r.force_n for r in rs.reactions) / 9.80665 * 1000.0
+    return out
 
 
 def balance(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRef,
@@ -1082,7 +1178,7 @@ def balance(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRe
     does not roll over) until every rail support keeps at least `min_g`.
     None if that cannot be reached. User idea (review 3): a block on the
     other side balances an overhanging load."""
-    reactions = support_reactions_g(layout, catalog)
+    reactions = support_reactions_g(layout, catalog, overhang_only=True)
     if reactions is None:
         return None
     usage = Counter(layout_usage(layout))
@@ -1111,13 +1207,13 @@ def balance(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRe
             trial = replace(layout, parts=layout.parts + (part,),
                             supports=layout.supports + (SupportLink(None, None, (pid,), rid, hole,
                                                                     name=f"cw{n}"),))
-            got = support_reactions_g(trial, catalog)
-            if got is None or got[rid] <= reactions[rid]:
+            got = support_reactions_g(trial, catalog, overhang_only=True)
+            if got is None or got.get(rid, min_g) <= reactions[rid]:
                 continue
             result = validate_layout(trial, catalog, source=source, sinks=sinks)
             if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
                 continue
-            if best is None or got[rid] > best[0][rid]:
+            if best is None or got.get(rid, min_g) > best[0].get(rid, min_g):
                 best = (got, trial, block)
         if best is None:
             return None
