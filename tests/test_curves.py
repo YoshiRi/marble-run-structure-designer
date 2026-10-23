@@ -132,16 +132,15 @@ def test_twist_drops_through_its_center_into_the_column_below():
     from quadrilla_solver.collision import solid_collisions
 
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
-    result = validate_layout(layout, CATALOG, source=PortRef("feed", "end_a"),
+    result = validate_layout(layout, CATALOG, source=PortRef("upper", "end_a"),
                              sinks=(PortRef("exit", "end_b"),))
     assert result.valid, result
     path = result.connectivity.paths["exit:end_b"]
-    # Hook entry: the feed rail ends in E's rear notch, E drops the marble from
-    # its bottom into the chute, and the funnel drops it through its center into C.
     steps = list(zip(path, path[1:]))
-    assert ("feed:end_b", "E:rear") in steps
-    assert ("E:bottom", "twist:hole:1") in steps
-    assert ("twist:hole:1", "twist:hole:2") in steps  # over the covered second chute hole
+    # B on the first chute hole lands the marble on the chute; it rolls over
+    # the covered second hole and the funnel drops it through its center into C.
+    assert ("B:front", "twist:hole:1") in steps
+    assert ("twist:hole:1", "twist:hole:2") in steps
     assert ("twist:hole:2", "C:top") in steps
     # Both chute holes mount 3 units above the center hole, 23 and 18 cm from
     # it (a short rail's holes, user-confirmed).
@@ -149,7 +148,6 @@ def test_twist_drops_through_its_center_into_the_column_below():
     twist = layout.rail_map()["twist"]
     assert [rail_hole_world(twist, CATALOG, i)[2] for i in range(3)] == [8, 8, 5]
     assert [spec.holes_cm[2] - x for x in spec.holes_cm[:2]] == [23.0, 18.0]
-    assert spec.shape == "twist"
     # A block reaching up into the funnel (off its center) collides with it.
     from dataclasses import replace
     from quadrilla_solver.model import PlacedPart
@@ -158,35 +156,20 @@ def test_twist_drops_through_its_center_into_the_column_below():
 
 
 def test_twist_chute_is_a_plain_rail():
-    """User: the chute connects like any rail. A block's bottom outlet drops
-    into it (feeding the next station), and a side outlet along the chute
-    lands on it; the entry block's bottom never falls through to the chute
-    column."""
+    """User: the chute connects like any rail. A bottom outlet on a chute hole
+    drops straight through it into the column below (review: mr-c61a3513),
+    and an open chute hole lets a rolling marble fall through."""
     from dataclasses import replace
     from quadrilla_solver.connectivity import build_routing_graph
 
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
-    edges = build_routing_graph(layout, CATALOG).edges
-    assert edges["E:bottom"] == ("twist:hole:1",)
-    # A yellow (top -> front) on the chute hole, front along the twist (+y): lands on it.
-    parts = tuple(replace(p, part_type="yellow", rotation_deg=0) if p.id == "E" else p
-                  for p in layout.parts)
+    parts = tuple(replace(p, part_type="orange_vertical") if p.id == "B" else p for p in layout.parts)
     edges = build_routing_graph(replace(layout, parts=parts), CATALOG).edges
-    assert "twist:hole:1" in edges.get("E:front", ())
-    # An open second chute hole lets the marble fall through, as on any rail.
+    assert edges["B:bottom"] == ("t0_4:top",)
     rails = tuple(replace(r, hole_states={2: "block_connected"}) if r.id == "twist" else r
                   for r in layout.rails)
     edges = build_routing_graph(replace(layout, rails=rails), CATALOG).edges
     assert edges.get("twist:hole:1", ()) == ()
-
-
-def test_free_standing_stack_must_sit_on_its_rail_hole():
-    from dataclasses import replace
-
-    layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
-    parts = tuple(replace(p, z_units=10) if p.id == "E" else p for p in layout.parts)
-    reasons = validate_assembly(replace(layout, parts=parts), CATALOG).reasons
-    assert any(r.startswith("stack_z_mismatch:twist_entry:E") for r in reasons)
 
 
 def test_twist_center_hole_must_not_be_covered():
@@ -198,9 +181,17 @@ def test_twist_center_hole_must_not_be_covered():
     assert "twist_center_hole_covered:twist" in reasons
 
 
-def test_free_standing_stack_loads_its_rail_in_statics():
+def test_free_standing_stack_loads_its_rail_and_sits_on_its_hole():
+    from dataclasses import replace
     from quadrilla_solver.layout_stability import analyze_layout_statics
+    from quadrilla_solver.model import PlacedPart, SupportLink
 
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
-    twist = analyze_layout_statics(layout, CATALOG).statics.rails["twist"]
-    assert any(load.source == "twist:point:twist_entry" for load in twist.applied_loads)
+    x, y, _ = rail_hole_world(layout.rail_map()["exit"], CATALOG, 2)
+    loaded = replace(layout, parts=layout.parts + (PlacedPart("w", "blue", x, y, 2),),
+                     supports=layout.supports + (SupportLink(None, None, ("w",), "exit", 2, name="weight"),))
+    assert validate_assembly(loaded, CATALOG).valid
+    exit_rail = analyze_layout_statics(loaded, CATALOG).statics.rails["exit"]
+    assert any(load.source == "exit:point:weight" for load in exit_rail.applied_loads)
+    off = replace(loaded, parts=tuple(replace(p, z_units=3) if p.id == "w" else p for p in loaded.parts))
+    assert any(r.startswith("stack_z_mismatch:weight:w") for r in validate_assembly(off, CATALOG).reasons)

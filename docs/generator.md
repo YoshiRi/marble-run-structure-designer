@@ -49,19 +49,18 @@ score. Curves also save covers: a curve has no holes between its end holes.
 ## Twist
 
 The twist (QD005 lists 3; the user's two are the same size) has two chute
-holes and a funnel center hole; its chute is a plain rail. The generator uses
-it three ways:
+holes and a funnel center hole; its chute is a plain rail. The generator
+feeds it like one:
 
-- **hook**: a rail runs into the side inlet of an entry block (blue, green or
-  natural) on either chute hole, which drops the marble from its bottom into
-  the chute; the twist heads to the **left** of the incoming rail, so the
-  marble arrives from the twist's left (user correction)
 - **landing**: a drop block stands on a chute hole and lands the marble along
   the chute (also the input block)
-- **tip**: a block outlet feeds the chute's tip like any rail
+- **tip**: a block outlet feeds the chute's tip
 
 The funnel then drops the marble through its center hole into a new drop
 column. `twist_probability` (default 0.5) is the chance to try a twist first.
+An earlier "hook" entry (a rail into a blue/green/natural block on a chute
+hole, dropping from its bottom) was removed: the marble falls straight through
+the chute hole into the block below (user review of mr-c61a3513).
 
 ## Exits
 

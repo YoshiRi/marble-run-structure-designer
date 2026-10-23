@@ -287,12 +287,11 @@ on one end hole of a short rail, the chute holes sit on its other two holes
 center hole at 0.
 
 The chute is a plain rail (user): it is fed like one, by a block standing on a
-chute hole (a side outlet landing along it, or a bottom outlet dropping in) or
-by a block outlet at its tip. A bottom-drop entry block (blue rear notch, green
-left notch, natural front/rear notch) is fed from the **left** of the twist's
-heading (user correction), a hook-shaped route; such a block carries no rail,
-so it is a free-standing support (`upper_rail_id: null`). Holes between the
-entry and the funnel are covered, as on any rail. The marble rolls down the
+chute hole whose side outlet lands the marble along it, or by a block outlet at
+its tip. A block's bottom outlet on a chute hole drops the marble straight
+through the hole into the column below, as on any rail; it does not enter the
+chute (user review of mr-c61a3513). Holes between the entry and the funnel are
+covered. The marble rolls down the
 chute, circles the funnel and drops through the center hole into the column
 below (the center hole may not be covered). Collision uses
 the chute (flat at the mount hole, then sloping) and a square around the funnel.

@@ -174,14 +174,6 @@ def build_routing_graph(
                 _add_edge(graph, f"{upper_id}:bottom", f"{lower_id}:top")
         if not stack or support.lower_rail_id is None:
             continue
-        # A block standing on a twist's chute hole drops the marble from its
-        # bottom outlet into the chute (user-confirmed); it rolls on into the
-        # funnel and out through the center hole.
-        entry = _twist_entry_node(rails.get(support.lower_rail_id), catalog, support.lower_hole_index)
-        if entry is not None:
-            if "bottom" in part_ports.get(stack[0], set()):
-                _add_edge(graph, f"{stack[0]}:bottom", _rail_node(support.lower_rail_id, entry))
-            continue
         below = columns_by_upper_hole.get((support.lower_rail_id, support.lower_hole_index))
         if below is None or below.stack_part_ids[-1] not in parts:
             continue
@@ -237,23 +229,6 @@ def build_routing_graph(
         nodes=tuple(edges),
         reasons=tuple(dict.fromkeys(reasons)),
     )
-
-
-def _twist_entry_node(rail, catalog, hole) -> str | None:
-    """Rail node a marble reaches when dropped into a twist's chute hole.
-
-    The chute holes are every hole but the last (the funnel center); the
-    marble rolls on to the next station in flow order, like on any rail.
-    None if this is not a twist chute hole.
-    """
-    if rail is None or hole is None:
-        return None
-    spec = catalog.rails.get(rail.rail_type)
-    if spec is None or spec.shape != "twist" or not 0 <= hole < len(spec.holes_cm) - 1:
-        return None
-    if rail.flow_direction == "a_to_b":
-        return f"hole:{hole + 1}"
-    return f"hole:{hole - 1}" if hole > 0 else "end_a"
 
 
 def _landing_edges(layout, catalog, support, explicit_sources):
