@@ -532,6 +532,24 @@
         });
       }
     }
+    // The top of a free-standing stack (it holds up no rail) is an input too:
+    // the marble can be put straight into the top block (generated layouts
+    // have no input rail).
+    const parts = new Map((layout.parts || []).map(part => [part.id, part]));
+    for (const support of layout.supports || []) {
+      if (support.upper_rail_id != null || !support.stack_part_ids?.length) continue;
+      if (twistEntryNode(catalog, (layout.rails || []).find(r => r.id === support.lower_rail_id),
+        support.lower_hole_index)) continue;  // a twist's entry block is fed from the side
+      const part = parts.get(support.stack_part_ids.at(-1));
+      const key = part && part.id + ":top";
+      if (!part || !(graph.edges[key] || []).length) continue;
+      const level = Number(part.z_units) + Number(partSpec(catalog, part.part_type)?.height || 0);
+      candidates.push({
+        key, part_id: part.id, level_units: level,
+        rail_id: "", hole_index: -1,
+        label: part.id + " · top · level " + level + "u",
+      });
+    }
     return candidates.sort((a, b) =>
       b.level_units - a.level_units ||
       a.rail_id.localeCompare(b.rail_id, "en") ||

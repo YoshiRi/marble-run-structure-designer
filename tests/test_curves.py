@@ -98,11 +98,11 @@ def test_rails_fed_by_an_explicit_link_are_not_swapped():
 
 def test_generator_uses_curves_when_the_inventory_has_them():
     budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005", "QDE6008AB05"]))
-    found = generate(CATALOG, budget, config=GeneratorConfig(), attempts=120, seed=4, keep=3)
+    found = generate(CATALOG, budget, config=GeneratorConfig(curve_ready_bias=0.8), attempts=120, seed=4, keep=10)
     with_curves = [c for c in found if c.metrics["curved_rails"] > 0]
     assert with_curves
     for c in with_curves:
-        assert validate_layout(c.layout, CATALOG, source=PortRef("rail0", "end_a"), sinks=c.sinks).valid
+        assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid
         assert c.usage.get("curved_short", 0) <= budget.counts["curved_short"]
         assert c.usage.get("s_curve", 0) <= budget.counts["s_curve"]
 

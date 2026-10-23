@@ -4,7 +4,7 @@ from quadrilla_solver.catalog import load_catalog
 import yaml
 
 from quadrilla_solver.generator import (
-    layout_sinks,
+    layout_sinks, layout_source,
     Budget, GeneratorConfig, generate, layout_to_yaml_dict, resolve_set_paths,
 )
 from quadrilla_solver.model import PortRef
@@ -36,7 +36,7 @@ def test_generated_layouts_validate_and_respect_the_set_inventory():
         layout = candidate.layout
         sinks = candidate.sinks
         assert sinks
-        result = validate_layout(layout, CATALOG, source=PortRef("rail0", "end_a"), sinks=sinks)
+        result = validate_layout(layout, CATALOG, source=candidate.source, sinks=sinks)
         assert result.valid, result
         assert result.marble_clearance == ()
         assert all(r.yaw_deg % 90 == 0 for r in layout.rails)
@@ -85,8 +85,9 @@ def test_published_generated_examples_stay_valid():
     assert paths
     for path in paths:
         layout = load_layout(path)
-        sinks = layout_sinks(yaml.safe_load(path.read_text()))
-        result = validate_layout(layout, CATALOG, source=PortRef("rail0", "end_a"), sinks=sinks)
+        data = yaml.safe_load(path.read_text())
+        sinks = layout_sinks(data)
+        result = validate_layout(layout, CATALOG, source=layout_source(data), sinks=sinks)
         assert result.valid, (path.name, result)
 
 
@@ -142,7 +143,8 @@ def test_gallery_index_matches_its_layouts():
         path = ROOT / entry["file"]
         assert path.exists(), entry["file"]
         assert layout_id(load_layout(path)) == entry["id"] == path.stem
-        result = validate_layout(load_layout(path), CATALOG, source=PortRef("rail0", "end_a"),
+        result = validate_layout(load_layout(path), CATALOG,
+                                 source=layout_source(yaml.safe_load(path.read_text())),
                                  sinks=layout_sinks(yaml.safe_load(path.read_text())))
         assert result.valid, entry["id"]
 
@@ -191,3 +193,27 @@ def test_twists_are_entered_with_a_hook_from_the_right():
                 # The feed travels toward the twist's left: it comes from the right.
                 assert abs(cos(d) - cos(h + radians(90))) < 1e-9
                 assert abs(sin(d) - sin(h + radians(90))) < 1e-9
+
+
+def test_input_goes_straight_into_a_block_standing_on_a_rail():
+    """No input rail: the marble is put into the top of a free-standing stack
+    on a rail, so no columns are spent on holding up an input rail."""
+    found = _run(11)
+    assert found
+    for c in found:
+        assert c.source.port == "top"
+        support = next(s for s in c.layout.supports if c.source.component_id in s.stack_part_ids)
+        assert support.upper_rail_id is None and support.lower_rail_id is not None
+        assert support.stack_part_ids[-1] == c.source.component_id
+
+
+def test_thin_towers_are_counted_and_filtered():
+    from quadrilla_solver.generator import thin_towers
+    from quadrilla_solver.model import load_layout
+
+    for c in _run(11):
+        assert c.metrics["thin_towers"] == 0
+    # Stacks braced along one axis count once they reach min_blocks.
+    layout = load_layout(ROOT / "tests" / "fixtures" / "landing-tower.yaml")
+    assert thin_towers(layout, CATALOG, min_blocks=1) >= 1
+    assert thin_towers(layout, CATALOG, min_blocks=99) == 0

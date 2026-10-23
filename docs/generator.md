@@ -61,6 +61,23 @@ is free-standing (a support with no upper rail). `twist_probability` (default
 0.5) is the chance to try a twist first, mid-cascade or at a branch end; about
 a third of builds with the default sets contain one, two thirds at 0.9.
 
+## Input and thin towers
+
+The marble is put straight into the top block (user review 2: an input rail
+only wastes columns). The build still starts from a top rail with a drop
+column under it, but the first drop must land on a lower rail; then the top
+rail and the columns that only held it are removed, and the drop column stays
+as a free-standing stack on its rail. Its top part is the source
+(`routing_query.source`, e.g. `c1_0_blue:top`); the viewer lists it as an
+input. `trim_input_rail: false` keeps the old input rail.
+
+A **thin tower** is a stack at one spot with 5 or more blocks (4u parts;
+purple 1u pieces and foundations not counted) whose rails all run along one
+axis: braced in one direction only, it topples easily (user review 2).
+Candidates with more than `max_thin_towers` (default 0) are dropped, and each
+one costs 12 points when allowed. This shrinks the builds: the best now have
+5-10 rails and 30-80 parts, where tall towers were the easy way up.
+
 ## Exits
 
 `exit_style: contained` (default, user rule) ends a branch only where a marble
@@ -103,6 +120,7 @@ were valued; high drops, very short branches and sprawling builds were not):
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
 - 1.5 x sum of exit levels (units) - 0.005 x footprint bounding-box area (cm2)
+- 12 x thin towers
 ```
 
 A twist counts as 60 cm of rolling (chute plus about 1.75 turns; estimate).
@@ -143,3 +161,9 @@ Reviews reported by ID feed the scoring and future pattern weights.
   the branch outputs (default 2) because each exit needs a catcher. Led to the
   contained exits, `max_exits` and the current scoring. Those layouts remain in
   git history at that commit.
+- Review 2 (gallery from commit d8ae75c, contained exits): 7 Buildable
+  (mr-b5d3fba6 also Interesting), 2 Doubtful (mr-c3ebf4ad, mr-d503eaf0), 3
+  Buildable but Doubtful (mr-f243c530, mr-f6d7cc83, mr-99f6f75f). Feedback:
+  the top input rail is unnecessary and wastes columns; stacks of 5+ blocks
+  braced along one direction only are doubtful. Led to the trimmed input and
+  the thin-tower filter.
