@@ -1,5 +1,9 @@
 # Layout Generator (M2)
 
+The layered design behind this (physics, construction, style rules,
+preferences, selection) is in `generator-design.md`; start there before
+adding a rule.
+
 `scripts/generate_layout.py` searches for buildable layouts from the combined
 contents of one or more commercial sets and writes the best ones as Layout YAML
 that the viewer can open.
