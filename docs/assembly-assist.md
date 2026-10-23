@@ -53,9 +53,10 @@ Routing blocks rotate freely, so each block in a step gets:
 
 ## 3D view in Build mode
 
-- Components of earlier steps: normal.
-- Components of the current step: normal plus an outline and the facing
-  arrows; the camera frames them.
+- Components of earlier steps: dark gray (user request after the first try).
+- Components of the current step: in color, outlined, with facing arrows.
+- The camera is framed once when Build mode opens, then kept between steps
+  (user request).
 - Later steps: hidden (toggle: ghosted at 15 % opacity).
 - Holes, support lines and the route overlay follow the existing toggles;
   the route is shown only on placed rails.

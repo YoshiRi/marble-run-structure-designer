@@ -203,8 +203,10 @@ the bottom (`viewer/assembly.js`, mirrored by `quadrilla_solver.assembly_plan`):
   holes, then blocks standing alone on it (input, twist entry, counterweights)
 - last step: everything placed; roll the marble
 
-The 3D view shows what is placed so far, outlines the current step and draws
+The 3D view shows what is placed so far: the current step in color, parts
+placed in earlier steps dark gray (user request); it outlines the current step and draws
 arrows on blocks the marble passes through (green: outlets, blue: fed side
 notches); facing is also given in words relative to the step's rail. Blocks
 used only as structure are marked "any way round". Done ticks are kept per
-layout ID in the browser.
+layout ID in the browser. The camera is framed once when Build mode opens and
+then stays where you leave it between steps (Reset camera reframes).
