@@ -97,8 +97,9 @@ def _twist_solids(rail: PlacedRail, catalog: PartCatalog, unit: float, width: fl
     chute_end = center - rim / 2.0
     z0 = rail.z_units * unit
     top = spec.hole_levels[0] if spec.hole_levels else 3
-    # Flat around the chute mount hole, then sloping one unit down to the rim.
-    flat_end = spec.holes_cm[0] + width / 2.0
+    # Flat past the last chute hole (a block may stand there), then sloping
+    # one unit down to the rim.
+    flat_end = spec.holes_cm[-2] + width / 2.0
     solids = _strip_solids(rail, catalog, 0.0, flat_end, width / 2.0,
                            z0 + top * unit, z0 + (top + 1) * unit, rail.id)
     pieces = 4

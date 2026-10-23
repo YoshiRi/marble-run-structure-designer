@@ -242,18 +242,18 @@ def build_routing_graph(
 def _twist_entry_node(rail, catalog, hole) -> str | None:
     """Rail node a marble reaches when dropped into a twist's chute hole.
 
-    The chute hole is the twist's first hole (index 0); the marble rolls
-    from it to the next station in flow order. None if this is not a twist
-    chute hole.
+    The chute holes are every hole but the last (the funnel center); the
+    marble rolls on to the next station in flow order, like on any rail.
+    None if this is not a twist chute hole.
     """
-    if rail is None or hole != 0:
+    if rail is None or hole is None:
         return None
     spec = catalog.rails.get(rail.rail_type)
-    if spec is None or spec.shape != "twist":
+    if spec is None or spec.shape != "twist" or not 0 <= hole < len(spec.holes_cm) - 1:
         return None
     if rail.flow_direction == "a_to_b":
-        return "hole:1" if len(spec.holes_cm) > 1 else "end_b"
-    return "end_a"
+        return f"hole:{hole + 1}"
+    return f"hole:{hole - 1}" if hole > 0 else "end_a"
 
 
 def _landing_edges(layout, catalog, support, explicit_sources):
@@ -263,8 +263,8 @@ def _landing_edges(layout, catalog, support, explicit_sources):
     if rail is None or part is None:
         return []
     spec = catalog.rails.get(rail.rail_type)
-    # The twist is entered through its chute hole only (see _twist_entry_node).
-    if spec is None or spec.shape == "twist":
+    # The twist's chute is a plain rail: blocks on it land the marble too.
+    if spec is None:
         return []
     unit = catalog.raw.get("geometry_cm", {}).get("height_unit", {})
     unit = float(unit.get("value", 1.5)) if isinstance(unit, Mapping) else float(unit or 1.5)

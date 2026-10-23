@@ -141,11 +141,14 @@ def test_twist_drops_through_its_center_into_the_column_below():
     steps = list(zip(path, path[1:]))
     assert ("feed:end_b", "E:rear") in steps
     assert ("E:bottom", "twist:hole:1") in steps
-    assert ("twist:hole:1", "C:top") in steps
-    # The chute hole mounts 3 units above the center hole.
+    assert ("twist:hole:1", "twist:hole:2") in steps  # over the covered second chute hole
+    assert ("twist:hole:2", "C:top") in steps
+    # Both chute holes mount 3 units above the center hole, 23 and 18 cm from
+    # it (a short rail's holes, user-confirmed).
     spec = CATALOG.rails["spiral"]
-    assert rail_hole_world(layout.rail_map()["twist"], CATALOG, 0)[2] == 8
-    assert rail_hole_world(layout.rail_map()["twist"], CATALOG, 1)[2] == 5
+    twist = layout.rail_map()["twist"]
+    assert [rail_hole_world(twist, CATALOG, i)[2] for i in range(3)] == [8, 8, 5]
+    assert [spec.holes_cm[2] - x for x in spec.holes_cm[:2]] == [23.0, 18.0]
     assert spec.shape == "twist"
     # A block reaching up into the funnel (off its center) collides with it.
     from dataclasses import replace
@@ -154,20 +157,27 @@ def test_twist_drops_through_its_center_into_the_column_below():
     assert any("twist" in r and "under" in r for r in solid_collisions(blocked, CATALOG))
 
 
-def test_twist_is_entered_only_through_a_bottom_outlet():
-    """A side outlet facing along the chute does not land on the twist, and the
-    entry block's bottom does not fall through to the chute column."""
+def test_twist_chute_is_a_plain_rail():
+    """User: the chute connects like any rail. A block's bottom outlet drops
+    into it (feeding the next station), and a side outlet along the chute
+    lands on it; the entry block's bottom never falls through to the chute
+    column."""
     from dataclasses import replace
     from quadrilla_solver.connectivity import build_routing_graph
 
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
     edges = build_routing_graph(layout, CATALOG).edges
     assert edges["E:bottom"] == ("twist:hole:1",)
-    # A yellow (top -> front) on the chute hole, front along the twist: no landing edge.
+    # A yellow (top -> front) on the chute hole, front along the twist (+y): lands on it.
     parts = tuple(replace(p, part_type="yellow", rotation_deg=0) if p.id == "E" else p
                   for p in layout.parts)
     edges = build_routing_graph(replace(layout, parts=parts), CATALOG).edges
-    assert not any(t.startswith("twist:") for t in edges.get("E:front", ()))
+    assert "twist:hole:1" in edges.get("E:front", ())
+    # An open second chute hole lets the marble fall through, as on any rail.
+    rails = tuple(replace(r, hole_states={2: "block_connected"}) if r.id == "twist" else r
+                  for r in layout.rails)
+    edges = build_routing_graph(replace(layout, rails=rails), CATALOG).edges
+    assert edges.get("twist:hole:1", ()) == ()
 
 
 def test_free_standing_stack_must_sit_on_its_rail_hole():
@@ -182,7 +192,8 @@ def test_free_standing_stack_must_sit_on_its_rail_hole():
 def test_twist_center_hole_must_not_be_covered():
     layout = load_layout(ROOT / "tests" / "fixtures" / "twist-drop.yaml")
     from dataclasses import replace
-    rails = tuple(replace(r, hole_states={1: "covered"}) if r.id == "twist" else r for r in layout.rails)
+    rails = tuple(replace(r, hole_states={1: "covered", 2: "covered"}) if r.id == "twist" else r
+                  for r in layout.rails)
     reasons = validate_assembly(replace(layout, rails=rails), CATALOG).reasons
     assert "twist_center_hole_covered:twist" in reasons
 

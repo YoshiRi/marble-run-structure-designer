@@ -149,11 +149,13 @@
   // Mirror of _twist_entry_node: where a marble dropped into a twist's
   // chute hole (index 0) continues.
   function twistEntryNode(catalog, rail, hole) {
-    if (!rail || Number(hole) !== 0) return null;
+    if (!rail || hole == null) return null;
     const spec = railGeometry(catalog, rail.rail_type);
-    if (!spec || spec.shape !== "twist") return null;
-    if (rail.flow_direction === "b_to_a") return "end_a";
-    return (spec.hole_positions_cm || []).length > 1 ? "hole:1" : "end_b";
+    const k = Number(hole);
+    const count = (spec?.hole_positions_cm || []).length;
+    if (!spec || spec.shape !== "twist" || !Number.isInteger(k) || k < 0 || k >= count - 1) return null;
+    if (rail.flow_direction === "b_to_a") return k > 0 ? "hole:" + (k - 1) : "end_a";
+    return "hole:" + (k + 1);
   }
 
   function supportsFlow(layout, catalog, ref, output) {
@@ -388,7 +390,7 @@
       const rail = rails.get(support.lower_rail_id);
       const part = parts.get(support.stack_part_ids[0]);
       const railSpec = rail && railGeometry(catalog, rail.rail_type);
-      if (!rail || !part || !railSpec || railSpec.shape === "twist") continue;
+      if (!rail || !part || !railSpec) continue;
       const hole = Number(support.lower_hole_index);
       if (!Number.isInteger(hole) || hole < 0 || hole >= (railSpec.hole_positions_cm || []).length) continue;
       // Direction of the rail where the block stands (tangent on a curve).

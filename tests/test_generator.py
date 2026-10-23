@@ -171,7 +171,7 @@ def test_exits_are_contained_and_capped():
     assert max(len(c.sinks) for c in three) <= 3
 
 
-def test_twists_are_entered_with_a_hook_from_the_right():
+def test_twists_are_entered_with_a_hook_from_the_left():
     from math import cos, radians, sin
 
     found = generate(CATALOG, _budget(), config=GeneratorConfig(twist_probability=0.9),
@@ -182,17 +182,18 @@ def test_twists_are_entered_with_a_hook_from_the_right():
         rails, parts = c.layout.rail_map(), c.layout.part_map()
         for s in c.layout.supports:
             if s.lower_rail_id in rails and rails[s.lower_rail_id].rail_type == "spiral" \
-                    and s.lower_hole_index == 0:
-                assert s.upper_rail_id is None
+                    and s.lower_hole_index in (0, 1) and s.upper_rail_id is None:
                 entry = parts[s.stack_part_ids[0]]
+                feeds = [l.source.component_id for l in c.layout.route_links
+                         if l.target.component_id == entry.id]
+                if not feeds:
+                    continue  # e.g. a counterweight
                 assert entry.part_type in ("blue", "green", "natural_drop")
-                feed = next(l.source.component_id for l in c.layout.route_links
-                            if l.target.component_id == entry.id)
                 h = radians(rails[s.lower_rail_id].yaw_deg)
-                d = radians(rails[feed].yaw_deg)
-                # The feed travels toward the twist's left: it comes from the right.
-                assert abs(cos(d) - cos(h + radians(90))) < 1e-9
-                assert abs(sin(d) - sin(h + radians(90))) < 1e-9
+                d = radians(rails[feeds[0]].yaw_deg)
+                # The feed travels toward the twist's right: it comes from the left (user).
+                assert abs(cos(d) - cos(h - radians(90))) < 1e-9
+                assert abs(sin(d) - sin(h - radians(90))) < 1e-9
 
 
 def test_input_goes_straight_into_a_block_standing_on_a_rail():

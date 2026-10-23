@@ -526,11 +526,18 @@ class CascadeGenerator:
         if any(dirs[p] == (d + 2) % 4 for p in ports if p != land_port):
             return None
         kinds = self.rng.sample(_RAIL_KINDS, len(_RAIL_KINDS))
+        # The twist's chute is a plain rail (user): a block on a chute hole
+        # can land the marble on it, which then circles into the funnel.
+        if self._twists_left(state) and self.rng.random() < self.config.twist_probability:
+            kinds = ["spiral"] + kinds
         for kind in kinds:
             spec = self.catalog.rails[kind]
+            twist = spec.shape == "twist"
             ready = self._curve_ready(kind)
             order = self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
             order.sort(key=lambda h: h not in ready)
+            if twist:
+                order = [h for h in order if h < len(spec.holes_cm) - 1]
             for k in order:
                 # The block stands on hole k: the rail's placement level sits
                 # below it by one unit plus that hole's mount level.
@@ -544,7 +551,12 @@ class CascadeGenerator:
                 can_continue = len(state.rails) < self.config.max_rails
                 stops = [("drop", self.rng.choice(preferred))] if downstream and can_continue else []
                 ends = self._terminal_stops(spec, downstream, rail_z)
-                if can_continue and rail_z > 4 and self.rng.random() < self.config.twist_probability:
+                if twist:  # the funnel always drops through its center hole
+                    stops = [("drop", len(spec.holes_cm) - 1)] if can_continue else []
+                    ends = []
+                if twist:
+                    pass
+                elif can_continue and rail_z > 4 and self.rng.random() < self.config.twist_probability:
                     stops = [("twist", None)] + stops + ends
                 else:
                     stops = stops + ends + ([("twist", None)] if can_continue and rail_z > 4 else [])
@@ -595,6 +607,11 @@ class CascadeGenerator:
         return 1 + sum(len(self.drop_blocks.get(c.top_types[0], ("",))) - 1
                        for c in state.columns.values() if c.top_types)
 
+    def _twists_left(self, state: _State) -> bool:
+        used = sum(1 for r in state.rails.values() if r.rail_type == "spiral")
+        return ("spiral" in self.catalog.rails and used < _spiral_capacity(self.budget.counts)
+                and len(state.rails) < self.config.max_rails)
+
     def _finish(self, state: _State, rail: PlacedRail, how: str, stop: int | None, d: int,
                 depth: int) -> tuple[_State, list[_Outlet]] | None:
         """End a rail: into a twist, as a dive through an open hole, or off
@@ -629,10 +646,11 @@ class CascadeGenerator:
         """End the rail in a twist, hook-shaped (user-described):
 
         the rail runs into the side inlet of an entry block (blue, green or
-        natural) standing on the twist's chute hole, which drops the marble
-        from its bottom into the chute. The twist heads to the right of the
-        rail, so the marble arrives from the twist's right side; the funnel
-        then drops it through its center hole into a new drop column.
+        natural) standing on one of the twist's two chute holes, which drops
+        the marble from its bottom into the chute. The twist heads to the
+        left of the rail, so the marble arrives from the twist's left side
+        (user correction); the funnel then drops it through its center hole
+        into a new drop column.
         """
         if "spiral" not in self.catalog.rails or not self.entry_blocks:
             return None
@@ -646,19 +664,25 @@ class CascadeGenerator:
         if twist_z < 1:
             return None
         ex, ey = self._point(rail, feed.length_cm + self.half)
-        h = (d - 1) % 4                           # turn right: marble comes from the right
-        sx = ex - spec.holes_cm[0] * _DIRS[h][0]
-        sy = ey - spec.holes_cm[0] * _DIRS[h][1]
-        trial = state.copy()
-        twist = self._place_rail(trial, "spiral", sx, sy, twist_z, h, spec.holes_cm[0],
-                                 len(spec.holes_cm) - 1, keep_free=(0,))
+        h = (d + 1) % 4                           # turn left: marble comes from the left
+        center = len(spec.holes_cm) - 1
+        twist = None
+        for k in self.rng.sample(range(center), center):  # either chute hole
+            sx = ex - spec.holes_cm[k] * _DIRS[h][0]
+            sy = ey - spec.holes_cm[k] * _DIRS[h][1]
+            trial = state.copy()
+            # Chute holes between the entry and the funnel get covers.
+            twist = self._place_rail(trial, "spiral", sx, sy, twist_z, h, spec.holes_cm[k],
+                                     center, keep_free=(k,))
+            if twist is not None:
+                break
         if twist is None:
             return None
         back = (d + 2) % 4                        # the inlet faces back up the rail
         for block, port in self.rng.sample(self.entry_blocks, len(self.entry_blocks)):
             rotation = (90 * back + _PORT_ROTATION_OFFSET[port]) % 360
             attempt = trial.copy()
-            column = Column(attempt.new_id("c"), ex, ey, twist.id, 0, block_z, None, None,
+            column = Column(attempt.new_id("c"), ex, ey, twist.id, k, block_z, None, None,
                             block_z + self.heights[block], (block,), rotation)
             if self._hits(attempt, [column.solid(self.half)]):
                 continue
@@ -699,6 +723,12 @@ class CascadeGenerator:
                 return ended, []
         can_continue = len(state.rails) < self.config.max_rails
         options = [(z, kind) for z in (outlet.floor_z - 1, outlet.floor_z - 2) for kind in _RAIL_KINDS]
+        if self._twists_left(state):
+            # A twist fed at its tip like any rail: its chute runs at its
+            # placement level + 3.
+            spiral = self.catalog.rails["spiral"]
+            options += [(z - spiral.end_level("end_a"), "spiral")
+                        for z in (outlet.floor_z - 1, outlet.floor_z - 2)]
         self.rng.shuffle(options)
         plans: list[str] = ["drop", "end"] if can_continue else ["end"]
         if can_continue and self.rng.random() < self.config.twist_probability:
@@ -706,7 +736,11 @@ class CascadeGenerator:
         for plan in plans:
             for z, kind in options:
                 spec = self.catalog.rails[kind]
-                if plan == "twist":
+                if spec.shape == "twist":  # fed at its tip: only the funnel drop ends it
+                    if plan != "drop":
+                        continue
+                    stops = [("drop", len(spec.holes_cm) - 1)]
+                elif plan == "twist":
                     if z <= 4:
                         continue
                     stops = [("twist", None)]
