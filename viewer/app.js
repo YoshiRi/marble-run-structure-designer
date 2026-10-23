@@ -2120,7 +2120,154 @@
   }
 
   document.getElementById("exampleSelect").addEventListener("change", event => {
+    const generated = generatedLayouts.get(event.target.value);
+    if (generated) { build.step = 0; setLayout(structuredClone(generated)); return; }
     loadExample(event.target.value).catch(console.error);
+  });
+
+  // ---- Generate in the browser (viewer/generator-worker.js runs the Python
+  // generator under Pyodide) ------------------------------------------------
+  const generatedLayouts = new Map();  // "generated:<id>" -> layout data
+  let generatorWorker = null;
+  let generationId = 0;
+
+  async function populateGenerateSets() {
+    const box = document.getElementById("genSets");
+    if (box.childElementCount) return;
+    let index;
+    try {
+      index = jsyaml.load(await (await fetch(DATA_ROOT + "catalog/sets/index.yaml")).text());
+    } catch (error) {
+      box.textContent = "Could not load the set list.";
+      return;
+    }
+    const preset = new Set(["QD001", "QD003", "QD005", "QDE6008AB05"]);
+    for (const group of Object.values(index.presets || {})) {
+      for (const entry of group) {
+        const label = document.createElement("label");
+        label.className = "gen-check";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = entry.id;
+        input.checked = preset.has(entry.id);
+        label.append(input, " " + entry.id + (entry.name_ja ? " " + entry.name_ja : ""));
+        box.appendChild(label);
+      }
+    }
+  }
+
+  function generateOptions() {
+    const value = id => document.getElementById(id).value;
+    const area = Number(value("genArea"));
+    return {
+      sets: [...document.querySelectorAll("#genSets input:checked")].map(input => input.value),
+      exclude: document.getElementById("genNoRightAngle").checked ? ["red_right_angle"] : [],
+      max_height: Number(value("genHeight")),
+      footprint: [area, area],
+      max_exits: Number(value("genExits")),
+      twist_probability: Number(value("genTwists")),
+      curve_bias: Number(value("genCurves")),
+      attempts: Number(value("genAttempts")),
+      seed: Math.max(1, Math.trunc(Number(value("genSeed")) || 1)),
+      keep: 6,
+    };
+  }
+
+  function downloadYaml(data) {
+    const blob = new Blob([jsyaml.dump(data, { lineWidth: 120 })], { type: "text/yaml" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = (data.layout_id || "layout") + ".yaml";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+
+  function openGenerated(data) {
+    const key = "generated:" + data.layout_id;
+    generatedLayouts.set(key, data);
+    const select = document.getElementById("exampleSelect");
+    if (![...select.options].some(o => o.value === key)) {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = "browser · " + data.layout_id;
+      select.appendChild(option);
+    }
+    select.value = key;
+    build.step = 0;
+    setLayout(structuredClone(data));
+  }
+
+  function showGenerated(layouts) {
+    const list = document.getElementById("genResults");
+    list.replaceChildren(...layouts.map(data => {
+      const m = data.metrics || {};
+      const li = document.createElement("li");
+      const text = document.createElement("span");
+      text.innerHTML = "<b>" + data.layout_id + "</b> · score " + data.generator.score +
+        ' <span class="muted">· ' + m.levels + " levels, " + m.rails + " rails, " + m.exits + (m.exits === 1 ? " exit" : " exits") +
+        (m.twists ? ", " + m.twists + " twist" + (m.twists > 1 ? "s" : "") : "") +
+        (m.curved_rails ? ", " + m.curved_rails + " curve" + (m.curved_rails > 1 ? "s" : "") : "") + "</span>";
+      const open = document.createElement("button");
+      open.type = "button";
+      open.textContent = "Open";
+      open.addEventListener("click", () => {
+        openGenerated(data);
+        document.getElementById("generateDialog").close();
+      });
+      const save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "YAML";
+      save.title = "Download this layout as YAML";
+      save.addEventListener("click", () => downloadYaml(data));
+      li.append(text, open, save);
+      return li;
+    }));
+  }
+
+  function runGenerator() {
+    const options = generateOptions();
+    const status = document.getElementById("genStatus");
+    const progress = document.getElementById("genProgress");
+    const run = document.getElementById("genRun");
+    if (!options.sets.length) { status.textContent = "Pick at least one set."; return; }
+    if (!generatorWorker) {
+      generatorWorker = new Worker("./generator-worker.js");
+      generatorWorker.onmessage = event => {
+        const message = event.data;
+        if (message.id !== undefined && message.id !== generationId) return;
+        if (message.type === "status") status.textContent = message.text;
+        else if (message.type === "progress") {
+          progress.max = message.total;
+          progress.value = message.done;
+          status.textContent = "Generating… " + message.done + " / " + message.total + " tries";
+        } else if (message.type === "result") {
+          run.disabled = false;
+          status.textContent = message.layouts.length
+            ? message.layouts.length + " layouts. Open one to view, build or roll it."
+            : "No valid layout found: try more effort, a larger area or more sets.";
+          showGenerated(message.layouts);
+        } else if (message.type === "error") {
+          run.disabled = false;
+          status.textContent = "Error: " + message.message;
+        }
+      };
+    }
+    generationId += 1;
+    run.disabled = true;
+    progress.value = 0;
+    document.getElementById("genResults").replaceChildren();
+    const base = new URL(DATA_ROOT, window.location.href).href;
+    generatorWorker.postMessage({ type: "generate", id: generationId, base, options });
+  }
+
+  document.getElementById("generateOpen").addEventListener("click", async () => {
+    await populateGenerateSets();
+    document.getElementById("generateDialog").showModal();
+  });
+  document.getElementById("genClose").addEventListener("click", () => document.getElementById("generateDialog").close());
+  document.getElementById("genRun").addEventListener("click", runGenerator);
+  document.getElementById("genReseed").addEventListener("click", () => {
+    document.getElementById("genSeed").value = String(1 + Math.floor(Math.random() * 99999));
   });
 
   document.getElementById("layoutFile").addEventListener("change", event => {

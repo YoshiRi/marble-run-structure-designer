@@ -31,6 +31,7 @@
           <input id="layoutFile" type="file" accept=".yaml,.yml,text/yaml">
         </label>
         <a class="toolbar-link" href="./gallery.html">Gallery</a>
+        <button id="generateOpen" type="button" title="Generate new layouts in the browser">Generate</button>
         <button id="buildToggle" type="button" aria-pressed="false" title="Step-by-step build instructions">Build</button>
         <div id="buildBar" class="build-bar" hidden>
           <button id="buildPrev" type="button" aria-label="Previous step">←</button>
@@ -125,6 +126,49 @@
       </aside>
     </main>
   </div>
+  <dialog id="generateDialog" class="gen-dialog" aria-labelledby="generateTitle">
+    <form id="generateForm" method="dialog">
+      <h2 id="generateTitle">Generate layouts</h2>
+      <p class="muted small-note">Runs the same generator as the command line, in your browser (Python via Pyodide; the first run downloads it, about 10 MB).</p>
+      <fieldset class="gen-sets">
+        <legend>Sets you have</legend>
+        <div id="genSets" class="gen-checks"></div>
+        <label class="gen-check"><input id="genNoRightAngle" type="checkbox" checked> No right-angle splitter</label>
+      </fieldset>
+      <div class="gen-grid">
+        <label>Max height
+          <select id="genHeight"><option value="18">18 u (27 cm)</option><option value="24" selected>24 u (36 cm)</option><option value="30">30 u (45 cm)</option></select>
+        </label>
+        <label>Area
+          <select id="genArea"><option value="60">60 × 60 cm</option><option value="75">75 × 75 cm</option><option value="90" selected>90 × 90 cm</option></select>
+        </label>
+        <label>Exits
+          <select id="genExits"><option>1</option><option selected>2</option><option>3</option></select>
+        </label>
+        <label>Twists
+          <select id="genTwists"><option value="0">none</option><option value="0.5" selected>some</option><option value="0.9">many</option></select>
+        </label>
+        <label>Curves
+          <select id="genCurves"><option value="0">few</option><option value="0.5" selected>some</option><option value="0.9">many</option></select>
+        </label>
+        <label>Effort
+          <select id="genAttempts"><option value="100">quick (100 tries)</option><option value="250" selected>normal (250)</option><option value="600">thorough (600)</option></select>
+        </label>
+        <label>Seed
+          <span class="gen-seed"><input id="genSeed" type="number" min="1" value="1"><button id="genReseed" type="button" title="New random seed">↻</button></span>
+        </label>
+      </div>
+      <div class="gen-progress">
+        <progress id="genProgress" max="1" value="0"></progress>
+        <span id="genStatus" class="muted small-note" aria-live="polite"></span>
+      </div>
+      <ol id="genResults" class="gen-results"></ol>
+      <div class="gen-actions">
+        <button id="genClose" type="button">Close</button>
+        <button id="genRun" type="button" class="primary">Generate</button>
+      </div>
+    </form>
+  </dialog>
   <script src="./routing.js"></script>
   <script src="./assembly.js"></script>
   <script src="./validation.js"></script>
