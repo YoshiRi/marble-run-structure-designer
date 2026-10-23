@@ -1294,7 +1294,16 @@ def layout_id(layout: Layout) -> str:
 
 
 def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
-                        generator_info: Mapping[str, Any]) -> dict[str, Any]:
+                        generator_info: Mapping[str, Any],
+                        available: Mapping[str, int] | None = None) -> dict[str, Any]:
+    """`available`: inventory counts the build was generated from (excluded
+    parts already zeroed); adds a checked bill of materials."""
+    from .assembly_plan import bill_of_materials, check_inventory
+
+    bom = bill_of_materials(candidate.layout)
+    bom_info: dict[str, Any] = {"used": bom}
+    if available is not None:
+        bom_info["check"] = check_inventory(bom, available)
     return {
         "schema_version": "0.1",
         "layout_id": layout_id(candidate.layout),
@@ -1303,6 +1312,7 @@ def layout_to_yaml_dict(candidate: Candidate, *, name: str, description: str,
         "generator": dict(generator_info),
         "metrics": dict(candidate.metrics),
         "inventory_used": dict(candidate.usage),
+        "bill_of_materials": bom_info,
         **layout_to_dict(candidate.layout, source=candidate.source, sinks=candidate.sinks),
     }
 

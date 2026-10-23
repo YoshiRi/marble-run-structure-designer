@@ -85,6 +85,7 @@ def main() -> None:
                             "max_height_units": args.max_height,
                             "footprint_cm": list(args.footprint), "max_exits": args.max_exits,
                             "exit_style": args.exit_style, "score": round(candidate.score, 1)},
+            available={k: (0 if k in config.exclude_parts else v) for k, v in budget.counts.items()},
         )
         path = args.out_dir / f"{name}.yaml"
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")

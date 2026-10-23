@@ -50,6 +50,7 @@
     com: [],
     polygon: [],
     structure: [],
+    build: [],
   };
 
   // Show the z=0 datum explicitly instead of relying on a plain ground plane.
@@ -78,6 +79,9 @@
 
   let catalog = null;
   let layout = null;
+  // The loaded layout. In Build mode `layout` is the part placed so far.
+  let fullLayout = null;
+  const build = { on: false, step: 0, plan: [], graph: null, ghost: false, onRoute: new Set() };
   let routingGraph = null;
   let lastOutcomes = null;
   // Sampled runs for the current input hole: exit node -> count.
@@ -1572,7 +1576,357 @@
     camera.radius = Math.max(25, size * 1.25);
   }
 
+  // ---- Build mode (docs/assembly-assist.md) --------------------------------
+  const BUILD_STORE = "marble-run-build-v1:";
+  const PART_NAMES = {
+    wooden_foundation: "foundation", natural_drop: "natural", purple_drop: "purple 1u",
+    orange_vertical: "orange", red_random_split: "red splitter", red_right_angle: "red right-angle",
+    blue: "blue", green: "green", cyan: "cyan", yellow: "yellow",
+    straight_short: "short straight", straight_long: "long straight",
+    straight_long_center: "long straight (center hole)", curved_short: "short curve",
+    curved_long: "long curve", s_curve: "S-curve", spiral: "twist", cover: "cover",
+  };
+  const partName = type => PART_NAMES[type] || type;
+
+  function stepIds(step) { return new Set(build.plan[step]?.components || []); }
+
+  // Components placed up to the current step (all of them on the first and
+  // last steps, so the parts list and the final check show the whole build).
+  function placedIds() {
+    const last = build.plan.length - 1;
+    if (build.step === 0 || build.step === last) {
+      return new Set(build.plan.flatMap(s => s.components));
+    }
+    const ids = new Set();
+    for (let i = 1; i <= build.step; i++) for (const id of build.plan[i].components) ids.add(id);
+    return ids;
+  }
+
+  function buildView() {
+    const ids = placedIds();
+    if (build.ghost) for (const s of build.plan) for (const id of s.components) ids.add(id);
+    const view = { ...fullLayout };
+    view.rails = (fullLayout.rails || []).filter(r => ids.has(r.id));
+    view.parts = (fullLayout.parts || []).filter(p => ids.has(p.id));
+    view.supports = (fullLayout.supports || []).filter(s =>
+      (s.stack_part_ids || []).every(id => ids.has(id)) &&
+      (s.upper_rail_id == null || ids.has(s.upper_rail_id)) &&
+      (s.lower_rail_id == null || ids.has(s.lower_rail_id)));
+    view.route_links = (fullLayout.route_links || []).filter(l =>
+      ids.has(l.source.component_id) && ids.has(l.target.component_id));
+    return view;
+  }
+
+  function stepMeshes(ids) {
+    return groups.structure.filter(m => m && !m.isDisposed() && ids.has(m.metadata?.info?.id));
+  }
+
+  function frameMeshes(meshes) {
+    if (!meshes.length) return fitCamera();
+    const min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+    const max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+    for (const mesh of meshes) {
+      mesh.computeWorldMatrix(true);
+      const bb = mesh.getBoundingInfo().boundingBox;
+      min.minimizeInPlace(bb.minimumWorld);
+      max.maximizeInPlace(bb.maximumWorld);
+    }
+    camera.setTarget(min.add(max).scale(0.5));
+    camera.radius = Math.max(35, max.subtract(min).length() * 1.6);
+  }
+
+  // Outline the current step, ghost later steps, and draw facing arrows.
+  function decorateBuildStep() {
+    const step = build.plan[build.step];
+    const current = stepIds(build.step);
+    const placed = placedIds();
+    for (const mesh of groups.structure) {
+      const id = mesh?.metadata?.info?.id;
+      if (!id || mesh.isDisposed()) continue;
+      if (!placed.has(id)) mesh.visibility = 0.15;
+      if (step.kind === "rail" && current.has(id)) {
+        mesh.renderOutline = true;
+        mesh.outlineColor = BABYLON.Color3.FromHexString("#f8fafc");
+        mesh.outlineWidth = 0.12;
+      }
+    }
+    if (step.kind !== "rail") return fitCamera();
+    for (const id of current) drawFacingArrows(id);
+    frameMeshes(stepMeshes(current));
+  }
+
+  // Blocks the marble passes through from the layout's input (BFS over the
+  // routing graph). Only these need a particular facing; the rest are
+  // structure, any way round.
+  function routeParts() {
+    const query = fullLayout.routing_query?.source;
+    const start = query ? query.component_id + ":" + query.port : null;
+    const seen = new Set(start ? [start] : []);
+    const queue = start ? [start] : [];
+    while (queue.length) {
+      for (const next of build.graph.edges[queue.shift()] || []) {
+        if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      }
+    }
+    return new Set([...seen].map(node => node.slice(0, node.indexOf(":"))));
+  }
+
+  function routeTargets(partId, port) {
+    return (build.graph?.edges[partId + ":" + port] || [])
+      .map(node => node.slice(0, node.indexOf(":")))
+      .filter(id => id !== partId);
+  }
+
+  function blockPorts(part) {
+    const spec = partSpec(part.part_type);
+    const outlets = new Set(), inlets = new Set();
+    for (const route of spec?.routes || []) {
+      for (const to of [route.to, ...(route.to_any_of || [])]) if (to) outlets.add(to);
+      if (route.from) inlets.add(route.from);
+    }
+    const sides = ["front", "rear", "left", "right"];
+    const notches = spec?.port_visualization?.side_entry_notches || [];
+    return {
+      outlets: sides.filter(p => outlets.has(p)),
+      // Only notches something actually feeds (a rail end, another block).
+      inlets: sides.filter(p => inlets.has(p) && notches.includes(p) && build.fed?.has(part.id + ":" + p)),
+    };
+  }
+
+  function drawArrow(pose, inward, color) {
+    const [x, y, z] = pose.position;
+    const [nx, ny] = pose.normal;
+    const lift = 0.9;
+    const tail = new BABYLON.Vector3(x + nx * (inward ? 3.2 : 0.2), z + lift, y + ny * (inward ? 3.2 : 0.2));
+    const head = new BABYLON.Vector3(x + nx * (inward ? 0.4 : 3.0), z + lift, y + ny * (inward ? 0.4 : 3.0));
+    const shaft = BABYLON.MeshBuilder.CreateTube("build-arrow", { path: [tail, head], radius: 0.18 }, scene);
+    const dir = head.subtract(tail).normalize();
+    const cone = BABYLON.MeshBuilder.CreateCylinder("build-arrow-head",
+      { diameterTop: 0, diameterBottom: 0.9, height: 1.0, tessellation: 12 }, scene);
+    cone.position = head;
+    const axis = BABYLON.Vector3.Cross(BABYLON.Axis.Y, dir);
+    const angle = Math.acos(Math.max(-1, Math.min(1, BABYLON.Vector3.Dot(BABYLON.Axis.Y, dir))));
+    if (axis.length() > 1e-6) cone.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis.normalize(), angle);
+    for (const mesh of [shaft, cone]) {
+      mesh.material = material("buildArrowMat", color);
+      mesh.material.emissiveColor = BABYLON.Color3.FromHexString(color).scale(0.5);
+      mesh.isPickable = false;
+      groups.build.push(mesh);
+    }
+  }
+
+  function drawFacingArrows(partId) {
+    const part = (layout.parts || []).find(p => p.id === partId);
+    if (!part || !partSpec(part.part_type)?.routes || !build.onRoute.has(partId)) return;
+    const { outlets, inlets } = blockPorts(part);
+    for (const port of outlets) {
+      const pose = MarbleRouting.portPose(layout, catalog, { component_id: partId, port });
+      if (pose) drawArrow(pose, false, "#22c55e");
+    }
+    for (const port of inlets) {
+      const pose = MarbleRouting.portPose(layout, catalog, { component_id: partId, port });
+      if (pose) drawArrow(pose, true, "#38bdf8");
+    }
+  }
+
+  // "front: along rail2 → rail4" style facing text, relative to the step's rail.
+  function facingText(part, rail) {
+    const { outlets, inlets } = blockPorts(part);
+    const sided = outlets.length || (partSpec(part.part_type)?.routes || []).some(r =>
+      ["front", "rear", "left", "right"].includes(r.from));
+    if (!sided) return "";  // vertical-only parts look the same any way round
+    if (!build.onRoute.has(part.id)) return "structure, any way round";
+    if (!outlets.length && !inlets.length) return "";
+    const spec = railSpec(rail.rail_type);
+    const ref = MarbleRouting.railPose(catalog, rail, Number(spec.length_cm) / 2)[2];
+    const words = [];
+    const relative = port => {
+      const pose = MarbleRouting.portPose(fullLayout, catalog, { component_id: part.id, port });
+      if (!pose) return "";
+      const a = Math.atan2(pose.normal[1], pose.normal[0]) - ref;
+      const c = Math.cos(a), s = Math.sin(a);
+      return Math.abs(c) >= Math.abs(s) ? (c > 0 ? "along " : "back along ") + rail.id
+        : (s > 0 ? "left of " : "right of ") + rail.id;
+    };
+    for (const port of outlets) {
+      const to = routeTargets(part.id, port);
+      words.push("out " + port + ": " + relative(port) + (to.length ? " → " + to.join(", ") : ""));
+    }
+    for (const port of inlets) {
+      const key = part.id + ":" + port;
+      const from = Object.entries(build.graph.edges)
+        .filter(([src, targets]) => targets.includes(key) && !src.startsWith(part.id + ":"))
+        .map(([src]) => src.slice(0, src.indexOf(":")));
+      words.push("in " + port + " notch: " + relative(port) + (from.length ? " ← " + from.join(", ") : ""));
+    }
+    return words.join("; ");
+  }
+
+  function groupParts(ids) {
+    const parts = new Map((fullLayout.parts || []).map(p => [p.id, p]));
+    const runs = [];
+    for (const id of ids) {
+      const type = parts.get(id)?.part_type;
+      if (runs.length && runs[runs.length - 1].type === type && !build.onRoute.has(id)
+          && !build.onRoute.has(runs[runs.length - 1].ids[0])) {
+        runs[runs.length - 1].ids.push(id);
+      } else runs.push({ type, ids: [id] });
+    }
+    return runs;
+  }
+
+  function swatch(type) {
+    const color = palette[type] || (String(type).includes("straight") || String(type).includes("curve")
+      ? palette.rail : type === "spiral" ? palette.twist : palette.default);
+    return '<i class="swatch" style="background:' + color + '"></i>';
+  }
+
+  const esc = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function doneKey() { return BUILD_STORE + (fullLayout?.layout_id || fullLayout?.name || "layout"); }
+  function loadDone() {
+    try { return new Set(JSON.parse(localStorage.getItem(doneKey()) || "[]")); } catch (e) { return new Set(); }
+  }
+  function saveDone(done) {
+    try { localStorage.setItem(doneKey(), JSON.stringify([...done])); } catch (e) { /* unavailable */ }
+  }
+
+  function stepTitle(step, i) {
+    if (step.kind === "parts") return "Parts";
+    if (step.kind === "check") return "Roll the marble";
+    return partName(step.rail_type) + " " + step.rail + " · level " + step.z_units +
+      (step.brace ? " · brace (no marble)" : "");
+  }
+
+  function bomHtml() {
+    const info = fullLayout.bill_of_materials;
+    const used = info?.used || MarbleAssembly.billOfMaterials(fullLayout);
+    const check = info?.check ? new Map(info.check.map(r => [r.part, r])) : null;
+    const pooled = { straight_long_center: "straight_long", spiral_large: "spiral", spiral_small: "spiral" };
+    const rows = Object.entries(used).map(([type, n]) => {
+      const row = check?.get(pooled[type] || type);
+      let status = "";
+      if (row) {
+        status = row.short ? '<span class="short">short ' + row.short + "</span>"
+          : '<span class="ok">ok</span>' + (row.wildcard ? " (" + row.wildcard + " any straight)" : "");
+      }
+      return "<tr><td>" + swatch(type) + esc(partName(type)) + "</td><td>" + n + "</td><td>" +
+        (row ? row.available + (pooled[type] ? " (shared)" : "") : "—") + "</td><td>" + status + "</td></tr>";
+    }).join("");
+    const sets = fullLayout.generator?.sets;
+    return '<p class="muted small-note">' + (sets
+      ? "Checked against sets " + esc(sets.join(", ")) +
+        (fullLayout.generator.exclude?.length ? " without " + esc(fullLayout.generator.exclude.map(partName).join(", ")) : "")
+      : "No set list in this layout: counts only.") + "</p>" +
+      '<table class="bom"><thead><tr><th>Part</th><th>Need</th><th>Have</th><th></th></tr></thead><tbody>' +
+      rows + "</tbody></table>";
+  }
+
+  function railStepHtml(step) {
+    const rail = (fullLayout.rails || []).find(r => r.id === step.rail);
+    const parts = new Map((fullLayout.parts || []).map(p => [p.id, p]));
+    const items = [];
+    for (const column of step.columns) {
+      const base = column.base === "ground" ? "on the ground" : "on " + column.base.rail + " hole " + column.base.hole;
+      const runs = groupParts(column.parts).map(run => {
+        const part = parts.get(run.ids[0]);
+        const facing = facingText(part, rail);
+        return swatch(run.type) + esc(partName(run.type)) + (run.ids.length > 1 ? " ×" + run.ids.length : "") +
+          (facing ? ' <span class="facing">(' + esc(facing) + ")</span>" : "");
+      });
+      items.push({ ids: column.parts, html: "<b>Column under hole " + column.hole + "</b>, " + esc(base) +
+        ", bottom to top: " + runs.join(" · ") });
+    }
+    const fit = [];
+    fit.push("rests on " + step.rests.map(([h, c]) => "hole " + h).join(" and "));
+    if (step.covers.length) fit.push("covers on holes " + step.covers.join(", "));
+    if (step.open.length) fit.push("hole " + step.open.join(", ") + " stays open: the marble dives through; keep below clear");
+    if (step.drops.length) fit.push("hole " + step.drops.join(", ") + " drops into the block below");
+    items.push({ ids: [step.rail], html: "<b>Lay " + swatch(rail.rail_type) + esc(partName(rail.rail_type)) + " " +
+      esc(rail.id) + "</b>" + (railSpec(rail.rail_type)?.shape === "arc" && rail.turn
+        ? " (turns " + esc(rail.turn) + ")" : "") + ": " + esc(fit.join("; ")) });
+    for (const free of step.free) {
+      const part = parts.get(free.parts[0]);
+      const facing = facingText(part, rail);
+      const what = free.support.startsWith("cw") ? "Counterweight" : "Stand";
+      items.push({ ids: free.parts, html: "<b>" + what + " on hole " + free.hole + "</b>: " +
+        groupParts(free.parts).map(run => swatch(run.type) + esc(partName(run.type)) +
+          (run.ids.length > 1 ? " ×" + run.ids.length : "")).join(" · ") +
+        (facing ? ' <span class="facing">(' + esc(facing) + ")</span>" : "") });
+    }
+    return '<ol class="build-items">' + items.map(item =>
+      '<li data-ids="' + esc(item.ids.join(" ")) + '">' + item.html + "</li>").join("") + "</ol>" +
+      '<p class="muted small-note">Green arrows: where the marble leaves a block. Blue arrows: side notches it enters.</p>';
+  }
+
+  function renderBuildPanel() {
+    const panel = document.getElementById("buildPanel");
+    document.getElementById("buildToggle").textContent = build.on ? "Exit build" : "Build";
+    document.getElementById("buildToggle").setAttribute("aria-pressed", String(build.on));
+    panel.hidden = !build.on;
+    if (!build.on || !fullLayout) return;
+    const step = build.plan[build.step];
+    const done = loadDone();
+    const last = build.plan.length - 1;
+    document.getElementById("buildStepTitle").textContent =
+      "Step " + build.step + " / " + last + " · " + stepTitle(step, build.step);
+    document.getElementById("buildPrev").disabled = build.step === 0;
+    document.getElementById("buildNext").disabled = build.step === last;
+    const doneBox = document.getElementById("buildDone");
+    doneBox.checked = done.has(build.step);
+    document.getElementById("buildProgress").textContent = done.size + " of " + (last + 1) + " steps done";
+    const body = document.getElementById("buildBody");
+    if (step.kind === "parts") body.innerHTML = bomHtml();
+    else if (step.kind === "check") {
+      body.innerHTML = '<p>Everything is placed. Roll a marble from the input (toolbar <b>Roll a marble</b> or the buttons below) and compare the exits.</p>';
+    } else body.innerHTML = railStepHtml(step);
+    for (const li of body.querySelectorAll("li[data-ids]")) {
+      const ids = new Set(li.dataset.ids.split(" "));
+      li.addEventListener("mouseenter", () => {
+        for (const m of stepMeshes(ids)) m.outlineColor = BABYLON.Color3.FromHexString("#facc15");
+      });
+      li.addEventListener("mouseleave", () => {
+        for (const m of stepMeshes(ids)) m.outlineColor = BABYLON.Color3.FromHexString("#f8fafc");
+      });
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "build");
+    url.searchParams.set("step", String(build.step));
+    window.history.replaceState(null, "", url);
+  }
+
+  function goToStep(step) {
+    build.step = Math.max(0, Math.min(build.plan.length - 1, step));
+    renderAll();
+  }
+
+  function setBuildMode(on) {
+    build.on = on;
+    if (on) {
+      for (const id of ["toggleCom", "togglePolygon"]) document.getElementById(id).checked = false;
+    }
+    if (!on) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("mode");
+      url.searchParams.delete("step");
+      window.history.replaceState(null, "", url);
+    }
+    renderAll();
+  }
+
+  function setLayout(data) {
+    fullLayout = data;
+    layout = data;
+    build.plan = MarbleAssembly.buildPlan(fullLayout);
+    build.graph = MarbleRouting.buildGraph(fullLayout, catalog);
+    build.onRoute = routeParts();
+    build.fed = new Set(Object.values(build.graph.edges).flat());
+    build.step = Math.min(build.step, build.plan.length - 1);
+    renderAll();
+  }
+
   function renderAll() {
+    layout = build.on ? buildView() : fullLayout;
     document.getElementById("allowSideEntryPlusOne").checked =
       Boolean(layout.routing_options?.allow_side_entry_plus_one);
     clearRendered();
@@ -1588,7 +1942,8 @@
     renderComAndPolygon();
     updateSummary();
     applyVisibility();
-    fitCamera();
+    if (build.on) decorateBuildStep(); else fitCamera();
+    renderBuildPanel();
   }
 
   function applyVisibility() {
@@ -1614,8 +1969,7 @@
   async function loadExample(path) {
     const response = await fetch(DATA_ROOT + path);
     if (!response.ok) throw new Error("Failed to load " + path);
-    layout = jsyaml.load(await response.text());
-    renderAll();
+    setLayout(jsyaml.load(await response.text()));
   }
 
   async function initialize() {
@@ -1634,6 +1988,12 @@
         }
         select.value = requested;
       }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "build") {
+        build.on = true;
+        for (const id of ["toggleCom", "togglePolygon"]) document.getElementById(id).checked = false;
+        build.step = Math.max(0, Number(params.get("step")) || 0);
+      }
       await loadExample(select.value);
     } catch (error) {
       document.getElementById("layoutMeta").textContent = String(error);
@@ -1651,8 +2011,8 @@
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        layout = jsyaml.load(String(reader.result));
-        renderAll();
+        build.step = 0;
+        setLayout(jsyaml.load(String(reader.result)));
       } catch (error) {
         alert("YAML parse error: " + error);
       }
@@ -1661,6 +2021,25 @@
   });
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
+  document.getElementById("buildToggle").addEventListener("click", () => setBuildMode(!build.on));
+  document.getElementById("buildPrev").addEventListener("click", () => goToStep(build.step - 1));
+  document.getElementById("buildNext").addEventListener("click", () => goToStep(build.step + 1));
+  document.getElementById("buildGhost").addEventListener("change", event => {
+    build.ghost = event.target.checked;
+    renderAll();
+  });
+  document.getElementById("buildDone").addEventListener("change", event => {
+    const done = loadDone();
+    if (event.target.checked) done.add(build.step); else done.delete(build.step);
+    saveDone(done);
+    if (event.target.checked && build.step < build.plan.length - 1) goToStep(build.step + 1);
+    else renderBuildPanel();
+  });
+  window.addEventListener("keydown", event => {
+    if (!build.on || event.target.closest?.("input, select, textarea")) return;
+    if (event.key === "ArrowRight") goToStep(build.step + 1);
+    if (event.key === "ArrowLeft") goToStep(build.step - 1);
+  });
   document.getElementById("rollOne").addEventListener("click", rollOne);
   document.getElementById("rollOneTop").addEventListener("click", rollOne);
   document.getElementById("rollMany").addEventListener("click", () => rollMany(100));

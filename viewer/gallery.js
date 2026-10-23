@@ -151,8 +151,15 @@
     open.className = "open";
     open.href = link;
     open.textContent = "Open in viewer";
+    const buildLink = document.createElement("a");
+    buildLink.className = "open";
+    buildLink.href = link + "&mode=build&step=0";
+    buildLink.textContent = "Build";
+    const links = document.createElement("div");
+    links.className = "card-links";
+    links.append(open, buildLink);
 
-    el.append(imgLink, idRow, tags, metrics, marks, note, open);
+    el.append(imgLink, idRow, tags, metrics, marks, note, links);
     return el;
   }
 

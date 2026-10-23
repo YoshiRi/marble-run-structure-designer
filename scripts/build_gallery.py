@@ -108,6 +108,7 @@ def main() -> None:
             candidate, name=lid,
             description=f"Gallery candidate ({label}, seed {seed}).",
             generator_info={"sets": SETS, "exclude": list(EXCLUDE), "config": label, "seed": seed, "score": round(candidate.score, 1)},
+            available={k: (0 if k in EXCLUDE else v) for k, v in budget.counts.items()},
         )
         assert data["layout_id"] == lid
         (out / f"{lid}.yaml").write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
