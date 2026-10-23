@@ -1,5 +1,9 @@
 # Layout Generator (M2)
 
+The layered design behind this (physics, construction, style rules,
+preferences, selection) is in `generator-design.md`; start there before
+adding a rule.
+
 `scripts/generate_layout.py` searches for buildable layouts from the combined
 contents of one or more commercial sets and writes the best ones as Layout YAML
 that the viewer can open.
@@ -62,7 +66,7 @@ An earlier "hook" entry (a rail into a blue/green/natural block on a chute
 hole, dropping from its bottom) was removed: the marble falls straight through
 the chute hole into the block below (user review of mr-c61a3513).
 
-## Input and thin towers
+## Input and towers
 
 The marble is put straight into the top block (user review 2: an input rail
 only wastes columns). The build still starts from a top rail with a drop
@@ -72,18 +76,16 @@ as a free-standing stack on its rail. Its top part is the source
 (`routing_query.source`, e.g. `c1_0_blue:top`); the viewer lists it as an
 input. `trim_input_rail: false` keeps the old input rail.
 
-A **thin tower** is a stack at one spot with 5 or more blocks (4u parts;
-purple 1u pieces and foundations not counted) whose rails all run along one
-axis: braced in one direction only, it topples easily (user review 2).
-Candidates with more than `max_thin_towers` (default 0) are dropped, and each
-one costs 12 points when allowed. This shrinks the builds: the best now have
-5-10 rails and 30-80 parts, where tall towers were the easy way up.
+A **weak tower** is a stack at one spot with 5 or more blocks (4u parts;
+purple 1u pieces and foundations not counted) whose upper half is braced in
+one direction only: every rail touching it at or above half its height runs
+along one axis (a rail near the ground hardly braces the top). It topples
+easily (user reviews 2 and 3). This is one rule and a penalty, -15 points each
+(user decision, `generator-design.md`); an earlier "thin tower" filter was
+merged into it.
 
 Review 3 refinements:
 
-- **weak towers**: 5+ blocks whose rails at or above half the stack's height
-  all run along one axis (a rail near the ground hardly braces the top);
-  -6 points each.
 - **support reactions**: the statics take moments about each rail's two
   supports with everything resting on it, now including free-standing stacks
   (input block, twist entry block). A rail carrying a load **outside** its
@@ -96,8 +98,8 @@ Review 3 refinements:
   weak tower, a straight rail carrying no marble is laid across it in its
   upper half, at right angles to the rails it holds; the tower's column is
   split at one of the brace's holes and the other support is another crossed
-  column or a new short one. Bracing roughly triples the candidates that pass
-  the thin-tower filter. Brace rails stay straight (no curve substitution).
+  column or a new short one. Bracing roughly tripled the candidates that
+  passed the former thin-tower filter. Brace rails stay straight (no curve substitution).
 - **unused area** (`dead_area_cm2`, user definition): top-view area taken by
   rails and columns where no marble rolls (1 cm grid; rolled rail stretches
   at full rail width and twist funnels count as used); 0.02 point per cm2.
@@ -158,7 +160,7 @@ were valued; high drops, very short branches and sprawling builds were not):
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
 - 1.5 x sum of exit levels (units) - 0.002 x footprint bounding-box area (cm2)
-- 12 x thin towers - 6 x weak towers - 0.05 x idle rail length (cm)
+- 15 x weak towers - 0.05 x idle rail length (cm)
 - 0.02 x unused top-view area (cm2)
 ```
 
