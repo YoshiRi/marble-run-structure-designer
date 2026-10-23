@@ -81,7 +81,7 @@
   let layout = null;
   // The loaded layout. In Build mode `layout` is the part placed so far.
   let fullLayout = null;
-  const build = { on: false, step: 0, plan: [], graph: null, ghost: false, onRoute: new Set() };
+  const build = { on: false, step: 0, plan: [], graph: null, ghost: false, onRoute: new Set(), reframe: false };
   let routingGraph = null;
   let lastOutcomes = null;
   // Sampled runs for the current input hole: exit node -> count.
@@ -1636,23 +1636,37 @@
   }
 
   // Outline the current step, ghost later steps, and draw facing arrows.
+  // Current step in color (outlined), parts placed in earlier steps dark gray,
+  // later steps ghosted. The camera stays where the user put it; it is
+  // framed only when Build mode opens (user request).
   function decorateBuildStep() {
     const step = build.plan[build.step];
     const current = stepIds(build.step);
     const placed = placedIds();
-    for (const mesh of groups.structure) {
-      const id = mesh?.metadata?.info?.id;
-      if (!id || mesh.isDisposed()) continue;
-      if (!placed.has(id)) mesh.visibility = 0.15;
-      if (step.kind === "rail" && current.has(id)) {
+    const earlier = material("buildEarlierMat", "#555c66");
+    earlier.emissiveColor = BABYLON.Color3.FromHexString("#555c66").scale(0.35);
+    earlier.specularColor = BABYLON.Color3.Black();
+    const earlierEdges = new BABYLON.Color4(0.42, 0.45, 0.5, 1);
+    for (const mesh of scene.meshes) {
+      const owner = mesh.metadata?.owner;
+      if (owner === undefined || mesh.isDisposed()) continue;
+      if (!placed.has(owner)) {
+        mesh.visibility = 0.15;
+      } else if (step.kind === "rail" && !current.has(owner)) {
+        if (mesh instanceof BABYLON.LinesMesh) mesh.color = new BABYLON.Color3(0.42, 0.45, 0.5);
+        else mesh.material = earlier;
+        if (mesh.edgesRenderer) mesh.edgesColor = earlierEdges;
+      } else if (step.kind === "rail" && mesh.metadata?.info?.id === owner) {
         mesh.renderOutline = true;
         mesh.outlineColor = BABYLON.Color3.FromHexString("#f8fafc");
         mesh.outlineWidth = 0.12;
       }
     }
-    if (step.kind !== "rail") return fitCamera();
-    for (const id of current) drawFacingArrows(id);
-    frameMeshes(stepMeshes(current));
+    if (step.kind === "rail") for (const id of current) drawFacingArrows(id);
+    if (build.reframe) {
+      build.reframe = false;
+      if (step.kind === "rail") frameMeshes(stepMeshes(current)); else fitCamera();
+    }
   }
 
   // Blocks the marble passes through from the layout's input (BFS over the
@@ -1902,6 +1916,7 @@
 
   function setBuildMode(on) {
     build.on = on;
+    build.reframe = on;
     if (on) {
       for (const id of ["toggleCom", "togglePolygon"]) document.getElementById(id).checked = false;
     }
@@ -1922,6 +1937,7 @@
     build.onRoute = routeParts();
     build.fed = new Set(Object.values(build.graph.edges).flat());
     build.step = Math.min(build.step, build.plan.length - 1);
+    build.reframe = true;  // a new layout: frame it once, then keep the view
     renderAll();
   }
 
@@ -1930,11 +1946,16 @@
     document.getElementById("allowSideEntryPlusOne").checked =
       Boolean(layout.routing_options?.allow_side_entry_plus_one);
     clearRendered();
-    for (const rail of layout.rails || []) renderRail(rail);
+    // Tag every mesh with the component that made it (Build mode colors by it).
+    const owned = (owner, draw) => {
+      const before = scene.meshes.length;
+      draw();
+      for (const mesh of scene.meshes.slice(before)) mesh.metadata = { ...(mesh.metadata || {}), owner };
+    };
+    for (const rail of layout.rails || []) owned(rail.id, () => renderRail(rail));
     for (const part of layout.parts || []) {
       const special = catalog.special_parts?.[part.part_type];
-      if (special?.shape === "twist_funnel") renderTwist(part, special);
-      else renderPart(part);
+      owned(part.id, () => (special?.shape === "twist_funnel" ? renderTwist(part, special) : renderPart(part)));
     }
     renderStackSeams();
     renderSupports();
@@ -1942,7 +1963,8 @@
     renderComAndPolygon();
     updateSummary();
     applyVisibility();
-    if (build.on) decorateBuildStep(); else fitCamera();
+    if (build.on) decorateBuildStep();
+    else if (build.reframe) { build.reframe = false; fitCamera(); }
     renderBuildPanel();
   }
 
@@ -1991,6 +2013,7 @@
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") === "build") {
         build.on = true;
+        build.reframe = true;
         for (const id of ["toggleCom", "togglePolygon"]) document.getElementById(id).checked = false;
         build.step = Math.max(0, Number(params.get("step")) || 0);
       }
