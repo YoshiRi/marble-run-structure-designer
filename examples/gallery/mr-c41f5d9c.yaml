@@ -12,7 +12,7 @@ generator:
   - red_right_angle
   config: no-twists
   seed: 3
-  score: 106.3
+  score: 105.1
 metrics:
   levels: 6
   rails: 6
@@ -27,12 +27,12 @@ metrics:
   block_exits: 0
   random_branches: 0
   columns_on_rails: 3
-  footprint_area_cm2: 4469
-  dead_area_cm2: 170
+  footprint_area_cm2: 4566
+  dead_area_cm2: 217
   thin_towers: 0
   braces: 1
   weak_towers: 0
-  idle_rail_cm: 50.5
+  idle_rail_cm: 51.6
   covers: 10
   parts: 34
   curved_rails: 1
