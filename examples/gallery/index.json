@@ -7,38 +7,12 @@
   ],
   "layouts": [
     {
-      "id": "mr-8a3ce448",
-      "file": "examples/gallery/mr-8a3ce448.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-8a3ce448.jpg",
-      "config": "more-curves",
-      "seed": 3,
-      "score": 103.3,
-      "tags": [
-        "twist"
-      ],
-      "metrics": {
-        "levels": 6,
-        "rails": 5,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 149.2,
-        "min_exit_path_cm": 149.2,
-        "columns_on_rails": 4,
-        "footprint_area_cm2": 3088,
-        "curves": 1,
-        "twists": 1,
-        "highest_exit": 2,
-        "parts": 38,
-        "covers": 5
-      }
-    },
-    {
-      "id": "mr-a4f328ac",
-      "file": "examples/gallery/mr-a4f328ac.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-a4f328ac.jpg",
+      "id": "mr-fcaf704a",
+      "file": "examples/gallery/mr-fcaf704a.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-fcaf704a.jpg",
       "config": "balanced",
-      "seed": 1,
-      "score": 102.3,
+      "seed": 2,
+      "score": 113.7,
       "tags": [
         "twist"
       ],
@@ -47,158 +21,27 @@
         "rails": 5,
         "exits": 1,
         "random_branches": 0,
-        "rolling_length_cm": 167.2,
-        "min_exit_path_cm": 167.2,
-        "columns_on_rails": 5,
-        "footprint_area_cm2": 3504,
-        "curves": 0,
-        "twists": 1,
-        "highest_exit": 2,
-        "parts": 28,
-        "covers": 8
-      }
-    },
-    {
-      "id": "mr-53e60a0f",
-      "file": "examples/gallery/mr-53e60a0f.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-53e60a0f.jpg",
-      "config": "more-twists",
-      "seed": 1,
-      "score": 100.3,
-      "tags": [
-        "twist"
-      ],
-      "metrics": {
-        "levels": 6,
-        "rails": 5,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 136.2,
-        "min_exit_path_cm": 136.2,
+        "rolling_length_cm": 185.2,
+        "min_exit_path_cm": 185.2,
         "columns_on_rails": 4,
-        "footprint_area_cm2": 2527,
+        "footprint_area_cm2": 3490,
         "curves": 1,
         "twists": 1,
-        "highest_exit": 2,
-        "parts": 35,
-        "covers": 4
-      }
-    },
-    {
-      "id": "mr-45cfd2d2",
-      "file": "examples/gallery/mr-45cfd2d2.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-45cfd2d2.jpg",
-      "config": "more-twists",
-      "seed": 3,
-      "score": 96.5,
-      "tags": [
-        "twist",
-        "compact"
-      ],
-      "metrics": {
-        "levels": 6,
-        "rails": 5,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 126.2,
-        "min_exit_path_cm": 126.2,
-        "columns_on_rails": 4,
-        "footprint_area_cm2": 2234,
-        "curves": 0,
-        "twists": 1,
-        "highest_exit": 2,
-        "parts": 35,
-        "covers": 6
-      }
-    },
-    {
-      "id": "mr-34320f6c",
-      "file": "examples/gallery/mr-34320f6c.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-34320f6c.jpg",
-      "config": "more-curves",
-      "seed": 2,
-      "score": 94.2,
-      "tags": [
-        "twist"
-      ],
-      "metrics": {
-        "levels": 5,
-        "rails": 4,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 156.5,
-        "min_exit_path_cm": 156.5,
-        "columns_on_rails": 3,
-        "footprint_area_cm2": 2508,
-        "curves": 0,
-        "twists": 1,
-        "highest_exit": 4,
-        "parts": 38,
+        "highest_exit": 3,
+        "parts": 40,
         "covers": 7
       }
     },
     {
-      "id": "mr-8e50ad64",
-      "file": "examples/gallery/mr-8e50ad64.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-8e50ad64.jpg",
-      "config": "compact",
+      "id": "mr-0fbabf23",
+      "file": "examples/gallery/mr-0fbabf23.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-0fbabf23.jpg",
+      "config": "more-twists",
       "seed": 2,
-      "score": 90.4,
+      "score": 113.3,
       "tags": [
         "twist",
-        "compact"
-      ],
-      "metrics": {
-        "levels": 6,
-        "rails": 5,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 108.2,
-        "min_exit_path_cm": 108.2,
-        "columns_on_rails": 4,
-        "footprint_area_cm2": 1847,
-        "curves": 0,
-        "twists": 1,
-        "highest_exit": 2,
-        "parts": 32,
-        "covers": 5
-      }
-    },
-    {
-      "id": "mr-d2872a03",
-      "file": "examples/gallery/mr-d2872a03.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-d2872a03.jpg",
-      "config": "no-twists",
-      "seed": 1,
-      "score": 87.1,
-      "tags": [
-        "no twist"
-      ],
-      "metrics": {
-        "levels": 6,
-        "rails": 5,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 135.2,
-        "min_exit_path_cm": 135.2,
-        "columns_on_rails": 4,
-        "footprint_area_cm2": 2751,
-        "curves": 0,
-        "twists": 0,
-        "highest_exit": 2,
-        "parts": 28,
-        "covers": 9
-      }
-    },
-    {
-      "id": "mr-e11f1475",
-      "file": "examples/gallery/mr-e11f1475.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-e11f1475.jpg",
-      "config": "three-exits",
-      "seed": 3,
-      "score": 84.9,
-      "tags": [
-        "twist",
+        "curves",
         "stacked"
       ],
       "metrics": {
@@ -206,108 +49,52 @@
         "rails": 5,
         "exits": 1,
         "random_branches": 0,
-        "rolling_length_cm": 109.0,
-        "min_exit_path_cm": 109.0,
-        "columns_on_rails": 6,
-        "footprint_area_cm2": 3484,
-        "curves": 1,
+        "rolling_length_cm": 163.0,
+        "min_exit_path_cm": 163.0,
+        "columns_on_rails": 7,
+        "footprint_area_cm2": 3219,
+        "curves": 2,
         "twists": 1,
         "highest_exit": 2,
-        "parts": 31,
+        "parts": 29,
         "covers": 3
       }
     },
     {
-      "id": "mr-105978e5",
-      "file": "examples/gallery/mr-105978e5.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-105978e5.jpg",
-      "config": "three-exits",
-      "seed": 2,
-      "score": 80.8,
+      "id": "mr-2a2b0d80",
+      "file": "examples/gallery/mr-2a2b0d80.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-2a2b0d80.jpg",
+      "config": "more-twists",
+      "seed": 1,
+      "score": 110.7,
       "tags": [
-        "twist",
-        "branched",
-        "compact"
-      ],
-      "metrics": {
-        "levels": 5,
-        "rails": 4,
-        "exits": 2,
-        "random_branches": 1,
-        "rolling_length_cm": 105.5,
-        "min_exit_path_cm": 105.5,
-        "columns_on_rails": 3,
-        "footprint_area_cm2": 1856,
-        "curves": 0,
-        "twists": 1,
-        "highest_exit": 2,
-        "parts": 37,
-        "covers": 5
-      }
-    },
-    {
-      "id": "mr-4ff4dddd",
-      "file": "examples/gallery/mr-4ff4dddd.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-4ff4dddd.jpg",
-      "config": "no-twists",
-      "seed": 2,
-      "score": 80.1,
-      "tags": [
-        "no twist"
+        "twist"
       ],
       "metrics": {
         "levels": 6,
         "rails": 5,
         "exits": 1,
         "random_branches": 0,
-        "rolling_length_cm": 135.2,
-        "min_exit_path_cm": 135.2,
+        "rolling_length_cm": 171.5,
+        "min_exit_path_cm": 171.5,
         "columns_on_rails": 3,
-        "footprint_area_cm2": 4675,
-        "curves": 0,
-        "twists": 0,
+        "footprint_area_cm2": 3219,
+        "curves": 1,
+        "twists": 1,
         "highest_exit": 2,
-        "parts": 33,
-        "covers": 7
+        "parts": 38,
+        "covers": 8
       }
     },
     {
-      "id": "mr-bfe43b36",
-      "file": "examples/gallery/mr-bfe43b36.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-bfe43b36.jpg",
-      "config": "more-curves",
-      "seed": 1,
-      "score": 75.1,
+      "id": "mr-611b4b8e",
+      "file": "examples/gallery/mr-611b4b8e.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-611b4b8e.jpg",
+      "config": "compact",
+      "seed": 2,
+      "score": 104.2,
       "tags": [
-        "no twist",
-        "curves",
-        "compact"
-      ],
-      "metrics": {
-        "levels": 5,
-        "rails": 4,
-        "exits": 1,
-        "random_branches": 0,
-        "rolling_length_cm": 101.0,
-        "min_exit_path_cm": 101.0,
-        "columns_on_rails": 4,
-        "footprint_area_cm2": 2298,
-        "curves": 2,
-        "twists": 0,
-        "highest_exit": 5,
-        "parts": 27,
-        "covers": 4
-      }
-    },
-    {
-      "id": "mr-7d9559f2",
-      "file": "examples/gallery/mr-7d9559f2.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-7d9559f2.jpg",
-      "config": "taller",
-      "seed": 1,
-      "score": 72.0,
-      "tags": [
-        "no twist",
+        "twist",
         "stacked",
         "compact"
       ],
@@ -316,15 +103,230 @@
         "rails": 5,
         "exits": 1,
         "random_branches": 0,
-        "rolling_length_cm": 57.0,
-        "min_exit_path_cm": 57.0,
+        "rolling_length_cm": 130.0,
+        "min_exit_path_cm": 130.0,
         "columns_on_rails": 6,
-        "footprint_area_cm2": 1369,
+        "footprint_area_cm2": 1838,
+        "curves": 0,
+        "twists": 1,
+        "highest_exit": 2,
+        "parts": 29,
+        "covers": 4
+      }
+    },
+    {
+      "id": "mr-84ce47c6",
+      "file": "examples/gallery/mr-84ce47c6.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-84ce47c6.jpg",
+      "config": "compact",
+      "seed": 2,
+      "score": 101.2,
+      "tags": [
+        "twist",
+        "compact"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 130.5,
+        "min_exit_path_cm": 130.5,
+        "columns_on_rails": 4,
+        "footprint_area_cm2": 2285,
+        "curves": 1,
+        "twists": 1,
+        "highest_exit": 2,
+        "parts": 40,
+        "covers": 6
+      }
+    },
+    {
+      "id": "mr-fa2ca02d",
+      "file": "examples/gallery/mr-fa2ca02d.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-fa2ca02d.jpg",
+      "config": "more-curves",
+      "seed": 2,
+      "score": 98.0,
+      "tags": [
+        "twist"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 144.2,
+        "min_exit_path_cm": 144.2,
+        "columns_on_rails": 4,
+        "footprint_area_cm2": 3232,
+        "curves": 1,
+        "twists": 1,
+        "highest_exit": 2,
+        "parts": 36,
+        "covers": 4
+      }
+    },
+    {
+      "id": "mr-7472ec72",
+      "file": "examples/gallery/mr-7472ec72.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-7472ec72.jpg",
+      "config": "taller",
+      "seed": 1,
+      "score": 97.5,
+      "tags": [
+        "twist",
+        "branched",
+        "compact"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 2,
+        "random_branches": 1,
+        "rolling_length_cm": 135.5,
+        "min_exit_path_cm": 110.5,
+        "columns_on_rails": 4,
+        "footprint_area_cm2": 1856,
+        "curves": 1,
+        "twists": 1,
+        "highest_exit": 3,
+        "parts": 43,
+        "covers": 7
+      }
+    },
+    {
+      "id": "mr-a782b439",
+      "file": "examples/gallery/mr-a782b439.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-a782b439.jpg",
+      "config": "three-exits",
+      "seed": 2,
+      "score": 97.0,
+      "tags": [
+        "twist"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 154.2,
+        "min_exit_path_cm": 154.2,
+        "columns_on_rails": 4,
+        "footprint_area_cm2": 3447,
+        "curves": 0,
+        "twists": 1,
+        "highest_exit": 3,
+        "parts": 37,
+        "covers": 7
+      }
+    },
+    {
+      "id": "mr-76650d36",
+      "file": "examples/gallery/mr-76650d36.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-76650d36.jpg",
+      "config": "balanced",
+      "seed": 3,
+      "score": 95.3,
+      "tags": [
+        "twist"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 158.5,
+        "min_exit_path_cm": 158.5,
+        "columns_on_rails": 3,
+        "footprint_area_cm2": 3760,
+        "curves": 0,
+        "twists": 1,
+        "highest_exit": 3,
+        "parts": 45,
+        "covers": 8
+      }
+    },
+    {
+      "id": "mr-5cf11b53",
+      "file": "examples/gallery/mr-5cf11b53.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-5cf11b53.jpg",
+      "config": "more-twists",
+      "seed": 3,
+      "score": 93.2,
+      "tags": [
+        "no twist",
+        "curves",
+        "compact"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 5,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 112.2,
+        "min_exit_path_cm": 112.2,
+        "columns_on_rails": 3,
+        "footprint_area_cm2": 1636,
+        "curves": 2,
+        "twists": 0,
+        "highest_exit": 2,
+        "parts": 33,
+        "covers": 5
+      }
+    },
+    {
+      "id": "mr-45a11337",
+      "file": "examples/gallery/mr-45a11337.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-45a11337.jpg",
+      "config": "no-twists",
+      "seed": 2,
+      "score": 90.9,
+      "tags": [
+        "no twist",
+        "curves",
+        "branched"
+      ],
+      "metrics": {
+        "levels": 6,
+        "rails": 7,
+        "exits": 2,
+        "random_branches": 1,
+        "rolling_length_cm": 184.5,
+        "min_exit_path_cm": 109.5,
+        "columns_on_rails": 2,
+        "footprint_area_cm2": 4607,
+        "curves": 2,
+        "twists": 0,
+        "highest_exit": 2,
+        "parts": 46,
+        "covers": 13
+      }
+    },
+    {
+      "id": "mr-9e39689d",
+      "file": "examples/gallery/mr-9e39689d.yaml",
+      "thumbnail": "examples/gallery/thumbs/mr-9e39689d.jpg",
+      "config": "taller",
+      "seed": 3,
+      "score": 43.3,
+      "tags": [
+        "no twist"
+      ],
+      "metrics": {
+        "levels": 5,
+        "rails": 4,
+        "exits": 1,
+        "random_branches": 0,
+        "rolling_length_cm": 41.2,
+        "min_exit_path_cm": 41.2,
+        "columns_on_rails": 4,
+        "footprint_area_cm2": 2512,
         "curves": 0,
         "twists": 0,
         "highest_exit": 2,
-        "parts": 21,
-        "covers": 3
+        "parts": 26,
+        "covers": 2
       }
     }
   ]
