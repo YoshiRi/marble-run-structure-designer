@@ -37,11 +37,11 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 from .catalog import PartCatalog
-from .collision import Solid, penetration_cm, rail_solids
+from .collision import Solid, component_solids, penetration_cm, rail_solids
 from .geometry import valid_support_pairs
 from .inventory import load_inventory
 from .model import Layout, PlacedPart, PlacedRail, PortRef, RouteLink, SupportLink, rail_hole_world
-from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, substitute
+from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, shorten, substitute
 from .validation import validate_layout
 
 _DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
@@ -896,6 +896,22 @@ def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
                if not part.startswith("straight_") and part != "spiral")
 
 
+def shorten_rails(layout: Layout, catalog: PartCatalog, budget: Budget, source: PortRef,
+                  sinks: Sequence[PortRef]) -> Layout:
+    """Swap long straights for short ones wherever the build stays the same
+    (user review of the dense-stack example: long rails used for nothing
+    widen the build). Each swap is validated; the inventory is respected."""
+    for rail in list(layout.rails):
+        for trial in shorten(layout, catalog, rail.id):
+            if not _within_budget(layout_usage(trial), budget.counts):
+                continue
+            result = validate_layout(trial, catalog, source=source, sinks=sinks)
+            if result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}:
+                layout = trial
+                break
+    return layout
+
+
 def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random.Random,
                source: PortRef, sinks: Sequence[PortRef], keep_straight: Iterable[str] = ()) -> Layout:
     """Swap eligible straights for curves while the layout stays valid.
@@ -1056,8 +1072,8 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "thin_towers": thin_towers(layout, catalog),
         "braces": len(state.braces),
         "weak_towers": thin_towers(layout, catalog, upper_half=True),
-        "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(rid, 0.0)
-                                  for rid, r in state.rails.items()
+        "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(r.id, 0.0)
+                                  for r in layout.rails
                                   if catalog.rails[r.rail_type].shape != "twist"), 1),
         "covers": state.covers,
         "parts": len(layout.parts),
@@ -1095,11 +1111,12 @@ def generate(
         if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
             continue
         paths = result.connectivity.paths
-        solids = generator._solids(state)
+        layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
         layout = add_curves(layout, catalog, budget, rng, source, sinks, keep_straight=state.braces)
         layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
         if layout is None:
             continue
+        solids = component_solids(layout, catalog)  # the final rails, after swaps
         usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
         if config.max_thin_towers is not None and metrics["thin_towers"] > config.max_thin_towers:
