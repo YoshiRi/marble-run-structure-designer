@@ -1,0 +1,446 @@
+schema_version: "0.7"
+
+geometry_cm:
+  height_unit:
+    value: 1.5
+    source: derived_from_user_measurement_6_cm_per_4_units
+    confidence: derived
+    note: discrete stacking scale; rail and purple drop-block heights are each confirmed as 1 unit (1.5 cm); foundation height remains provisional
+  standard_block_footprint:
+    width_cm: 4.5
+    depth_cm: 4.5
+    source: user_measurement
+    confidence: measured
+  standard_block_stacking_height_cm:
+    value: 6.0
+    source: user_measurement
+    confidence: measured
+    note: effective height per standard block in an assembled stack
+  standard_block_connector_protrusion_cm:
+    value: 1.0
+    source: user_measurement
+    confidence: measured
+    note: inserted into mating piece; not added to effective stacked height
+  marble_diameter_cm:
+    value: 1.6
+    source: official_product_page_QD005_lists_16_mm_marbles
+    confidence: confirmed
+  rail_width_cm:
+    value: 4.5
+    source: user_measurement
+    confidence: measured
+  rail_groove_width_cm:
+    value: 1.0
+    source: user_measurement
+    confidence: measured
+    note: centered longitudinal channel on the top of straight rails
+  rail_groove_depth_cm:
+    value: 0.3
+    source: viewer_visualization_assumption
+    confidence: provisional
+    note: groove depth and cross-section profile still need measurement
+  rail_hole_diameter_cm:
+    value: 1.8
+    source: user_approximation
+    confidence: approximate
+  block_port_diameter_cm:
+    value: 1.8
+    source: viewer_assumption_using_rail_hole_diameter
+    confidence: provisional
+    note: actual block opening diameters not measured; face-center placement also provisional
+
+mass_defaults:
+  standard_routing_block_g:
+    value: 55
+    source: temporary_user_assumption
+    confidence: provisional
+    scope: unmeasured_height_4_routing_blocks
+
+height_units:
+  rail: 1 # user confirmed; 1.5 cm derived from 4-unit / 6 cm block scale
+  standard_block: 4
+  spiral:
+    value: 3
+    confidence: tentative
+  purple_drop_block: 1 # user-confirmed; physical body height is 1.5 cm, matching a rail
+  wooden_foundation: 1
+
+routing_blocks:
+  yellow:
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front]
+    port_visualization: { side_entry_notches: [] }
+    routes:
+      - { from: top, to: front }
+    confidence: confirmed
+
+  blue:
+    height: 4
+    mass_g:
+      value: 53
+      source: user_measurement
+      confidence: measured
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front, rear, bottom]
+    port_visualization: { side_entry_notches: [rear] }
+    routes:
+      - { from: top, to: front }
+      - { from: rear, to: bottom }
+    confidence: confirmed
+
+  green:
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front, left, bottom]
+    port_visualization: { side_entry_notches: [left] }
+    routes:
+      - { from: top, to: front }
+      - { from: left, to: bottom }
+    confidence: confirmed
+
+  cyan:
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front, left, right]
+    routes:
+      - { from: top, to: front }
+      - { from: left, to: right }
+      - { from: right, to: left }
+    confidence: confirmed
+
+  natural_drop:
+    appearance: natural_wood
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [front, rear, bottom]
+    port_visualization: { side_entry_notches: [front, rear] }
+    routes:
+      - { from: front, to: bottom }
+      - { from: rear, to: bottom }
+    confidence: confirmed_partial
+    todo: do not infer any additional ports/routes until physically confirmed
+
+  red_random_split:
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front, rear]
+    routes:
+      - from: top
+        to_any_of: [front, rear]
+        selection: random
+    confidence: confirmed
+    todo: probability distribution is unspecified
+
+  red_right_angle:
+    appearance: red
+    height: 4
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, front, right]
+    routes:
+      - from: top
+        to_any_of: [front, right]
+        selection: random
+    port_geometry:
+      output_angle_deg: 90
+    confidence: confirmed
+    todo: probability distribution is unspecified
+
+  orange_vertical:
+    height: 4
+    mass_g:
+      value: 58
+      source: user_measurement
+      confidence: measured
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, bottom]
+    routes:
+      - { from: top, to: bottom }
+    horizontal_ports: blocked
+    confidence: confirmed
+
+  purple_drop:
+    height: 1
+    body_height_cm:
+      value: 1.5
+      source: user_confirmation_rail_thickness
+      confidence: confirmed
+      note: same physical height as a one-unit rail
+    mass_g:
+      value: 12
+      source: user_measurement
+      confidence: measured
+    rotations_deg: any  # stands on one peg; any angle (user-confirmed)
+    ports: [top, bottom]
+    routes:
+      - { from: top, to: bottom }
+    confidence: confirmed
+
+structural_parts:
+  wooden_foundation:
+    appearance: natural_wood
+    height: 1
+    mass_g:
+      value: 12
+      source: user_measurement
+      confidence: measured
+    routing: false
+    role: foundation
+    confidence: confirmed
+
+  # Flat boards with rail-style holes (user-reported). Holes presumably sit on
+  # the block grid; pitch, thickness and how they are used in a build are not
+  # measured yet, so no height is given and the solver ignores them.
+  plate_two_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 2
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_three_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 3
+    hole_layout: in_a_row
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+  plate_four_corner_holes:
+    appearance: natural_wood
+    routing: false
+    hole_count: 4
+    hole_layout: four_corners
+    solver_support: not_yet
+    confidence: reported
+    todo: measure hole pitch, outline size and thickness; describe typical use
+
+rails:
+  straight_long:
+    height: 1
+    length_cm: 50
+    mass_g:
+      value: 135
+      source: user_measurement
+      confidence: measured
+    hole_positions_cm: [2, 7, 43, 48]
+    confidence: measured
+
+  straight_long_center:
+    height: 1
+    length_cm: 50
+    mass_g:
+      value: 135
+      source: user_measurement_assumed_same_physical_rail_family
+      confidence: provisional
+    hole_positions_cm: [2, 7, 25, 43, 48]
+    center_special_mount:
+      possible: true
+      confidence: partial
+      note: some rail variants have a center groove/mount for the seesaw; exact compatibility must be checked
+    confidence: measured
+
+  straight_short:
+    height: 1
+    length_cm: 27
+    mass_g:
+      value: 74
+      source: user_measurement
+      confidence: measured
+    hole_positions_cm: [2, 7, 20, 25]
+    confidence: inferred_from_measured_end_spacing
+    todo: confirm all hole centers directly
+
+# Curved rails: same width and thickness as straight rails. Kept out of
+# `rails:` on purpose: the solver and viewer only model straight rails so far,
+# and must not treat these as straight. Geometry is derived from user
+# observations (see docs/parts.md, "Curved rails"), not yet measured.
+curved_rails:
+  curved_short:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    mass_g:
+      value: 76
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_six_short_curves_overlapped_at_holes_close_a_circle_and_end_holes_match_short_straight_outer_holes
+      confidence: estimated
+      note: centerline radius through the hole centers; inner/outer edges at 20.75 / 25.25 cm
+    hole_angles_deg: [0, 60]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 69.96              # derived: 60 + 2 x overhang angle (4.98 deg)
+    centerline_length_cm: 28.0855437  # derived: 4 + 23*pi/3
+    hole_arc_positions_cm: [2.0, 26.0855437]
+    end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
+    stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
+
+  curved_long:
+    shape: arc
+    height: 1
+    width_cm: 4.5
+    mass_g:
+      value: 142
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
+    hole_circle_radius_cm:
+      value: 23.0
+      source: derived_three_long_curves_overlapped_at_holes_close_a_circle_and_middle_hole_overlaps_a_short_curve
+      confidence: estimated
+    hole_angles_deg: [0, 60, 120]
+    end_overhang_cm:
+      value: 2.0
+      source: assumed_same_as_straight_rail_end_holes
+      confidence: provisional
+    arc_deg: 129.96             # derived
+    centerline_length_cm: 52.1710874  # derived: 4 + 2*23*pi/3
+    hole_arc_positions_cm: [2.0, 26.0855437, 50.1710874]
+    end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
+    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
+
+  s_curve:
+    shape: compound_arc
+    height: 1
+    width_cm: 4.5
+    mass_g:
+      value: 142
+      source: estimated_from_straight_rail_linear_density_2.72_g_per_cm
+      confidence: provisional
+    description: two short-curve arcs sharing a middle hole, bending in opposite directions (user description)
+    hole_circle_radius_cm: { value: 23.0, source: same_as_short_curve, confidence: estimated }
+    segments:                  # from end A; turn is relative to the rail's turn
+      - { length_cm: 26.0855437, turn: same }      # 2 cm overhang + 60 deg to the middle hole
+      - { length_cm: 26.0855437, turn: opposite }  # 60 deg to the end hole + 2 cm overhang
+    centerline_length_cm: 52.1710874  # derived
+    hole_arc_positions_cm: [2.0, 26.0855437, 50.1710874]  # user-confirmed: holes at both ends and the middle
+    hole_chord_cm: [23.0, 23.0]  # derived: the three holes are collinear, 23 + 23 = 46 cm
+    connection_equivalent_to: straight_long_center holes 0, 2, 4   # user-confirmed
+    solver_support: not_yet
+    confidence: estimated_shape_user_confirmed
+
+# The twist (spiral funnel) is modeled as a rail running straight from the
+# chute tip (end A) to the funnel center, with a level difference of 3: its
+# chute hole mounts 3 units above its center hole. The marble enters from the
+# bottom outlet of a block standing on the chute hole (blue, green or natural,
+# side inlet facing the feeding rail; user-recommended), rolls down the chute,
+# circles the funnel counter-clockwise seen from above and drops through the
+# center hole into the column below. Geometry from user description; not measured.
+special_rails:
+  spiral:
+    aliases: [twist, ツイスト]
+    shape: twist
+    appearance: natural_wood
+    height: 1
+    width_cm: 4.5
+    overall_length_cm: { value: 36, source: user_estimate, confidence: approximate }
+    chute_length_cm: { value: 12, source: user_estimate, confidence: approximate }
+    funnel_rim_diameter_cm: { value: 23, source: user_estimate, confidence: approximate }
+    # Two chute holes (user-confirmed): with the funnel hole on one end hole of
+    # a short rail, the chute holes sit on the short rail's other two holes
+    # (23 and 18 cm from the funnel center). Funnel center = outlet.
+    hole_positions_cm: [1.5, 6.5, 24.5]
+    hole_mount_levels_units: [3, 3, 0]  # user-observed level difference of 3
+    # The chute is a plain rail (user): it is fed like one, by a block standing
+    # on it (side outlet landing, or a bottom outlet dropping in) or from a
+    # block outlet at its tip. A bottom-drop entry is fed from the LEFT of the
+    # twist's heading (user correction; blue, green or natural).
+    entry: { holes: [0, 1], via: [block_bottom, landing, rail_end], recommended_blocks: [blue, green, natural_drop],
+             feed_from: left_of_heading, source: user_description }
+    centerline_length_cm: 24.5       # routing ends at the funnel center
+    com_cm: 21.0                     # mostly the funnel; provisional
+    mass_g:
+      value: 150
+      source: rough_estimate_wood_volume
+      confidence: provisional
+    size_variants:
+      note: the historical Twist set lists a large and a small spiral, but the user's two pieces are the same size; treat all as this size for now
+    confidence: estimated_shape_user_described
+
+hole_state_types:
+  open:
+    description: hole is open and may permit a drop/connection depending on layout
+  block_connected:
+    description: a block is connected at the hole
+  covered:
+    description: cover makes the rail route pass over the hole
+  covered_slope:
+    description: covered slope is fitted; routing semantics still to be defined
+    parameters:
+      - orientation
+
+accessories:
+  routing_affecting:
+    cover:
+      resulting_hole_state: covered
+      confidence: confirmed
+    covered_slope:
+      aliases:
+        - covered_accelerator
+        - "フタ付加速パーツ"
+      resulting_hole_state: covered_slope
+      confidence: partial
+      todo: define exact route/behavior and orientation semantics
+
+  non_routing:
+    accelerator_plate:
+      mass_g:
+        value: 2.5
+        source: user_measurement
+        confidence: measured
+      affects_routing_graph: false
+      confidence: confirmed
+      note: keep for viewer/construction-assist if desired
+
+special_parts:
+  seesaw:
+    implementation_scope: deferred
+    mount:
+      location: rail_center
+      requires:
+        - center_hole
+        - center_groove_or_mount
+      confidence: confirmed_partial
+    ports: [top, left_end, right_end]
+    routes:
+      - from: top
+        to_any_of: [left_end, right_end]
+        selection: hysteretic_state
+    state:
+      type: hysteretic_direction
+      approximate_switch_scale_marbles: [4, 5]
+      confidence: approximate
+      todo: define exact switching rule and threshold
+    simplified_solver_model:
+      allowed_for_reachability: true
+      approximation: branch_to_either_rail_end
+
+  melody_step:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
+  round_spinner:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
+  clear_fall:
+    implementation_scope: deferred
+    confidence: product_preset_only
+
+deferred:
+  - curved_rails
+  - s_rails
+  - seesaw_detailed_state_machine
+  - seesaw_geometry
+  - spiral_geometry
+  - funny_function_special_geometry
