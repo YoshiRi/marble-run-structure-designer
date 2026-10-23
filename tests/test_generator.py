@@ -200,17 +200,17 @@ def test_input_goes_straight_into_a_block_standing_on_a_rail():
         assert support.stack_part_ids[-1] == c.source.component_id
 
 
-def test_thin_towers_are_counted_and_filtered():
-    from quadrilla_solver.generator import thin_towers
+def test_weak_towers_are_counted_and_penalized():
+    from quadrilla_solver.generator import score, weak_towers
     from quadrilla_solver.model import load_layout
 
-    for c in _run(11):
-        assert c.metrics["thin_towers"] == 0
     # Stacks braced along one axis count once they reach min_blocks.
     layout = load_layout(ROOT / "tests" / "fixtures" / "landing-tower.yaml")
-    assert thin_towers(layout, CATALOG, min_blocks=1) >= 1
-    assert thin_towers(layout, CATALOG, min_blocks=99) == 0
-
+    assert weak_towers(layout, CATALOG, min_blocks=1) >= 1
+    assert weak_towers(layout, CATALOG, min_blocks=99) == 0
+    # One rule, a penalty (user decision): candidates may keep weak towers.
+    base = {"levels": 5, "rolling_length_cm": 100, "random_branches": 0, "columns_on_rails": 0}
+    assert score({**base, "weak_towers": 1}) < score({**base, "weak_towers": 0})
 
 def test_excluded_parts_are_never_used():
     found = generate(CATALOG, _budget(), config=GeneratorConfig(exclude_parts=("red_right_angle",)),

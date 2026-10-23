@@ -129,9 +129,6 @@ class GeneratorConfig:
     # The marble can be put straight into the top block: no input rail (and
     # no columns built only to hold one up) when that block stands on a rail.
     trim_input_rail: bool = True
-    # Stacks of 5+ blocks braced along one axis only topple easily (user
-    # review); candidates with more of them than this are dropped.
-    max_thin_towers: int | None = 0
     # The marble rolls at least this far on a rail it lands on before the next
     # drop or dive. Short hops (block on hole 20, drop at hole 25) make the
     # compact stacked towers, so the default stays small; long rails held up
@@ -859,7 +856,7 @@ def score(metrics: Mapping[str, Any]) -> float:
     """What the user rewards in reviews: many levels and a long roll on every
     branch; branches and stacked columns next; curves and twists for variety.
     Penalized: a marble leaving high above the ground, a very short branch,
-    a sprawling footprint (place taken for little run), thin towers, and rail
+    a sprawling footprint (place taken for little run), weak towers, and rail
     length the marble never rolls on (a shorter rail would do)."""
     return (
         10.0 * metrics["levels"]
@@ -870,8 +867,7 @@ def score(metrics: Mapping[str, Any]) -> float:
         + 3.0 * metrics.get("curved_rails", 0)
         + 5.0 * metrics.get("twists", 0)
         - 1.5 * sum(metrics.get("exit_levels", ()))
-        - 12.0 * metrics.get("thin_towers", 0)
-        - 6.0 * metrics.get("weak_towers", 0)
+        - 15.0 * metrics.get("weak_towers", 0)
         - 0.05 * metrics.get("idle_rail_cm", 0.0)
         - 0.002 * metrics.get("footprint_area_cm2", 0.0)
         - 0.02 * metrics.get("dead_area_cm2", 0.0)
@@ -930,18 +926,17 @@ def _roll_lengths(state: _State, catalog: PartCatalog) -> dict[str, float]:
     return out
 
 
-def thin_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
-                upper_half: bool = False) -> int:
-    return len(tower_spots(layout, catalog, min_blocks, upper_half))
+def weak_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> int:
+    return len(tower_spots(layout, catalog, min_blocks))
 
 
-def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
-                upper_half: bool = False) -> list[dict[str, Any]]:
-    """Stacks at one spot with at least `min_blocks` blocks (4u parts) braced
-    in one direction only: every rail touching the stack runs along one axis
-    (within 45 deg). Such towers topple easily (user review 2). With
-    `upper_half`, only rails touching at or above half the stack's height
-    count: a rail near the ground hardly braces its top (review 3)."""
+def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> list[dict[str, Any]]:
+    """Weak towers: stacks at one spot with at least `min_blocks` blocks (4u
+    parts) whose upper half is braced in one direction only (every rail
+    touching the stack at or above half its height runs along one axis,
+    within 45 deg). They topple easily (user reviews 2 and 3); a rail near
+    the ground hardly braces the top. One rule, scored as a penalty (user
+    decision; generator-design.md)."""
     from .model import rail_pose
 
     rails, parts = layout.rail_map(), layout.part_map()
@@ -967,7 +962,7 @@ def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5,
     for (x, y), t in towers.items():
         if t["blocks"] < min_blocks:
             continue
-        axes = [a for z, a in t["contacts"] if not upper_half or z >= t["top"] / 2]
+        axes = [a for z, a in t["contacts"] if z >= t["top"] / 2]
         spread = max((min(abs(a - b), pi - abs(a - b)) for a in axes for b in axes), default=0.0)
         if spread < pi / 4:
             spots.append({"x": x, "y": y, "top": t["top"], "axes": axes})
@@ -1053,9 +1048,8 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "columns_on_rails": sum(1 for c in state.columns.values() if c.base_rail is not None),
         "footprint_area_cm2": round(_footprint_area(solids)),
         "dead_area_cm2": round(_dead_area(state, catalog, solids)),
-        "thin_towers": thin_towers(layout, catalog),
         "braces": len(state.braces),
-        "weak_towers": thin_towers(layout, catalog, upper_half=True),
+        "weak_towers": weak_towers(layout, catalog),
         "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(rid, 0.0)
                                   for rid, r in state.rails.items()
                                   if catalog.rails[r.rail_type].shape != "twist"), 1),
@@ -1082,7 +1076,7 @@ def generate(
             continue
         layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
         if config.brace_towers:
-            spots = tower_spots(layout, catalog, upper_half=True)
+            spots = tower_spots(layout, catalog)
             if spots:
                 state = generator.brace(state, spots)
                 layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
@@ -1102,8 +1096,6 @@ def generate(
             continue
         usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
-        if config.max_thin_towers is not None and metrics["thin_towers"] > config.max_thin_towers:
-            continue
         metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
         metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
         metrics["covers"] = usage.get("cover", 0)

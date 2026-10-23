@@ -107,6 +107,15 @@ The moves, i.e. the grammar of the generator:
 | twist | a twist fed like a rail: landing on its chute, or at its tip |
 | end branch | dive through an open hole / leave a low block outlet |
 
+**Moves and patterns.** A *move* is one construction step: one rail or one
+block column added, as in the table. A *pattern* is a known combination of
+several moves that a person would recognize and reuse, e.g. the triangle
+layout on the 23 cm lattice or a brace across a tall column. Patterns are hard
+to stumble on by random single moves, so they are added as macro moves: one
+step of the search places the whole pattern, which is then checked like any
+other move. Patterns come from the user (decision: learn a few known patterns
+rather than hope the search finds them).
+
 **Repair (rewrite passes).** A proposed build then goes through a list of
 local rewrites. Each pass is named and has one purpose. Trim and brace work on
 the abstract state under the same per-move checks, and the build is
@@ -132,7 +141,6 @@ field with a default, and the source of the default is recorded.
 | --- | --- | --- |
 | exits are block outlets or dives (`exit_style`) | contained | review 1 |
 | at most n exits (`max_exits`) | 2 | review 1 (catching marbles) |
-| no thin towers (5+ blocks braced along one axis) | 0 allowed | review 2 |
 | overhanging load keeps >= 20 g on the lighter support | 20 g | review 3 |
 | parts not owned (`exclude_parts`) | right-angle splitter (gallery) | review 3 |
 | max height, footprint, max rails | 24 u, 90x90 cm, 12 | setup |
@@ -150,7 +158,7 @@ weight and a source. No preference is hidden inside construction moves.
 | random branches, twists, curves, columns on rails | + | goal / variety |
 | exit height | - | review 1 (marble from high up) |
 | unused top-view area, footprint, idle rail length | - | reviews 1, 3 |
-| weak towers | - | review 3 |
+| weak towers (5+ blocks, upper half braced along one axis) | - | reviews 2, 3; one rule, a penalty (decision) |
 
 Construction biases (probabilities like `twist_probability`) only change
 *how often* a move is tried. They are search tuning, not preferences, and
@@ -186,11 +194,9 @@ by score. It never changes a build.
     twist bugs came from exactly this.
   - Target: moves propose; a small "joint check" query (one edge of the
     routing graph) decides.
-- **Two rules are both a filter and a penalty**: thin towers (filter) and weak
-  towers (penalty) are near-duplicates. Decide one definition and one layer.
 - **Bracing is a repair, not a move.** Tall builds depend on a pass patching
-  towers after the fact. A construction move that places a crossing rail
-  when a column grows tall would be more natural.
+  towers after the fact. A brace pattern placed when a column grows tall
+  would be more natural.
 - **Metrics are mixed**: some come from the abstract state (rolled length),
   some from the final layout (area, idle rail). All should come from the final
   layout plus the routing graph.
@@ -208,14 +214,18 @@ by score. It never changes a build.
   search (bottom-up, or proposing a footprint pattern first) is a layer-2
   change and does not touch the other layers.
 
-## 5. Open design questions
+## 5. Decisions
 
-- Thin vs weak towers: one rule. Is it a filter (never) or a preference
-  (worse)?
-- Should bracing become a construction move?
-- Do we want known patterns (e.g. the triangle layout on the 23 cm lattice,
-  `generator-roadmap.md`) as construction moves?
-- Edit mode in the viewer: port the validators to the browser first, or edit
-  through a small local Python service?
-- Learning weights from review marks (Buildable / Doubtful / Interesting):
-  only layer 4 (and maybe 3) should ever be learned; physics never.
+| Question | Decision |
+| --- | --- |
+| Thin vs weak towers | one rule (weak towers), a **penalty**, not a filter |
+| Known layouts (triangle, ...) | add as **patterns** (macro moves) taught by the user |
+| Edit mode | port the validators to **JavaScript** with Python parity tests, like routing |
+| Learning from review marks | **not yet** |
+
+## 6. Open questions
+
+- Which patterns first, and their exact geometry (the triangle: rail ends on
+  the triangle's sides, the middle hole on the perpendicular).
+- Bracing: keep as a pass, or turn into a pattern?
+- Search: stay top-down, or propose a footprint pattern first?
