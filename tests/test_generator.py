@@ -268,3 +268,14 @@ def test_weak_towers_get_brace_rails():
         linked = {l.source.component_id for l in c.layout.route_links} | {l.target.component_id for l in c.layout.route_links}
         braces = [r for r in c.layout.rails if not r.hole_states and r.id not in linked]
         assert braces
+
+
+def test_brace_rails_stay_straight():
+    found = generate(CATALOG, _budget(), config=GeneratorConfig(curve_ready_bias=0.9),
+                     attempts=80, seed=1, keep=200)
+    linked = lambda c: {l.source.component_id for l in c.layout.route_links} | \
+        {l.target.component_id for l in c.layout.route_links}
+    braces = [r for c in found if c.metrics["braces"]
+              for r in c.layout.rails if not r.hole_states and r.id not in linked(c)]
+    assert braces
+    assert all(r.rail_type.startswith("straight_") for r in braces)
