@@ -195,7 +195,9 @@ Thumbnails are rendered with `scripts/render_gallery_thumbnails.js` (dev tool).
 link) turns the viewer into step-by-step instructions, one rail per step from
 the bottom (`viewer/assembly.js`, mirrored by `quadrilla_solver.assembly_plan`):
 
-- step 0: bill of materials, checked against the sets in the layout's
+- step navigation (← Step n / N →) sits in the toolbar next to Build
+- step 0: a parts board over the 3D view (icon × count per part, shortfalls
+  in red) and the bill of materials, checked against the sets in the layout's
   `bill_of_materials.check` (written by the generator; long rails with and
   without the center hole share a count, wildcard straights fill shortfalls)
 - each rail step: the columns that hold it up (bottom to top, on the ground or

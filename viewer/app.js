@@ -1812,6 +1812,48 @@
       (step.brace ? " · brace (no marble)" : "");
   }
 
+  // Simple top-view-ish icons for the parts board (step 0).
+  function partIcon(type) {
+    const rail = palette.rail, edge = "rgba(0,0,0,.35)";
+    const color = palette[type] || palette.default;
+    const holes = (w, xs) => xs.map(x => '<circle cx="' + x + '" cy="20" r="3.2" fill="#3b2f1f" opacity=".55"/>').join("");
+    const bar = (w, xs) => '<svg viewBox="0 0 ' + (w + 4) + ' 40" width="' + (w + 4) + '" height="40"><rect x="2" y="13" width="' + w +
+      '" height="14" rx="2" fill="' + rail + '" stroke="' + edge + '"/>' + holes(w, xs) + "</svg>";
+    switch (type) {
+      case "straight_short": return bar(56, [6, 17, 46, 56]);
+      case "straight_long": return bar(100, [6, 16, 92, 102]);
+      case "straight_long_center": return bar(100, [6, 16, 54, 92, 102]);
+      case "curved_short": return '<svg viewBox="0 0 60 40" width="60" height="40"><path d="M6 34 A 40 40 0 0 1 54 34" fill="none" stroke="' + rail + '" stroke-width="12"/></svg>';
+      case "curved_long": return '<svg viewBox="0 0 84 44" width="84" height="44"><path d="M6 38 A 38 34 0 0 1 78 38" fill="none" stroke="' + rail + '" stroke-width="12"/></svg>';
+      case "s_curve": return '<svg viewBox="0 0 96 40" width="96" height="40"><path d="M6 30 C 30 2, 42 2, 48 20 S 66 38, 90 10" fill="none" stroke="' + rail + '" stroke-width="11"/></svg>';
+      case "spiral": return '<svg viewBox="0 0 76 44" width="76" height="44"><circle cx="54" cy="22" r="19" fill="' + palette.twist + '" stroke="' + edge + '"/><circle cx="54" cy="22" r="11" fill="none" stroke="#a57f45" stroke-width="2"/><circle cx="54" cy="22" r="3" fill="#3b2f1f"/><rect x="2" y="15" width="34" height="14" rx="2" fill="' + palette.twist + '" stroke="' + edge + '"/></svg>';
+      case "cover": return '<svg viewBox="0 0 24 40" width="24" height="40"><circle cx="12" cy="20" r="8" fill="#f59e0b" stroke="' + edge + '"/></svg>';
+      case "purple_drop": return '<svg viewBox="0 0 40 40" width="40" height="40"><rect x="2" y="14" width="36" height="12" rx="2" fill="' + color + '" stroke="' + edge + '"/></svg>';
+      case "wooden_foundation": return '<svg viewBox="0 0 40 40" width="40" height="40"><rect x="2" y="16" width="36" height="9" rx="2" fill="' + color + '" stroke="' + edge + '"/></svg>';
+      default: return '<svg viewBox="0 0 40 40" width="40" height="40"><rect x="2" y="2" width="36" height="36" rx="4" fill="' + color + '" stroke="' + edge + '"/><circle cx="20" cy="20" r="6" fill="rgba(0,0,0,.35)"/></svg>';
+    }
+  }
+
+  function renderPartsBoard() {
+    const info = fullLayout.bill_of_materials;
+    const used = info?.used || MarbleAssembly.billOfMaterials(fullLayout);
+    const pooled = { straight_long_center: "straight_long", spiral_large: "spiral", spiral_small: "spiral" };
+    const check = info?.check ? new Map(info.check.map(r => [r.part, r])) : null;
+    const order = t => (/straight|curve|s_curve/.test(t) ? 0 : t === "spiral" ? 1 : t === "cover" ? 3 :
+      t === "wooden_foundation" || t === "purple_drop" ? 4 : 2);
+    const tiles = Object.entries(used).sort(([a], [b]) => order(a) - order(b) || (a < b ? -1 : 1)).map(([type, n]) => {
+      const short = check?.get(pooled[type] || type)?.short;
+      const wide = order(type) <= 1 ? " is-wide" : "";
+      return '<div class="part-tile' + wide + (short ? " is-short" : "") + '"><div class="part-icon">' + partIcon(type) +
+        '</div><div class="part-count">×' + n + '</div><div class="part-name">' + esc(partName(type)) +
+        (short ? ' <b class="short">short ' + short + "</b>" : "") + "</div></div>";
+    }).join("");
+    const total = Object.values(used).reduce((a, b) => a + b, 0);
+    document.getElementById("partsBoard").innerHTML = '<div class="parts-board-head"><h2>Parts for this build</h2>' +
+      '<span class="muted">' + total + " pieces · press → to start</span></div>" +
+      '<div class="parts-grid">' + tiles + "</div>";
+  }
+
   function bomHtml() {
     const info = fullLayout.bill_of_materials;
     const used = info?.used || MarbleAssembly.billOfMaterials(fullLayout);
@@ -1878,12 +1920,16 @@
     document.getElementById("buildToggle").textContent = build.on ? "Exit build" : "Build";
     document.getElementById("buildToggle").setAttribute("aria-pressed", String(build.on));
     panel.hidden = !build.on;
+    document.getElementById("buildBar").hidden = !build.on;
+    document.getElementById("partsBoard").hidden = !build.on || build.step !== 0;
     if (!build.on || !fullLayout) return;
     const step = build.plan[build.step];
     const done = loadDone();
     const last = build.plan.length - 1;
     document.getElementById("buildStepTitle").textContent =
       "Step " + build.step + " / " + last + " · " + stepTitle(step, build.step);
+    document.getElementById("buildBarStep").textContent = "Step " + build.step + " / " + last;
+    if (build.step === 0) renderPartsBoard();
     document.getElementById("buildPrev").disabled = build.step === 0;
     document.getElementById("buildNext").disabled = build.step === last;
     const doneBox = document.getElementById("buildDone");
