@@ -230,7 +230,7 @@ Current logical configurations include:
 - covered/pass-through
 - covered-slope
 
-Some rail variants also provide a dedicated center mount for a seesaw.
+The center hole of `straight_long_center` is also the seesaw's mount.
 
 ## Accessories
 
@@ -245,28 +245,31 @@ Some rail variants also provide a dedicated center mount for a seesaw.
 
 ## Seesaw special part
 
-Implementation is **deferred for the MVP**, but its observed behavior is recorded so the model can accommodate it later.
+Modeled (user, 2026-10-24) as a **random distributor**:
 
-Mounting:
+- **Body**: 19 cm long, 3 cm wide, 8 cm tall.
+- **Mass**: about two blocks, entered as 106 g. This is an estimate.
+- **Mount**: only on the center hole (hole 2) of a center-hole long straight rail (`straight_long_center`). It stands alone on that hole, lies along the rail, and holds no rail above it.
+- **Input**: a marble that falls onto it from above, out of any open hole or off a rail end. The fall starts at most 12 levels above the seesaw's base; 8 is usual. The fall cannot start lower than the seesaw's own height.
+- **Output**: either arm, chosen at random. The marble leaves 9.5 cm from the pivot, lands on the host rail and rolls outward toward that rail's end. It drops at the first open hole, or off the end.
+- **Blocking**: a marble rolling along the host rail toward the seesaw stops there.
+- **Host rail flow**: the host rail must have `flow_direction: from_hole` with `flow_hole: 2` (see "Rail direction" below).
 
-- installed at the center of compatible rail variants
-- the compatible rail has a center hole plus a groove/mount for the seesaw
+The real seesaw tips after about 4–5 marbles and then sends a batch the other way (hysteresis). The routing does not model that; it treats each marble as a 50/50 split.
 
-Routing:
+Open question: whether a column may still hold the rail up from below at the same center hole. It is allowed for now.
 
-```text
-TOP -> LEFT_END
-TOP -> RIGHT_END
-```
+### Rail direction
 
-Behavior:
+A rail has no direction of its own: a marble rolls whichever way it enters. The model labels each rail with how marbles move on it:
 
-- stateful distributor
-- marbles dropped from above are sent toward one end of the rail or the other
-- the direction has hysteresis; the observed switching scale is approximately **4-5 marbles**
-- exact state-transition mechanics and exact threshold are intentionally left unspecified for now
+| `flow_direction` | Meaning |
+| --- | --- |
+| `a_to_b`, `b_to_a` | one way along the whole rail |
+| `to_hole` + `flow_hole: k` | **collector**: from both ends into hole k (e.g. the bottom rail of the official triangle build) |
+| `from_hole` + `flow_hole: k` | **outward**: from hole k to both ends (the rail under a seesaw) |
 
-For initial reachability-only solving, this can eventually be approximated as a branch to either rail end. A later viewer/simulation layer can model the hysteretic switching state.
+Every hole lies on one side of the pivot, so each stretch has a single direction and the routing graph stays unambiguous.
 
 ## Spiral (twist)
 
@@ -303,8 +306,7 @@ The initial solver may ignore:
 
 - curved rails
 - S-shaped rails
-- seesaw state transitions
-- detailed seesaw geometry
+- seesaw state transitions (hysteresis; the routing treats it as a random split)
 - Funny Function special-part geometry
 
 Still unresolved for the parts that remain in the MVP path:

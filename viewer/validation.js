@@ -233,7 +233,10 @@
       const h = partBodyHeightCm(catalog, part.part_type, unit);
       if (h == null) continue;
       const z = Number(part.z_units) * unit;
-      out.push(solid(part.id, Number(part.x_cm), Number(part.y_cm), width / 2, depth / 2,
+      const fpPart = findPart(catalog, part.part_type)?.[1]?.footprint_cm;
+      const [hx, hy] = fpPart && fpPart.length != null
+        ? [Number(fpPart.length) / 2, Number(fpPart.width) / 2] : [width / 2, depth / 2];
+      out.push(solid(part.id, Number(part.x_cm), Number(part.y_cm), hx, hy,
         Number(part.rotation_deg || 0) * Math.PI / 180, z, z + h));
     }
     return out;
@@ -299,14 +302,31 @@
       if (!spec) continue;
       const x = railNodeLocalX(colon < 0 ? "" : node.slice(colon + 1), spec);
       if (x == null) continue;
-      if (!reached.has(rail.id)) reached.set(rail.id, []);
-      reached.get(rail.id).push(x);
+      // Per stretch: a pivot rail (collector or seesaw) has one on each side.
+      let sides = [0];
+      const k = rail.flow_hole;
+      if ((rail.flow_direction === "to_hole" || rail.flow_direction === "from_hole") && k != null &&
+          Number(k) >= 0 && Number(k) < spec.holes_cm.length) {
+        const pivot = spec.holes_cm[Number(k)];
+        sides = [[-1, x <= pivot + 1e-6], [1, x >= pivot - 1e-6]].filter(([, keep]) => keep).map(([s]) => s);
+      }
+      for (const side of sides) {
+        const key = rail.id + "\u0000" + side;
+        if (!reached.has(key)) reached.set(key, []);
+        reached.get(key).push(x);
+      }
     }
     const solids = componentSolids(layout, catalog);
     const unit = geometry(catalog, "height_unit", 1.5);
     const reasons = [];
-    for (const railId of [...reached.keys()].sort()) {
-      const xs = reached.get(railId);
+    // Python sorts (rail_id, side) tuples.
+    const keys = [...reached.keys()].sort((a, b) => {
+      const [ra, sa] = a.split("\u0000"), [rb, sb] = b.split("\u0000");
+      return ra < rb ? -1 : ra > rb ? 1 : Number(sa) - Number(sb);
+    });
+    for (const key of keys) {
+      const railId = key.split("\u0000")[0];
+      const xs = reached.get(key);
       const start = Math.min(...xs), end = Math.max(...xs);
       const rail = rails.get(railId);
       const spec = railSpec(catalog, rail.rail_type);
@@ -341,7 +361,13 @@
         continue;
       }
       const flow = rail.flow_direction ?? "a_to_b";
-      if (flow !== "a_to_b" && flow !== "b_to_a") reasons.push("invalid_flow_direction:" + rail.id + ":" + flow);
+      if (!["a_to_b", "b_to_a", "to_hole", "from_hole"].includes(flow)) {
+        reasons.push("invalid_flow_direction:" + rail.id + ":" + flow);
+      } else if ((flow === "to_hole" || flow === "from_hole") &&
+          !(rail.flow_hole != null && Number.isInteger(Number(rail.flow_hole)) &&
+            Number(rail.flow_hole) >= 0 && Number(rail.flow_hole) < spec.holes_cm.length)) {
+        reasons.push("invalid_flow_hole:" + rail.id + ":" + (rail.flow_hole == null ? "None" : rail.flow_hole));
+      }
       for (const [idx, state] of holeEntries(rail)) {
         if (!(idx >= 0 && idx < spec.holes_cm.length)) reasons.push("invalid_hole_index:" + rail.id + ":" + idx);
         if (!HOLE_STATES.has(state)) reasons.push("invalid_hole_state:" + rail.id + ":" + idx + ":" + state);
@@ -488,8 +514,39 @@
       }
     }
 
+    reasons.push(...seesawReasons(layout, catalog));
     reasons.push(...solidCollisions(layout, catalog));
     return { valid: reasons.length === 0, reasons: unique(reasons), warnings: unique(warnings) };
+  }
+
+  // Mirror of assembly._seesaw_reasons.
+  function seesawReasons(layout, catalog) {
+    const reasons = [];
+    const rails = new Map((layout.rails || []).map(r => [r.id, r]));
+    const holder = new Map();
+    for (const s of layout.supports || []) for (const pid of s.stack_part_ids || []) holder.set(pid, s);
+    for (const part of layout.parts || []) {
+      const spec = findPart(catalog, part.part_type)?.[1];
+      if (!spec || spec.shape !== "seesaw") continue;
+      const support = holder.get(part.id);
+      if (!support || support.upper_rail_id != null || (support.stack_part_ids || []).length !== 1) {
+        reasons.push("seesaw_must_stand_alone_on_a_rail:" + part.id);
+        continue;
+      }
+      const host = support.lower_rail_id != null ? rails.get(support.lower_rail_id) : null;
+      const mount = spec.mount || {};
+      if (!host || !(mount.rails || []).includes(host.rail_type) || support.lower_hole_index !== mount.hole) {
+        reasons.push("seesaw_needs_center_hole:" + part.id);
+        continue;
+      }
+      const turn = (((Number(part.rotation_deg || 0) - Number(host.yaw_deg || 0)) % 180) + 180) % 180;
+      if (Math.min(turn, 180 - turn) > 0.5) reasons.push("seesaw_not_along_rail:" + part.id + ":" + host.id);
+      if (host.flow_direction !== "from_hole" || Number(host.flow_hole) !== Number(support.lower_hole_index) ||
+          host.flow_hole == null) {
+        reasons.push("seesaw_rail_must_flow_outward:" + part.id + ":" + host.id);
+      }
+    }
+    return reasons;
   }
 
   function freeStackReasons(support, label, layout, catalog, used, xyTol, zTol, rails, parts) {

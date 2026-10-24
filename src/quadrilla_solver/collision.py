@@ -153,10 +153,14 @@ def component_solids(layout: Layout, catalog: PartCatalog) -> list[Solid]:
         height = _part_body_height_cm(catalog, part.part_type, unit)
         if height is None:
             continue
+        spec = catalog.part_spec(part.part_type) or {}
+        footprint = spec.get("footprint_cm") or {}
+        half = ((float(footprint["length"]) / 2.0, float(footprint["width"]) / 2.0)
+                if "length" in footprint else (width / 2.0, depth / 2.0))
         solids.append(Solid(
             part.id,
             (part.x_cm, part.y_cm),
-            (width / 2.0, depth / 2.0),
+            half,
             radians(part.rotation_deg),
             part.z_units * unit,
             part.z_units * unit + height,
@@ -235,7 +239,8 @@ def marble_clearance_conflicts(
     between the first and last reached point must be free. A block standing
     on a hole the marble rolls over, for example, blocks the path.
     """
-    reached: dict[str, list[float]] = {}
+    # Per stretch: a pivot rail (collector or seesaw) has one on each side.
+    reached: dict[tuple[str, int], list[float]] = {}
     rails = layout.rail_map()
     for node in reachable_nodes:
         component, _, port = node.partition(":")
@@ -246,12 +251,19 @@ def marble_clearance_conflicts(
         if spec is None:
             continue
         local_x = _rail_node_local_x(port, spec)
-        if local_x is not None:
-            reached.setdefault(rail.id, []).append(local_x)
+        if local_x is None:
+            continue
+        sides = [0]
+        if rail.flow_direction in ("to_hole", "from_hole") and rail.flow_hole is not None \
+                and 0 <= rail.flow_hole < len(spec.holes_cm):
+            pivot = spec.holes_cm[rail.flow_hole]
+            sides = [s for s, keep in ((-1, local_x <= pivot + 1e-6), (1, local_x >= pivot - 1e-6)) if keep]
+        for side in sides:
+            reached.setdefault((rail.id, side), []).append(local_x)
 
     solids = component_solids(layout, catalog)
     reasons = []
-    for rail_id, xs in sorted(reached.items()):
+    for (rail_id, _), xs in sorted(reached.items()):
         start, end = min(xs), max(xs)
         if end - start <= 0 or catalog.rails[rails[rail_id].rail_type].shape == "twist":
             continue  # the twist's path runs inside its own funnel
