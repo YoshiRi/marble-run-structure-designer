@@ -117,8 +117,16 @@
     }
   }
 
+  // Materials are shared by (name, color, alpha): creating one per mesh on
+  // every redraw leaked hundreds of materials and made each redraw slower.
+  // Callers that tweak a material do so the same way for the same key.
+  const materialCache = new Map();
   function material(name, hex, alpha = 1) {
+    const key = name + "|" + hex + "|" + alpha;
+    const hit = materialCache.get(key);
+    if (hit) return hit;
     const mat = new BABYLON.StandardMaterial(name + Math.random(), scene);
+    materialCache.set(key, mat);
     const c = BABYLON.Color3.FromHexString(hex);
     mat.diffuseColor = c;
     mat.emissiveColor = c.scale(0.08);
@@ -336,66 +344,66 @@
     groups.structure.push(mesh);
   }
 
-  function buildRailMesh(rail, spec) {
+  // The straight rail shape (groove and holes cut by CSG) is built once per
+  // rail type at the origin, then copied and placed: CSG per rail per redraw
+  // made every edit slow.
+  const railShapeCache = new Map();
+  function railShape(type, spec) {
+    if (railShapeCache.has(type)) return railShapeCache.get(type);
     const length = Number(spec.length_cm);
-    const heightUnits = Number(spec.height || 1);
-    const railHeight = heightUnits * HEIGHT_SCALE_CM;
-    const center = railPoint(rail, length / 2);
-    const box = BABYLON.MeshBuilder.CreateBox("rail-solid-" + rail.id, {
-      width: length,
-      height: railHeight,
-      depth: RAIL_WIDTH_CM,
-    }, scene);
-    box.material = material("railMat", palette.rail);
-    box.rotation.y = -(Number(rail.yaw_deg || 0) * Math.PI) / 180;
-    box.position = world(center.x, center.y, Number(rail.z_units) + heightUnits / 2);
-    box.computeWorldMatrix(true);
-
+    const railHeight = Number(spec.height || 1) * HEIGHT_SCALE_CM;
+    const box = BABYLON.MeshBuilder.CreateBox("rail-shape", { width: length, height: railHeight, depth: RAIL_WIDTH_CM }, scene);
+    let shape = { data: BABYLON.VertexData.ExtractFromMesh(box, true, true), cutouts: false };
     // Cut a centered longitudinal channel and vertical through-holes.
     // Channel width is measured; the rectangular 0.3 cm depth is provisional.
     // Without CSG, a visible top strip indicates the channel location.
-    if (!BABYLON.CSG || typeof BABYLON.CSG.FromMesh !== "function") {
-      return { mesh: box, cutouts: false, grooveCutout: false };
-    }
-    try {
-      let solid = BABYLON.CSG.FromMesh(box);
-      const grooveDepth = Math.min(RAIL_GROOVE_DEPTH_CM, railHeight * 0.8);
-      const groove = BABYLON.MeshBuilder.CreateBox("rail-groove-cutter", {
-        width: length + 0.25,
-        height: grooveDepth + 0.12,
-        depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
-      }, scene);
+    if (BABYLON.CSG && typeof BABYLON.CSG.FromMesh === "function") {
+      const cutters = [];
       try {
-        groove.rotation.y = box.rotation.y;
-        groove.position = world(center.x, center.y, Number(rail.z_units) + heightUnits);
-        groove.position.y -= grooveDepth / 2 - 0.06;
+        let solid = BABYLON.CSG.FromMesh(box);
+        const grooveDepth = Math.min(RAIL_GROOVE_DEPTH_CM, railHeight * 0.8);
+        const groove = BABYLON.MeshBuilder.CreateBox("rail-groove-cutter", {
+          width: length + 0.25, height: grooveDepth + 0.12, depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
+        }, scene);
+        cutters.push(groove);
+        groove.position.y = railHeight / 2 - (grooveDepth / 2 - 0.06);
         groove.computeWorldMatrix(true);
         solid = solid.subtract(BABYLON.CSG.FromMesh(groove));
-      } finally {
-        groove.dispose();
-      }
-      for (const localX of spec.hole_positions_cm || []) {
-        const p = railPoint(rail, Number(localX));
-        const cutter = BABYLON.MeshBuilder.CreateCylinder("hole-cutter", {
-          diameter: HOLE_DIAMETER_CM,
-          height: railHeight + 1.0,
-          tessellation: 32,
-        }, scene);
-        try {
-          cutter.position = world(p.x, p.y, Number(rail.z_units) + heightUnits / 2);
+        for (const localX of spec.hole_positions_cm || []) {
+          const cutter = BABYLON.MeshBuilder.CreateCylinder("hole-cutter", {
+            diameter: HOLE_DIAMETER_CM, height: railHeight + 1.0, tessellation: 32,
+          }, scene);
+          cutters.push(cutter);
+          cutter.position.x = Number(localX) - length / 2;
           cutter.computeWorldMatrix(true);
           solid = solid.subtract(BABYLON.CSG.FromMesh(cutter));
-        } finally {
-          cutter.dispose();
         }
+        const cut = solid.toMesh("rail-shape-cut", null, scene);
+        shape = { data: BABYLON.VertexData.ExtractFromMesh(cut, true, true), cutouts: true };
+        cut.dispose();
+      } catch (error) {
+        console.warn("CSG rail cutouts unavailable; using visible surface markers", error);
+      } finally {
+        for (const c of cutters) c.dispose();
       }
-      const cutMesh = solid.toMesh("rail-" + rail.id, box.material, scene);
-      box.dispose();
-      return { mesh: cutMesh, cutouts: true, grooveCutout: true };
-    } catch (error) {
-      console.warn("CSG rail cutouts unavailable; using visible surface markers", error);
-      return { mesh: box, cutouts: false, grooveCutout: false };
     }
+    box.dispose();
+    railShapeCache.set(type, shape);
+    return shape;
+  }
+
+  function buildRailMesh(rail, spec) {
+    const length = Number(spec.length_cm);
+    const heightUnits = Number(spec.height || 1);
+    const center = railPoint(rail, length / 2);
+    const shape = railShape(rail.rail_type, spec);
+    const mesh = new BABYLON.Mesh("rail-" + rail.id, scene);
+    shape.data.applyToMesh(mesh);
+    mesh.material = material("railMat", palette.rail);
+    mesh.rotation.y = -(Number(rail.yaw_deg || 0) * Math.PI) / 180;
+    mesh.position = world(center.x, center.y, Number(rail.z_units) + heightUnits / 2);
+    mesh.computeWorldMatrix(true);
+    return { mesh, cutouts: shape.cutouts, grooveCutout: shape.cutouts };
   }
 
   function renderRail(rail) {
@@ -548,7 +556,24 @@
     return p;
   }
 
+  // CSG is slow (tens of ms per block): build each block shape once and copy
+  // its vertices for every other block of the same type.
+  const blockShapeCache = new Map();
   function buildBlockMesh(part, heightCm, ports, sideEntryNotches) {
+    const key = [part.part_type, heightCm, ports.join(","), [...sideEntryNotches].join(",")].join("|");
+    const cached = blockShapeCache.get(key);
+    if (cached) {
+      const mesh = new BABYLON.Mesh("part-" + part.id, scene);
+      cached.data.applyToMesh(mesh);
+      mesh.material = material("partMat", palette[part.part_type] || palette.default);
+      return { mesh, cutouts: cached.cutouts };
+    }
+    const built = buildBlockMeshUncached(part, heightCm, ports, sideEntryNotches);
+    blockShapeCache.set(key, { data: BABYLON.VertexData.ExtractFromMesh(built.mesh, true, true), cutouts: built.cutouts });
+    return built;
+  }
+
+  function buildBlockMeshUncached(part, heightCm, ports, sideEntryNotches) {
     // CSG subtracts short blind recesses. This does NOT model internal
     // marble channels or claim that a real block's openings are centered.
     const body = BABYLON.MeshBuilder.CreateBox("part-solid-" + part.id, {
@@ -1550,6 +1575,7 @@
   }
 
   // Full layout validation (viewer/validation.js mirrors the Python validators).
+  let lastValidation = null;
   function updateValidation() {
     const box = document.getElementById("validationStatus");
     if (!box || !window.MarbleValidation) return;
@@ -1563,6 +1589,7 @@
         !build.on && query.source && sinks.length ? { source: key(query.source), sinks } : {});
     } catch (error) {
       box.textContent = "Validation error: " + error.message;
+      lastValidation = { valid: false, reasons: ["validation error: " + error.message] };
       return;
     }
     const reasons = [
@@ -1574,6 +1601,7 @@
       ...(result.connectivity?.reasons || []),
       ...result.marble_clearance,
     ];
+    lastValidation = { valid: result.valid, reasons: [...new Set(reasons)] };
     box.className = "validation-status " + (result.valid ? "ok" : "bad");
     box.textContent = result.valid
       ? "Valid: assembly, stability, statics" + (result.connectivity ? ", routing" : "") + " and clearance pass."
@@ -2009,6 +2037,7 @@
   }
 
   function setBuildMode(on) {
+    if (on && edit.on) edit.on = false;
     build.on = on;
     build.reframe = on;
     if (on) {
@@ -2023,7 +2052,8 @@
     renderAll();
   }
 
-  function setLayout(data) {
+  function setLayout(data, opts = {}) {
+    if (!opts.edit) resetEdit(data);
     fullLayout = data;
     layout = data;
     build.plan = MarbleAssembly.buildPlan(fullLayout);
@@ -2031,28 +2061,57 @@
     build.onRoute = routeParts();
     build.fed = new Set(Object.values(build.graph.edges).flat());
     build.step = Math.min(build.step, build.plan.length - 1);
-    build.reframe = true;  // a new layout: frame it once, then keep the view
-    renderAll();
+    if (!opts.edit) build.reframe = true;  // a new layout: frame it once, then keep the view
+    renderAll(opts.changed || null);
   }
 
-  function renderAll() {
+  // Tag every mesh with the component that made it (Build and Edit modes use it).
+  function owned(owner, draw) {
+    const before = scene.meshes.length;
+    draw();
+    for (const mesh of scene.meshes.slice(before)) mesh.metadata = { ...(mesh.metadata || {}), owner };
+  }
+
+  function renderComponent(id) {
+    const rail = (layout.rails || []).find(r => r.id === id);
+    if (rail) return owned(rail.id, () => renderRail(rail));
+    const part = (layout.parts || []).find(p => p.id === id);
+    if (!part) return;
+    const special = catalog.special_parts?.[part.part_type];
+    owned(part.id, () => (special?.shape === "twist_funnel" ? renderTwist(part, special) : renderPart(part)));
+  }
+
+  // Dispose the meshes of some owners only (edit mode redraws what changed).
+  function disposeOwned(owners) {
+    for (const mesh of scene.meshes.slice()) {
+      if (owners.has(mesh.metadata?.owner) && !mesh.isDisposed()) mesh.dispose();
+    }
+    for (const list of Object.values(groups)) {
+      const keep = list.filter(m => m && !m.isDisposed());
+      list.length = 0;
+      list.push(...keep);
+    }
+  }
+
+  // changed: ids whose meshes are stale (edit mode); otherwise redraw all.
+  function renderAll(changed = null) {
     layout = build.on ? buildView() : fullLayout;
     document.getElementById("allowSideEntryPlusOne").checked =
       Boolean(layout.routing_options?.allow_side_entry_plus_one);
-    clearRendered();
-    // Tag every mesh with the component that made it (Build mode colors by it).
-    const owned = (owner, draw) => {
-      const before = scene.meshes.length;
-      draw();
-      for (const mesh of scene.meshes.slice(before)) mesh.metadata = { ...(mesh.metadata || {}), owner };
-    };
-    for (const rail of layout.rails || []) owned(rail.id, () => renderRail(rail));
-    for (const part of layout.parts || []) {
-      const special = catalog.special_parts?.[part.part_type];
-      owned(part.id, () => (special?.shape === "twist_funnel" ? renderTwist(part, special) : renderPart(part)));
+    if (changed && !build.on) {
+      disposeOwned(new Set([...changed, "__seams", "__supports"]));
+      for (const list of [groups.com, groups.polygon]) {
+        for (const mesh of list) if (!mesh.isDisposed()) mesh.dispose();
+        list.length = 0;
+      }
+      for (const id of changed) renderComponent(id);
+    } else {
+      clearRendered();
+      for (const rail of layout.rails || []) renderComponent(rail.id);
+      for (const part of layout.parts || []) renderComponent(part.id);
     }
-    renderStackSeams();
-    renderSupports();
+    owned("__seams", renderStackSeams);
+    owned("__supports", renderSupports);
     renderRouting();
     renderComAndPolygon();
     updateSummary();
@@ -2060,7 +2119,10 @@
     applyVisibility();
     if (build.on) decorateBuildStep();
     else if (build.reframe) { build.reframe = false; fitCamera(); }
+    if (edit.on) decorateEdit();
+    else if (changed) for (const mesh of scene.meshes) if (mesh.metadata?.owner !== undefined) mesh.visibility = 1;
     renderBuildPanel();
+    renderEditPanel();
   }
 
   function applyVisibility() {
@@ -2125,11 +2187,513 @@
     loadExample(event.target.value).catch(console.error);
   });
 
+  // ---- Edit mode -------------------------------------------------------
+  // Block edits (type, rotation, covers, free-standing stacks) are field
+  // changes made here. Rail rewrites (curve, shorten) are the generator's own
+  // Python passes, run in the worker (web.edit_json), so their geometry has
+  // one implementation. Every change is validated by viewer/validation.js;
+  // invalid results are kept (and shown) so the user can see why, then undo.
+  const edit = { on: false, selected: null, undo: [], redo: [], available: null, origin: null,
+                 pyReady: false, busy: false, note: "", pending: new Map() };
+  let editRequestId = 0;
+  const POOLED = { straight_long_center: "straight_long", spiral_large: "spiral", spiral_small: "spiral" };
+
+  function resetEdit(data) {
+    Object.assign(edit, { selected: null, undo: [], redo: [], note: "", busy: false });
+    edit.origin = data?.layout_id || data?.name || null;
+    const check = data?.bill_of_materials?.check;
+    edit.available = check ? Object.fromEntries(check.map(r => [r.part, r.available])) : null;
+  }
+
+  function componentOf(id) {
+    const rail = (fullLayout?.rails || []).find(r => r.id === id);
+    if (rail) return { kind: "rail", item: rail };
+    const part = (fullLayout?.parts || []).find(p => p.id === id);
+    return part ? { kind: "part", item: part } : null;
+  }
+
+  function editedClone() {
+    const data = structuredClone(fullLayout);
+    if (data.layout_id) {
+      data.name = data.layout_id + " (edited)";
+      delete data.layout_id;
+    }
+    delete data.metrics;
+    delete data.inventory_used;
+    return data;
+  }
+
+  const splitNode = node => {
+    const i = node.indexOf(":");
+    return { component_id: node.slice(0, i), port: node.slice(i + 1) };
+  };
+
+  // The exits follow the build: after a change the routing query lists
+  // whatever the marble now reaches from the same input.
+  function exitsFrom(data) {
+    const source = data.routing_query?.source;
+    if (!source) return null;
+    try {
+      const graph = MarbleRouting.buildGraph(data, catalog);
+      return MarbleRouting.analyzeOutcomes(data, catalog, graph, source.component_id + ":" + source.port).exits;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function withCurrentExits(data) {
+    const exits = exitsFrom(data);
+    if (exits) data.routing_query = { ...data.routing_query, sinks: exits.map(e => splitNode(e.node)) };
+    return data;
+  }
+
+  function validateData(data) {
+    const q = data.routing_query || {};
+    const key = ref => ref.component_id + ":" + ref.port;
+    try {
+      return MarbleValidation.validateLayout(data, catalog,
+        q.source && q.sinks?.length ? { source: key(q.source), sinks: q.sinks.map(key) } : {}).valid;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Components whose data differ between two layouts (added, removed or changed).
+  function changedIds(a, b) {
+    const index = data => new Map([...(data.rails || []), ...(data.parts || [])].map(c => [c.id, JSON.stringify(c)]));
+    const x = index(a), y = index(b);
+    const out = new Set();
+    for (const [id, v] of x) if (y.get(id) !== v) out.add(id);
+    for (const id of y.keys()) if (!x.has(id)) out.add(id);
+    return out;
+  }
+
+  function showEdited(next) {
+    const changed = changedIds(fullLayout, next);
+    setLayout(next, { edit: true, changed });
+  }
+
+  function commitEdit(next, note) {
+    const before = fullLayout;
+    edit.undo.push(before);
+    edit.redo = [];
+    edit.note = note || "";
+    showEdited(withCurrentExits(next));
+  }
+
+  function undoEdit() {
+    if (!edit.undo.length || edit.busy) return;
+    edit.redo.push(fullLayout);
+    edit.note = "Undone.";
+    showEdited(edit.undo.pop());
+  }
+
+  function redoEdit() {
+    if (!edit.redo.length || edit.busy) return;
+    edit.undo.push(fullLayout);
+    edit.note = "Redone.";
+    showEdited(edit.redo.pop());
+  }
+
+  // Selecting only moves the outline and redraws the panel: no scene rebuild.
+  function selectEdit(id) {
+    edit.selected = id;
+    decorateEdit();
+    renderEditPanel();
+  }
+
+  // ---- block edits
+  function blockHeight(type) {
+    const spec = catalog.routing_blocks?.[type] || catalog.structural_parts?.[type];
+    return spec?.height != null ? Number(spec.height) : null;
+  }
+
+  function swapChoices(type) {
+    const height = blockHeight(type);
+    if (height == null) return [];
+    return [...Object.keys(catalog.routing_blocks || {}), ...Object.keys(catalog.structural_parts || {})]
+      .filter(t => t !== type && blockHeight(t) === height);
+  }
+
+  function rotatePart(id, delta) {
+    const data = editedClone();
+    const part = data.parts.find(p => p.id === id);
+    if (!part) return;
+    part.rotation_deg = (((Number(part.rotation_deg) || 0) + delta) % 360 + 360) % 360;
+    if (!part.rotation_deg) delete part.rotation_deg;
+    commitEdit(data, "Rotated " + id + " by " + delta + "°.");
+  }
+
+  function retypePart(id, type) {
+    const data = editedClone();
+    const part = data.parts.find(p => p.id === id);
+    if (!part) return;
+    const was = part.part_type;
+    part.part_type = type;
+    commitEdit(data, id + ": " + partName(was) + " → " + partName(type) + ".");
+  }
+
+  // A free-standing stack (counterweight) that does not hold the input.
+  function freeStackOf(id) {
+    const source = fullLayout.routing_query?.source?.component_id;
+    const support = (fullLayout.supports || []).find(s =>
+      s.upper_rail_id == null && (s.stack_part_ids || []).includes(id));
+    if (!support || (support.stack_part_ids || []).includes(source)) return null;
+    return support;
+  }
+
+  function removeFreeStack(id) {
+    const support = freeStackOf(id);
+    if (!support) return;
+    const data = editedClone();
+    const gone = new Set(support.stack_part_ids);
+    data.parts = data.parts.filter(p => !gone.has(p.id));
+    data.supports = data.supports.filter(s => !(s.upper_rail_id == null && (s.stack_part_ids || []).includes(id)));
+    edit.selected = null;
+    commitEdit(data, "Removed the free-standing stack " + [...gone].join(", ") + ".");
+  }
+
+  function toggleCover(railId, index) {
+    const data = editedClone();
+    const rail = data.rails.find(r => r.id === railId);
+    const states = { ...(rail.hole_states || {}) };
+    const state = states[index] ?? "open";
+    if (state === "open") states[index] = "covered";
+    else if (state === "covered") delete states[index];
+    else return;
+    rail.hole_states = states;
+    commitEdit(data, railId + " hole " + index + ": " + (state === "open" ? "cover added" : "cover removed") + ".");
+  }
+
+  // ---- rail rewrites (Python, in the worker)
+  function pyEdit(op) {
+    const id = "edit-" + (++editRequestId);
+    return new Promise((resolve, reject) => {
+      edit.pending.set(id, { resolve, reject });
+      pyWorker(editListener).postMessage({
+        type: "edit", id, base: new URL(DATA_ROOT, window.location.href).href,
+        request: { layout: fullLayout, op },
+      });
+    });
+  }
+
+  function editListener(message) {
+    if (message.type === "status" && edit.on && edit.busy) {
+      edit.note = message.text;
+      renderEditPanel();
+    }
+    const pending = edit.pending.get(message.id);
+    if (!pending) return;
+    edit.pending.delete(message.id);
+    if (message.type === "edited") pending.resolve(message.response);
+    else if (message.type === "error") pending.reject(new Error(message.message));
+  }
+
+  async function railEdit(op, railId, turn) {
+    if (edit.busy) return;
+    edit.busy = true;
+    edit.note = "Working…";
+    renderEditPanel();
+    try {
+      if (!edit.pyReady) edit.note = "Loading Python for rail rewrites (first time only, ~10 s)…";
+      renderEditPanel();
+      const response = await pyEdit({ op, rail: railId, turn });
+      edit.pyReady = true;
+      if (response.error) throw new Error(response.error);
+      const base = editedClone();
+      const trials = response.candidates.map(c => withCurrentExits({ ...structuredClone(base), ...c }));
+      const chosen = trials.find(validateData) || trials[0];
+      edit.busy = false;
+      commitEdit(chosen, railId + ": " + (op === "curve" ? "curve to the " + turn : "shortened") +
+        (trials.length > 1 ? " (" + trials.length + " placements tried)" : "") + ".");
+    } catch (error) {
+      edit.busy = false;
+      edit.note = error.message;
+      renderEditPanel();
+    }
+  }
+
+  // ---- panel and highlight
+  // Selected component in color with an outline; the rest fades back.
+  function decorateEdit() {
+    for (const mesh of scene.meshes) {
+      const owner = mesh.metadata?.owner;
+      if (owner === undefined || mesh.isDisposed()) continue;
+      const mine = edit.selected && owner === edit.selected;
+      mesh.visibility = !edit.selected || mine ? 1 : 0.28;
+      mesh.renderOutline = Boolean(mine && mesh.metadata?.info?.id === owner);
+      if (mesh.renderOutline) {
+        mesh.outlineColor = BABYLON.Color3.FromHexString("#facc15");
+        mesh.outlineWidth = 0.18;
+      }
+    }
+  }
+
+  function shortages() {
+    if (!edit.available) return [];
+    const need = {};
+    for (const [type, n] of Object.entries(MarbleAssembly.billOfMaterials(fullLayout))) {
+      const key = POOLED[type] || type;
+      need[key] = (need[key] || 0) + n;
+    }
+    return Object.entries(need)
+      .filter(([key, n]) => n > (edit.available[key] ?? 0))
+      .map(([key, n]) => ({ part: key, needed: n, available: edit.available[key] ?? 0 }));
+  }
+
+  function editChecksHtml() {
+    const lines = [];
+    const valid = lastValidation?.valid;
+    lines.push(valid ? "<b>Valid</b>: stands, routes and clears."
+      : "<b>Not valid</b>:<br>" + (lastValidation?.reasons || []).slice(0, 6).map(esc).join("<br>"));
+    const exits = exitsFrom(fullLayout) || [];
+    const open = exits.filter(e => e.kind === "rail_end");
+    lines.push("Exits: " + exits.length + (exits.length > 2 ? ' <span class="edit-warn">(more than 2)</span>' : "") +
+      (open.length ? ' <span class="edit-warn">· ' + open.length + " roll off a rail end</span>" : ""));
+    const short = shortages();
+    if (edit.available) {
+      lines.push(short.length
+        ? '<span class="edit-short">Short: ' + short.map(r => esc(partName(r.part)) + " " + r.needed + "/" + r.available).join(", ") + "</span>"
+        : "Parts: within the sets.");
+    }
+    return { html: lines.join("<br>"), ok: valid && exits.length <= 2 && !open.length && !short.length };
+  }
+
+  function button(label, attrs, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = label;
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "disabled") b.disabled = Boolean(v); else b.setAttribute(k, v);
+    }
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function row(label, ...children) {
+    const div = document.createElement("div");
+    div.className = "edit-row";
+    const span = document.createElement("span");
+    span.className = "label";
+    span.textContent = label;
+    div.append(span, ...children);
+    return div;
+  }
+
+  function renderEditPanel() {
+    const toggle = document.getElementById("editToggle");
+    toggle.textContent = edit.on ? "Exit edit" : "Edit";
+    toggle.setAttribute("aria-pressed", String(edit.on));
+    document.getElementById("editPanel").hidden = !edit.on;
+    document.getElementById("editBar").hidden = !edit.on;
+    if (!edit.on || !fullLayout) { renderEditPopup(); return; }
+    document.getElementById("editUndo").disabled = !edit.undo.length || edit.busy;
+    document.getElementById("editRedo").disabled = !edit.redo.length || edit.busy;
+    const checks = editChecksHtml();
+    const box = document.getElementById("editCheck");
+    box.className = "validation-status " + (checks.ok ? "ok" : lastValidation?.valid ? "warn" : "bad");
+    box.innerHTML = (edit.undo.length ? edit.undo.length + " change" + (edit.undo.length > 1 ? "s" : "") + " · " : "") + checks.html;
+    document.getElementById("editNote").textContent = edit.note;
+    const body = document.getElementById("editBody");
+    body.replaceChildren();
+    const pick = document.createElement("select");
+    pick.setAttribute("aria-label", "Select a rail or block");
+    pick.innerHTML = '<option value="">Select a rail or block…</option>' +
+      '<optgroup label="Rails">' + (fullLayout.rails || []).map(r =>
+        '<option value="' + esc(r.id) + '">' + esc(r.id + " · " + partName(r.rail_type) + " · z" + r.z_units) + "</option>").join("") + "</optgroup>" +
+      '<optgroup label="Blocks">' + (fullLayout.parts || []).map(p =>
+        '<option value="' + esc(p.id) + '">' + esc(p.id + " · " + partName(p.part_type) + " · z" + p.z_units) + "</option>").join("") + "</optgroup>";
+    pick.value = edit.selected || "";
+    pick.addEventListener("change", () => { edit.popupAt = null; selectEdit(pick.value || null); });
+    body.append(pick);
+    const found = edit.selected && componentOf(edit.selected);
+    if (!found) {
+      body.append(Object.assign(document.createElement("p"), { className: "muted",
+        textContent: "Click a rail or block in the 3D view, or pick one above." }));
+      renderEditPopup();
+      return;
+    }
+    body.append(...editActions(found));
+    renderEditPopup();
+  }
+
+  // Title and action buttons for the selected component (panel and popup).
+  function editActions(found) {
+    const out = [];
+    const title = document.createElement("h3");
+    const item = found.item;
+    const type = found.kind === "rail" ? item.rail_type : item.part_type;
+    title.innerHTML = swatch(type) + esc(partName(type)) + ' <span class="muted">' + esc(item.id) + "</span>";
+    out.push(title);
+    if (found.kind === "part") {
+      const special = catalog.special_parts?.[type] || catalog.special_rails?.[type];
+      if (special) {
+        out.push(row("", Object.assign(document.createElement("span"), {
+          className: "muted", textContent: "Special part: no edits yet." })));
+      } else {
+        out.push(row("Rotate",
+          button("↺ 90°", { title: "Rotate counter-clockwise (Shift+R)" }, () => rotatePart(item.id, -90)),
+          button("↻ 90°", { title: "Rotate clockwise (R)" }, () => rotatePart(item.id, 90)),
+          Object.assign(document.createElement("span"), { className: "muted", textContent: (item.rotation_deg || 0) + "°" })));
+        const choices = swapChoices(type);
+        if (choices.length) {
+          out.push(row("Swap to", ...choices.map(t =>
+            button(swatch(t) + esc(partName(t)), { title: "Same height: the stack stays closed" }, () => retypePart(item.id, t)))));
+        }
+        if (freeStackOf(item.id)) {
+          out.push(row("Stack", button("Remove free-standing stack", {}, () => removeFreeStack(item.id))));
+        }
+      }
+    } else {
+      const straight = /^straight_/.test(item.rail_type);
+      const can = op => !edit.busy && straight && (op === "curve" || item.rail_type !== "straight_short");
+      out.push(row("Rewrite",
+        button("Curve left", { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
+        button("Curve right", { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
+        button("Shorten", { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
+      out.push(Object.assign(document.createElement("p"), {
+        className: "muted small-note",
+        textContent: straight ? "Rewrites keep every hole in use; if one cannot, the note below says why. The first rewrite loads Python (~10 s)."
+          : "Only straight rails can be rewritten." }));
+      const spec = railSpec(item.rail_type);
+      const chips = (spec?.hole_positions_cm || []).map((_, i) => {
+        const state = (item.hole_states || {})[i] ?? "open";
+        const editable = state === "open" || state === "covered";
+        return button(String(i), {
+          class: "hole-chip", "data-state": state, disabled: !editable || edit.busy,
+          title: "hole " + i + ": " + state + (editable ? " (click to " + (state === "open" ? "cover" : "uncover") + ")" : ""),
+        }, () => toggleCover(item.id, i));
+      });
+      if (chips.length) out.push(row("Covers", ...chips));
+    }
+    return out;
+  }
+
+  // Popup next to the tapped part: the same actions, close at hand.
+  function renderEditPopup() {
+    const popup = document.getElementById("editPopup");
+    const found = edit.on && edit.popupAt && edit.selected && componentOf(edit.selected);
+    popup.hidden = !found;
+    if (!found) return;
+    const close = button("✕", { class: "popup-close", "aria-label": "Close" }, () => { edit.popupAt = null; renderEditPopup(); });
+    const status = document.createElement("div");
+    status.className = "popup-status " + (lastValidation?.valid ? "ok" : "bad");
+    status.textContent = (lastValidation?.valid ? "✓ valid" : "✗ " + (lastValidation?.reasons?.[0] || "not valid")) +
+      (edit.note ? " · " + edit.note : "");
+    popup.replaceChildren(close, ...editActions(found), status);
+    placeEditPopup();
+  }
+
+  // Screen rectangle (in the viewport panel) covered by the selected part.
+  function selectedScreenBox() {
+    const rect = canvas.getBoundingClientRect();
+    const host = canvas.parentElement.getBoundingClientRect();
+    const k = rect.width / engine.getRenderWidth();
+    const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+    const transform = scene.getTransformMatrix();
+    let box = null;
+    for (const mesh of scene.meshes) {
+      if (mesh.isDisposed() || mesh.metadata?.owner !== edit.selected) continue;
+      mesh.computeWorldMatrix(true);
+      for (const v of mesh.getBoundingInfo().boundingBox.vectorsWorld) {
+        const p = BABYLON.Vector3.Project(v, BABYLON.Matrix.Identity(), transform, viewport);
+        const x = rect.left - host.left + p.x * k, y = rect.top - host.top + p.y * k;
+        box = box ? { l: Math.min(box.l, x), r: Math.max(box.r, x), t: Math.min(box.t, y), b: Math.max(box.b, y) }
+          : { l: x, r: x, t: y, b: y };
+      }
+    }
+    return box;
+  }
+
+  // Put the popup beside the selected part, never on it: right, left,
+  // below or above, whichever fits; tap point as a fallback.
+  function placeEditPopup() {
+    const popup = document.getElementById("editPopup");
+    if (popup.hidden) return;
+    const host = popup.parentElement.getBoundingClientRect();
+    const w = popup.offsetWidth, h = popup.offsetHeight, gap = 16, pad = 8;
+    const box = selectedScreenBox() ||
+      { l: edit.popupAt.x, r: edit.popupAt.x, t: edit.popupAt.y, b: edit.popupAt.y };
+    const clampY = y => Math.max(pad, Math.min(host.height - h - pad, y));
+    const clampX = x => Math.max(pad, Math.min(host.width - w - pad, x));
+    const midY = (box.t + box.b) / 2 - h / 2, midX = (box.l + box.r) / 2 - w / 2;
+    const options = [
+      { ok: box.r + gap + w <= host.width - pad, x: box.r + gap, y: clampY(midY) },
+      { ok: box.l - gap - w >= pad, x: box.l - gap - w, y: clampY(midY) },
+      { ok: box.b + gap + h <= host.height - pad, x: clampX(midX), y: box.b + gap },
+      { ok: box.t - gap - h >= pad, x: clampX(midX), y: box.t - gap - h },
+    ];
+    const pick = options.find(o => o.ok) || { x: clampX(box.r + gap), y: clampY(box.b + gap) };
+    popup.style.left = pick.x + "px";
+    popup.style.top = pick.y + "px";
+  }
+
+  function setEditMode(on) {
+    if (on && build.on) {
+      build.on = false;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("mode");
+      url.searchParams.delete("step");
+      window.history.replaceState(null, "", url);
+    }
+    edit.on = on;
+    if (!on) { edit.selected = null; edit.popupAt = null; }
+    renderAll();
+  }
+
+  function exportEdited() {
+    const data = structuredClone(fullLayout);
+    if (edit.undo.length) {
+      data.edited_from = edit.origin;
+      delete data.metrics;
+      delete data.inventory_used;
+      const used = MarbleAssembly.billOfMaterials(data);
+      data.bill_of_materials = { used };
+      if (edit.available) {
+        const need = {};
+        for (const [type, n] of Object.entries(used)) need[POOLED[type] || type] = (need[POOLED[type] || type] || 0) + n;
+        data.bill_of_materials.check = Object.entries(need).map(([part, needed]) => ({
+          part, needed, available: edit.available[part] ?? 0, short: Math.max(0, needed - (edit.available[part] ?? 0)) }));
+      }
+    }
+    const stem = (edit.origin || "layout") + (edit.undo.length ? "-edited" : "");
+    downloadYaml(data, stem + ".yaml");
+  }
+
+  document.getElementById("editToggle").addEventListener("click", () => setEditMode(!edit.on));
+  document.getElementById("editUndo").addEventListener("click", undoEdit);
+  document.getElementById("editRedo").addEventListener("click", redoEdit);
+  document.getElementById("editSave").addEventListener("click", exportEdited);
+  window.addEventListener("keydown", event => {
+    if (!edit.on || event.target.closest?.("input, select, textarea, dialog")) return;
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); (event.shiftKey ? redoEdit : undoEdit)(); }
+    else if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redoEdit(); }
+    else if (event.key === "Escape") { edit.popupAt = null; selectEdit(null); }
+    else if (!mod && event.key.toLowerCase() === "r" && edit.selected && componentOf(edit.selected)?.kind === "part") {
+      const type = componentOf(edit.selected).item.part_type;
+      if (!catalog.special_parts?.[type] && !catalog.special_rails?.[type]) rotatePart(edit.selected, event.shiftKey ? -90 : 90);
+    }
+  });
+
   // ---- Generate in the browser (viewer/generator-worker.js runs the Python
   // generator under Pyodide) ------------------------------------------------
   const generatedLayouts = new Map();  // "generated:<id>" -> layout data
   let generatorWorker = null;
+  let generatorListening = false;
   let generationId = 0;
+  const workerListeners = new Set();
+
+  // One Python worker for generation and edit-mode rail rewrites; messages
+  // go to every listener, each picks its own.
+  function pyWorker(listener) {
+    if (listener) workerListeners.add(listener);
+    if (!generatorWorker) {
+      generatorWorker = new Worker("./generator-worker.js");
+      generatorWorker.onmessage = event => { for (const l of workerListeners) l(event.data); };
+    }
+    return generatorWorker;
+  }
 
   async function populateGenerateSets() {
     const box = document.getElementById("genSets");
@@ -2343,11 +2907,11 @@
     };
   }
 
-  function downloadYaml(data) {
+  function downloadYaml(data, filename) {
     const blob = new Blob([jsyaml.dump(data, { lineWidth: 120 })], { type: "text/yaml" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = (data.layout_id || "layout") + ".yaml";
+    link.download = filename || (data.layout_id || "layout") + ".yaml";
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
@@ -2400,11 +2964,10 @@
     const progress = document.getElementById("genProgress");
     const run = document.getElementById("genRun");
     if (!options.sets.length) { status.textContent = "Pick at least one set."; return; }
-    if (!generatorWorker) {
-      generatorWorker = new Worker("./generator-worker.js");
-      generatorWorker.onmessage = event => {
-        const message = event.data;
-        if (message.id !== undefined && message.id !== generationId) return;
+    if (!generatorListening) {
+      generatorListening = true;
+      pyWorker(message => {
+        if (message.type === "edited" || (message.id !== undefined && message.id !== generationId)) return;
         if (message.type === "status") status.textContent = message.text;
         else if (message.type === "progress") {
           progress.max = message.total;
@@ -2420,14 +2983,14 @@
           run.disabled = false;
           status.textContent = "Error: " + message.message;
         }
-      };
+      });
     }
     generationId += 1;
     run.disabled = true;
     progress.value = 0;
     document.getElementById("genResults").replaceChildren();
     const base = new URL(DATA_ROOT, window.location.href).href;
-    generatorWorker.postMessage({ type: "generate", id: generationId, base, options });
+    pyWorker().postMessage({ type: "generate", id: generationId, base, options });
   }
 
   document.getElementById("generateOpen").addEventListener("click", async () => {
@@ -2503,10 +3066,21 @@
     const picked = pointerInfo.pickInfo?.pickedMesh;
     // Clicking a drop marker, or the rim/cap of a valid input hole, selects
     // that hole as the marble input.
-    const inputKey = picked?.metadata?.inputHoleKey
+    const inputKey = edit.on ? null : picked?.metadata?.inputHoleKey
       ?? (picked?.metadata?.info?.kind === "rail_hole" ? picked.metadata.info.id : null);
     // Copy the info first: selecting re-renders the route and disposes the marker.
     const pickedInfo = picked?.metadata?.info;
+    if (edit.on) {
+      const id = pickedInfo?.kind === "rail_hole" ? pickedInfo.rail_id : picked?.metadata?.owner;
+      const rect = canvas.getBoundingClientRect();
+      const host = canvas.parentElement.getBoundingClientRect();
+      const k = rect.width / engine.getRenderWidth();
+      edit.popupAt = id && componentOf(id)
+        ? { x: rect.left - host.left + scene.pointerX * k, y: rect.top - host.top + scene.pointerY * k } : null;
+      selectEdit(id && componentOf(id) ? id : null);
+      if (pickedInfo) document.getElementById("selection").textContent = JSON.stringify(pickedInfo, null, 2);
+      return;
+    }
     if (inputKey && selectInputHole(inputKey)) {
       document.getElementById("selection").textContent =
         JSON.stringify({ selected_input_hole: inputKey, ...pickedInfo }, null, 2);
@@ -2525,7 +3099,8 @@
     canvas.style.cursor = pick?.hit ? "pointer" : "";
   });
 
-  window.addEventListener("resize", () => engine.resize());
+  window.addEventListener("resize", () => { engine.resize(); if (edit.on) placeEditPopup(); });
+  camera.onViewMatrixChangedObservable.add(() => { if (edit.on && edit.popupAt) placeEditPopup(); });
   engine.runRenderLoop(() => scene.render());
   initialize();
 })();

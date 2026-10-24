@@ -3,9 +3,11 @@
  * not re-implemented here: this loads the same package the CLI uses.
  *
  * Messages in:  {type: "generate", id, base, options}
+ *               {type: "edit", id, base, request}   (rail rewrites, web.edit_json)
  *   base: URL of the site root (where src/, catalog/ live)
  * Messages out: {type: "status", text} | {type: "progress", id, done, total}
- *               {type: "result", id, layouts} | {type: "error", id, message}
+ *               {type: "result", id, layouts} | {type: "edited", id, response}
+ *               {type: "error", id, message}
  */
 /* global loadPyodide, jsyaml */
 "use strict";
@@ -43,17 +45,21 @@ _yaml = types.ModuleType("yaml")
 _yaml.safe_load = _safe_load
 sys.modules["yaml"] = _yaml
 sys.path.insert(0, "/repo/src")
-from quadrilla_solver.web import generate_json
+from quadrilla_solver.web import generate_json, edit_json
 `);
-  return py.globals.get("generate_json");
+  return { generateJson: py.globals.get("generate_json"), editJson: py.globals.get("edit_json") };
 }
 
 self.onmessage = async event => {
-  const { type, id, base, options } = event.data || {};
-  if (type !== "generate") return;
+  const { type, id, base, options, request } = event.data || {};
+  if (type !== "generate" && type !== "edit") return;
   try {
     if (!ready) ready = boot(base);
-    const generateJson = await ready;
+    const { generateJson, editJson } = await ready;
+    if (type === "edit") {
+      self.postMessage({ type: "edited", id, response: JSON.parse(editJson(JSON.stringify(request), "/repo")) });
+      return;
+    }
     self.postMessage({ type: "status", text: "Generating…" });
     const out = generateJson(JSON.stringify(options), "/repo",
       (done, total) => self.postMessage({ type: "progress", id, done, total }));
