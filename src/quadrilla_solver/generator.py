@@ -142,6 +142,8 @@ class GeneratorConfig:
     min_support_reaction_g: float = 20.0
     # Tie weak towers with brace rails across them (user idea, review 3).
     brace_towers: bool = True
+    # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
+    weights: Mapping[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -852,26 +854,54 @@ class Candidate:
     source: PortRef = PortRef("rail0", "end_a")  # where the marble is put in
 
 
-def score(metrics: Mapping[str, Any]) -> float:
+# Preferences (generator-design.md, layer 4): one linear score. Each term has
+# a sign (+ reward, - penalty), a default weight, and where it came from. The
+# viewer's Generate dialog lets the user change the weights (their profile).
+SCORE_TERMS: tuple[dict[str, Any], ...] = (
+    {"key": "levels", "sign": 1, "weight": 10.0, "label": "Levels",
+     "help": "per level of drops", "source": "goal"},
+    {"key": "rolling_length_cm", "sign": 1, "weight": 0.2, "label": "Total roll",
+     "help": "per cm the marble rolls, all branches", "source": "review 1"},
+    {"key": "min_exit_path_cm", "sign": 1, "weight": 0.15, "label": "Shortest branch",
+     "help": "per cm of roll on the shortest start-to-exit path", "source": "review 1"},
+    {"key": "random_branches", "sign": 1, "weight": 4.0, "label": "Branches",
+     "help": "per random splitter", "source": "goal"},
+    {"key": "columns_on_rails", "sign": 1, "weight": 2.0, "label": "Stacked columns",
+     "help": "per column standing on a rail", "source": "goal"},
+    {"key": "curved_rails", "sign": 1, "weight": 3.0, "label": "Curves",
+     "help": "per curved rail", "source": "variety"},
+    {"key": "twists", "sign": 1, "weight": 5.0, "label": "Twists",
+     "help": "per twist", "source": "variety"},
+    {"key": "exit_height", "sign": -1, "weight": 1.5, "label": "High exits",
+     "help": "per unit of height the marble leaves from (all exits)", "source": "review 1"},
+    {"key": "weak_towers", "sign": -1, "weight": 15.0, "label": "Weak towers",
+     "help": "per stack of 5+ blocks braced along one axis", "source": "reviews 2, 3"},
+    {"key": "idle_rail_cm", "sign": -1, "weight": 0.05, "label": "Idle rail",
+     "help": "per cm of rail the marble never rolls on", "source": "reviews 3, dense-stack"},
+    {"key": "dead_area_cm2", "sign": -1, "weight": 0.02, "label": "Unused area",
+     "help": "per cm2 of top view taken by parts no marble rolls on", "source": "review 3"},
+    {"key": "footprint_area_cm2", "sign": -1, "weight": 0.002, "label": "Footprint",
+     "help": "per cm2 of the bounding box in top view", "source": "review 1"},
+)
+DEFAULT_WEIGHTS: dict[str, float] = {t["key"]: t["weight"] for t in SCORE_TERMS}
+
+
+def _term_value(key: str, metrics: Mapping[str, Any]) -> float:
+    if key == "exit_height":
+        return float(sum(metrics.get("exit_levels", ())))
+    return float(metrics.get(key, 0) or 0)
+
+
+def score(metrics: Mapping[str, Any], weights: Mapping[str, float] | None = None) -> float:
     """What the user rewards in reviews: many levels and a long roll on every
     branch; branches and stacked columns next; curves and twists for variety.
     Penalized: a marble leaving high above the ground, a very short branch,
     a sprawling footprint (place taken for little run), weak towers, and rail
-    length the marble never rolls on (a shorter rail would do)."""
-    return (
-        10.0 * metrics["levels"]
-        + 0.2 * metrics["rolling_length_cm"]
-        + 0.15 * metrics.get("min_exit_path_cm", 0.0)
-        + 4.0 * metrics["random_branches"]
-        + 2.0 * metrics["columns_on_rails"]
-        + 3.0 * metrics.get("curved_rails", 0)
-        + 5.0 * metrics.get("twists", 0)
-        - 1.5 * sum(metrics.get("exit_levels", ()))
-        - 15.0 * metrics.get("weak_towers", 0)
-        - 0.05 * metrics.get("idle_rail_cm", 0.0)
-        - 0.002 * metrics.get("footprint_area_cm2", 0.0)
-        - 0.02 * metrics.get("dead_area_cm2", 0.0)
-    )
+    length the marble never rolls on (a shorter rail would do).
+
+    `weights` overrides the default weight (magnitude) of any term."""
+    chosen = {**DEFAULT_WEIGHTS, **(weights or {})}
+    return sum(t["sign"] * float(chosen[t["key"]]) * _term_value(t["key"], metrics) for t in SCORE_TERMS)
 
 
 def layout_usage(layout: Layout) -> dict[str, int]:
@@ -1119,7 +1149,7 @@ def generate(
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
                      metrics["curved_rails"],
                      tuple(sorted(Counter(p.part_type for p in layout.parts).items())))
-        candidate = Candidate(layout, score(metrics), metrics, usage, sinks, source)
+        candidate = Candidate(layout, score(metrics, config.weights), metrics, usage, sinks, source)
         if signature not in found or found[signature].score < candidate.score:
             found[signature] = candidate
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]

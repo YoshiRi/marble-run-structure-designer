@@ -158,6 +158,24 @@
           <span class="gen-seed"><input id="genSeed" type="number" min="1" value="1"><button id="genReseed" type="button" title="New random seed">↻</button></span>
         </label>
       </div>
+      <details id="genPrefs" class="gen-prefs">
+        <summary>Preferences (score weights and rules)</summary>
+        <div class="gen-profile">
+          <label>Profile
+            <select id="genProfile"><option value="">Default</option></select>
+          </label>
+          <button id="genProfileSave" type="button">Save as…</button>
+          <button id="genProfileDelete" type="button">Delete</button>
+          <button id="genProfileExport" type="button">Export</button>
+          <label class="gen-import">Import<input id="genProfileImport" type="file" accept=".json,application/json"></label>
+          <button id="genProfileReset" type="button">Reset to default</button>
+        </div>
+        <p class="muted small-note">The score adds up rewards (+) and penalties (−); a weight of 0 ignores that term. Rules filter builds out.</p>
+        <h3>Score weights</h3>
+        <div id="genWeights" class="gen-tunables"></div>
+        <h3>Rules</h3>
+        <div id="genStyle" class="gen-tunables"></div>
+      </details>
       <div class="gen-progress">
         <progress id="genProgress" max="1" value="0"></progress>
         <span id="genStatus" class="muted small-note" aria-live="polite"></span>

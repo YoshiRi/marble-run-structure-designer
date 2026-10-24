@@ -160,6 +160,11 @@ weight and a source. No preference is hidden inside construction moves.
 | unused top-view area, footprint, idle rail length | - | reviews 1, 3 |
 | weak towers (5+ blocks, upper half braced along one axis) | - | reviews 2, 3; one rule, a penalty (decision) |
 
+The terms live in `SCORE_TERMS` (`generator.py`) with their default weights
+and sources. A user can change the weights (and some layer-3 rules) as a
+**profile** in the viewer's Generate dialog; the layout records the profile
+it was made with. Taste goes into a profile, not into code.
+
 Construction biases (probabilities like `twist_probability`) only change
 *how often* a move is tried. They are search tuning, not preferences, and
 should not be used to express taste.

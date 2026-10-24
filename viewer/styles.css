@@ -230,3 +230,20 @@ button, select, input { font: inherit; }
 .gen-results li span { flex: 1 1 220px; }
 .gen-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .gen-dialog button:focus-visible, .gen-dialog select:focus-visible, .gen-dialog input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.gen-prefs { margin: 10px 0 4px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.gen-prefs summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.gen-prefs h3 { margin: 10px 0 6px; font-size: 13px; }
+.gen-profile { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; margin-top: 8px; }
+.gen-profile label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.gen-profile select, .gen-profile button, .gen-import { min-height: 32px; border: 1px solid var(--border); border-radius: 7px; background: Canvas; color: CanvasText; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+.gen-import { display: inline-flex; align-items: center; color: CanvasText !important; }
+.gen-import input { display: none; }
+.gen-tunables { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 10px; }
+.gen-tunables label { display: grid; gap: 3px; font-size: 12px; color: CanvasText; }
+.gen-tunables input[type="number"], .gen-tunables select { min-height: 30px; border: 1px solid var(--border); border-radius: 6px; background: Canvas; color: CanvasText; padding: 3px 6px; font: inherit; font-size: 13px; }
+.gen-tunables input[type="checkbox"] { justify-self: start; width: 18px; height: 18px; }
+.gen-tunables small { color: var(--muted); font-size: 11px; line-height: 1.3; }
+.gen-tunables .plus { color: #16a34a; }
+.gen-tunables .minus { color: #dc2626; }
+.gen-dialog { overflow-y: auto; }
