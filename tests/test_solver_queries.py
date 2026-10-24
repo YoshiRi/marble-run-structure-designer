@@ -74,22 +74,22 @@ def _height(set_file: str):
 def test_basic_height_under_mvp_model():
     sol = _height("basic-qd001.yaml")
     assert sol.rail_levels == 3
-    assert sol.height_units == 28
+    assert sol.height_units == 31  # levels of 1.2 cm, blocks 5 levels
 
 
 def test_speedway_height_under_mvp_model():
     sol = _height("speedway-qd101.yaml")
     assert sol.rail_levels == 2
-    assert sol.height_units == 21
+    assert sol.height_units == 25
 
 
 def test_funny_function_height_under_mvp_model():
     sol = _height("funny-function-qd003.yaml")
     assert sol.rail_levels == 4
-    assert sol.height_units == 39
+    assert sol.height_units == 46
 
 
 def test_twist_and_rail_height_under_mvp_model():
     sol = _height("twist-and-rail-qd005.yaml")
     assert sol.rail_levels == 7
-    assert sol.height_units == 66
+    assert sol.height_units == 78

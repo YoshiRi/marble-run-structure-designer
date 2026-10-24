@@ -1,14 +1,46 @@
-schema_version: "0.1"
+schema_version: '0.1'
 name: curves-and-twist-preview
-description: >
-  Preview of the estimated curved rail and twist shapes: a short curve stacked hole on hole above a short
-  straight, a long curve, an S-curve, and a twist.
+description: 'Preview of the estimated curved rail and twist shapes: a short curve
+  stacked hole on hole above a short straight, a long curve, an S-curve, and a twist.
+
+  '
 rails:
-  - { id: straight, rail_type: straight_short, x_cm: 0, y_cm: 0, z_units: 1, yaw_deg: 0,
-      hole_states: { 0: covered, 1: covered, 2: covered, 3: covered } }
-  - { id: short_curve, rail_type: curved_short, x_cm: 0.3136, y_cm: -1.0740, z_units: 3,
-      yaw_deg: 34.9822, turn: right }
-  - { id: long_curve, rail_type: curved_long, x_cm: 0, y_cm: 40, z_units: 1, yaw_deg: 0, turn: left }
-  - { id: s_curve, rail_type: s_curve, x_cm: -45, y_cm: 10, z_units: 1, yaw_deg: 90, turn: left }
-  # Twist: chute tip at (37.5, 8) heading +x to the funnel center (62, 8).
-  - { id: twist, rail_type: spiral, x_cm: 37.5, y_cm: 8, z_units: 2, yaw_deg: 0 }
+- id: straight
+  rail_type: straight_short
+  x_cm: 0
+  y_cm: 0
+  z_units: 1
+  yaw_deg: 0
+  hole_states:
+    0: covered
+    1: covered
+    2: covered
+    3: covered
+- id: short_curve
+  rail_type: curved_short
+  x_cm: 0.3136
+  y_cm: -1.074
+  z_units: 3
+  yaw_deg: 34.9822
+  turn: right
+- id: long_curve
+  rail_type: curved_long
+  x_cm: 0
+  y_cm: 40
+  z_units: 1
+  yaw_deg: 0
+  turn: left
+- id: s_curve
+  rail_type: s_curve
+  x_cm: -45
+  y_cm: 10
+  z_units: 1
+  yaw_deg: 90
+  turn: left
+- id: twist
+  rail_type: spiral
+  x_cm: 37.5
+  y_cm: 8
+  z_units: 2
+  yaw_deg: 0
+parts: []

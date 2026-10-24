@@ -1,11 +1,11 @@
-schema_version: "0.7"
+schema_version: "0.8"
 
 geometry_cm:
   height_unit:
-    value: 1.5
-    source: derived_from_user_measurement_6_cm_per_4_units
-    confidence: derived
-    note: discrete stacking scale; rail and purple drop-block heights are each confirmed as 1 unit (1.5 cm); foundation height remains provisional
+    value: 1.2
+    source: user_measurement_2026-10-24  # one level is 1.2 cm; five rails or purple blocks stack to one 6 cm block
+    confidence: measured
+    note: discrete stacking scale; rails and purple drop blocks are 1 level each, a standard block 5 levels; (was 1.5 cm and 4 levels per block until 2026-10-24, a measurement mistake); foundation height remains provisional
   standard_block_footprint:
     width_cm: 4.5
     depth_cm: 4.5
@@ -57,17 +57,17 @@ mass_defaults:
     scope: unmeasured_height_4_routing_blocks
 
 height_units:
-  rail: 1 # user confirmed; 1.5 cm derived from 4-unit / 6 cm block scale
-  standard_block: 4
+  rail: 1 # user confirmed: 1.2 cm
+  standard_block: 5 # user confirmed 2026-10-24: five rails or purple blocks = one block (6 cm)
   spiral:
-    value: 3
+    value: 3 # user: still 3 levels from in to out
     confidence: tentative
-  purple_drop_block: 1 # user-confirmed; physical body height is 1.5 cm, matching a rail
+  purple_drop_block: 1 # user confirmed; 1.2 cm, matching a rail
   wooden_foundation: 1
 
 routing_blocks:
   yellow:
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front]
     port_visualization: { side_entry_notches: [] }
@@ -76,7 +76,7 @@ routing_blocks:
     confidence: confirmed
 
   blue:
-    height: 4
+    height: 5
     mass_g:
       value: 53
       source: user_measurement
@@ -90,7 +90,7 @@ routing_blocks:
     confidence: confirmed
 
   green:
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, left, bottom]
     port_visualization: { side_entry_notches: [left] }
@@ -100,7 +100,7 @@ routing_blocks:
     confidence: confirmed
 
   cyan:
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, left, right]
     routes:
@@ -111,7 +111,7 @@ routing_blocks:
 
   natural_drop:
     appearance: natural_wood
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [front, rear, bottom]
     port_visualization: { side_entry_notches: [front, rear] }
@@ -122,7 +122,7 @@ routing_blocks:
     todo: do not infer any additional ports/routes until physically confirmed
 
   red_random_split:
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, rear]
     routes:
@@ -134,7 +134,7 @@ routing_blocks:
 
   red_right_angle:
     appearance: red
-    height: 4
+    height: 5
     rotations_deg: any  # stands on one peg; any angle (user-confirmed)
     ports: [top, front, right]
     routes:
@@ -147,7 +147,7 @@ routing_blocks:
     todo: probability distribution is unspecified
 
   orange_vertical:
-    height: 4
+    height: 5
     mass_g:
       value: 58
       source: user_measurement
@@ -162,7 +162,7 @@ routing_blocks:
   purple_drop:
     height: 1
     body_height_cm:
-      value: 1.5
+      value: 1.2
       source: user_confirmation_rail_thickness
       confidence: confirmed
       note: same physical height as a one-unit rail
@@ -410,7 +410,7 @@ special_parts:
     shape: seesaw
     footprint_cm: { length: 19.0, width: 3.0 }
     body_height_cm: 8.0
-    height: 5               # whole levels for stacking; geometry uses body_height_cm
+    height: 7               # whole levels (8 cm = 6.7 levels of 1.2 cm); geometry uses body_height_cm
     mass_g:
       value: 106
       source: user estimate (about two blocks)

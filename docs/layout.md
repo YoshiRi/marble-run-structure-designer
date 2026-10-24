@@ -159,7 +159,7 @@ Side-entry notches that feed a downward route (blue rear, green left, and
 natural-drop front/rear) have a specific optional allowance. By default, the
 rail groove must meet the notch at the part's installation level. Set
 `routing_options.allow_side_entry_plus_one: true` to also accept the rail
-groove exactly one height unit (1.5 cm) above that level. This exception still
+groove exactly one level (1.2 cm) above that level. This exception still
 requires matching XY, opposite-facing normals, and a valid directed connection;
 it models the open-bottom drop inlet rather than claiming the port centers are
 at the same height. The Viewer has a checkbox for this option; its toggle is

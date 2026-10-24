@@ -214,12 +214,13 @@ def test_route_link_ports_match_catalogued_visible_openings():
     source = port_pose(layout, CATALOG, link.source)
     target = port_pose(layout, CATALOG, link.target)
     assert source is not None and target is not None
-    # Blue block installed at 2u: its centered front hole opens at 3u (4.5 cm).
-    assert source.position_cm[2] == pytest.approx(3 * 1.5)
+    # Blue block installed at level 2: its centered front hole opens one level
+    # higher, at level 3 (3 x 1.2 cm).
+    assert source.position_cm[2] == pytest.approx(3 * 1.2)
     # The exit rail's groove is at the installation level, one unit lower,
     # at the same XY: the marble drops straight out of the hole.
     assert source.position_cm[:2] == pytest.approx(target.position_cm[:2], abs=1e-6)
-    assert source.position_cm[2] - target.position_cm[2] == pytest.approx(1.5)
+    assert source.position_cm[2] - target.position_cm[2] == pytest.approx(1.2)
     assert sum(x * y for x, y in zip(source.outward, target.outward)) == pytest.approx(-1)
     assert validate_route_link_geometry(layout, CATALOG, link) is None
 
@@ -245,7 +246,7 @@ def test_purple_drop_block_height_matches_one_unit_rail():
     rail = CATALOG.raw["rails"]["straight_long"]
     assert purple["height"] == 1
     assert rail["height"] == 1
-    assert purple["body_height_cm"]["value"] == pytest.approx(1.5)
+    assert purple["body_height_cm"]["value"] == pytest.approx(1.2)  # one level (user, 2026-10-24)
 
     layout = Layout(
         "purple-height",
@@ -254,7 +255,7 @@ def test_purple_drop_block_height_matches_one_unit_rail():
     top = port_pose(layout, CATALOG, PortRef("purple", "top"))
     bottom = port_pose(layout, CATALOG, PortRef("purple", "bottom"))
     assert top is not None and bottom is not None
-    assert top.position_cm[2] - bottom.position_cm[2] == pytest.approx(1.5)
+    assert top.position_cm[2] - bottom.position_cm[2] == pytest.approx(1.2)
 
 
 def test_centered_side_ports_drop_one_but_never_climb():
@@ -279,7 +280,7 @@ def test_centered_side_ports_drop_one_but_never_climb():
         ),
     )
     right = port_pose(layout, CATALOG, PortRef("cyan", "right"))
-    assert right is not None and right.position_cm[2] == pytest.approx(3 * 1.5)
+    assert right is not None and right.position_cm[2] == pytest.approx(3 * 1.2)
 
     drop_out, climb_in = layout.route_links
     assert validate_route_link_geometry(layout, CATALOG, drop_out) is None
@@ -331,3 +332,14 @@ def test_block_outlet_lands_on_the_rail_it_stands_on():
         replace(r, flow_direction="a_to_b") if r.id == "bottom" else r for r in layout.rails
     ))
     assert build_routing_graph(flipped, CATALOG).edges.get("N:front", ()) == ()
+
+
+def test_level_scale_is_one_point_two_cm_and_a_block_is_five_levels():
+    """User measurement 2026-10-24 (was 1.5 cm and 4 levels)."""
+    from quadrilla_solver import generator
+
+    assert CATALOG.raw["geometry_cm"]["height_unit"]["value"] == pytest.approx(1.2)
+    assert CATALOG.standard_block_units() == 5
+    assert CATALOG.height_units("blue") == 5 and CATALOG.height_units("purple_drop") == 1
+    assert generator._UNIT_CM == pytest.approx(CATALOG.raw["geometry_cm"]["height_unit"]["value"])
+    assert CATALOG.rails["spiral"].hole_levels == (3, 3, 0)

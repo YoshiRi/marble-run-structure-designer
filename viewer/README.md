@@ -59,10 +59,10 @@ The center-hole rail includes a cataloged center position at 25 cm.
 
 **Derived and provisional dimensions:**
 
-- 1 height unit = **1.5 cm**, derived from the standard block's 6 cm / 4 units
-- rail height is **1 unit**, explicitly confirmed by the user; this renders
-  as **1.5 cm** from the derived scale (not a separate caliper measurement)
-- purple thin/drop block height: **1.5 cm (1 unit)**, user-confirmed and rendered from an explicit catalog dimension
+- 1 level = **1.2 cm** (user measurement, 2026-10-24); a standard block is
+  5 levels (6 cm), rails and purple blocks 1 level each
+- rail height: **1.2 cm (1 level)**, user-confirmed
+- purple thin/drop block height: **1.2 cm (1 level)**, user-confirmed and rendered from an explicit catalog dimension
 - wooden foundation height remains unverified in centimeters
 - block port diameter = **1.8 cm provisional**, borrowed from the approximate
   rail-hole diameter; actual block port diameters have not been measured
@@ -133,7 +133,7 @@ probabilities to be withheld rather than guessed.
 
 Side-entry notches that route downwards normally connect at the part's
 installation level. The **Allow rail groove one level above a side-drop inlet**
-checkbox optionally permits a +1-unit (1.5 cm) vertical offset, while retaining
+checkbox optionally permits a +1-level (1.2 cm) vertical offset, while retaining
 XY alignment, facing-direction, and flow-direction checks. The option is off
 by default and can also be configured in YAML with
 `routing_options.allow_side_entry_plus_one: true`.
