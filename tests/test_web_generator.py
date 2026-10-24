@@ -75,3 +75,39 @@ def test_weights_and_rules_change_what_is_generated():
     capped = json.loads(generate_json(json.dumps({**base, "style": {"max_rails": 5, "exit_style": "nope"}}), str(ROOT)))
     assert capped[0]["generator"]["style"] == {"max_rails": 5}
     assert all(d["metrics"]["rails"] <= 5 + 2 for d in capped)  # braces may add a rail or two
+
+
+def _edit(layout, op):
+    from quadrilla_solver.web import edit_json
+    return json.loads(edit_json(json.dumps({"layout": layout, "op": op}), str(ROOT)))
+
+
+def _valid(data):
+    from quadrilla_solver.model import layout_from_dict
+    source, sinks = layout_source(data), list(layout_sinks(data))
+    return validate_layout(layout_from_dict(data), load_catalog(ROOT / "catalog" / "parts.yaml"),
+                           source=source, sinks=sinks).valid
+
+
+def test_edit_json_lists_and_applies_rail_rewrites():
+    import yaml
+
+    data = yaml.safe_load((ROOT / "tests" / "fixtures" / "dense-stack-long-rails.yaml").read_text())
+    options = _edit(data, {"op": "options"})["options"]
+    assert "shorten" in options["rail6"] and "curve" in options["rail0"]
+    shortened = _edit(data, {"op": "shorten", "rail": "rail6"})["candidates"]
+    assert shortened and all(set(c) == {"rails", "parts", "supports", "route_links"} for c in shortened)
+    rail = next(r for r in shortened[0]["rails"] if r["id"] == "rail6")
+    assert rail["rail_type"] == "straight_short"
+    assert any(_valid({**data, **c}) for c in shortened)
+    curved = _edit(data, {"op": "curve", "rail": "rail0", "turn": "right"})["candidates"]
+    assert next(r for r in curved[0]["rails"] if r["id"] == "rail0")["rail_type"].startswith("curved")
+
+
+def test_edit_json_reports_rewrites_that_do_not_apply():
+    import yaml
+
+    data = yaml.safe_load((ROOT / "tests" / "fixtures" / "dense-stack-long-rails.yaml").read_text())
+    assert "error" in _edit(data, {"op": "shorten", "rail": "rail1"})
+    assert "error" in _edit(data, {"op": "curve", "rail": "nope"})
+    assert "error" in _edit(data, {"op": "explode", "rail": "rail0"})

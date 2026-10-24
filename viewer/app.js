@@ -1550,6 +1550,7 @@
   }
 
   // Full layout validation (viewer/validation.js mirrors the Python validators).
+  let lastValidation = null;
   function updateValidation() {
     const box = document.getElementById("validationStatus");
     if (!box || !window.MarbleValidation) return;
@@ -1563,6 +1564,7 @@
         !build.on && query.source && sinks.length ? { source: key(query.source), sinks } : {});
     } catch (error) {
       box.textContent = "Validation error: " + error.message;
+      lastValidation = { valid: false, reasons: ["validation error: " + error.message] };
       return;
     }
     const reasons = [
@@ -1574,6 +1576,7 @@
       ...(result.connectivity?.reasons || []),
       ...result.marble_clearance,
     ];
+    lastValidation = { valid: result.valid, reasons: [...new Set(reasons)] };
     box.className = "validation-status " + (result.valid ? "ok" : "bad");
     box.textContent = result.valid
       ? "Valid: assembly, stability, statics" + (result.connectivity ? ", routing" : "") + " and clearance pass."
@@ -2009,6 +2012,7 @@
   }
 
   function setBuildMode(on) {
+    if (on && edit.on) edit.on = false;
     build.on = on;
     build.reframe = on;
     if (on) {
@@ -2023,7 +2027,8 @@
     renderAll();
   }
 
-  function setLayout(data) {
+  function setLayout(data, opts = {}) {
+    if (!opts.edit) resetEdit(data);
     fullLayout = data;
     layout = data;
     build.plan = MarbleAssembly.buildPlan(fullLayout);
@@ -2031,7 +2036,7 @@
     build.onRoute = routeParts();
     build.fed = new Set(Object.values(build.graph.edges).flat());
     build.step = Math.min(build.step, build.plan.length - 1);
-    build.reframe = true;  // a new layout: frame it once, then keep the view
+    if (!opts.edit) build.reframe = true;  // a new layout: frame it once, then keep the view
     renderAll();
   }
 
@@ -2060,7 +2065,9 @@
     applyVisibility();
     if (build.on) decorateBuildStep();
     else if (build.reframe) { build.reframe = false; fitCamera(); }
+    if (edit.on) decorateEdit();
     renderBuildPanel();
+    renderEditPanel();
   }
 
   function applyVisibility() {
@@ -2125,11 +2132,434 @@
     loadExample(event.target.value).catch(console.error);
   });
 
+  // ---- Edit mode -------------------------------------------------------
+  // Block edits (type, rotation, covers, free-standing stacks) are field
+  // changes made here. Rail rewrites (curve, shorten) are the generator's own
+  // Python passes, run in the worker (web.edit_json), so their geometry has
+  // one implementation. Every change is validated by viewer/validation.js;
+  // invalid results are kept (and shown) so the user can see why, then undo.
+  const edit = { on: false, selected: null, undo: [], redo: [], available: null, origin: null,
+                 railOps: null, railOpsBusy: false, busy: false, note: "", pending: new Map() };
+  let editRequestId = 0;
+  const POOLED = { straight_long_center: "straight_long", spiral_large: "spiral", spiral_small: "spiral" };
+
+  function resetEdit(data) {
+    Object.assign(edit, { selected: null, undo: [], redo: [], note: "", railOps: null, busy: false });
+    edit.origin = data?.layout_id || data?.name || null;
+    const check = data?.bill_of_materials?.check;
+    edit.available = check ? Object.fromEntries(check.map(r => [r.part, r.available])) : null;
+  }
+
+  function componentOf(id) {
+    const rail = (fullLayout?.rails || []).find(r => r.id === id);
+    if (rail) return { kind: "rail", item: rail };
+    const part = (fullLayout?.parts || []).find(p => p.id === id);
+    return part ? { kind: "part", item: part } : null;
+  }
+
+  function editedClone() {
+    const data = structuredClone(fullLayout);
+    if (data.layout_id) {
+      data.name = data.layout_id + " (edited)";
+      delete data.layout_id;
+    }
+    delete data.metrics;
+    delete data.inventory_used;
+    return data;
+  }
+
+  const splitNode = node => {
+    const i = node.indexOf(":");
+    return { component_id: node.slice(0, i), port: node.slice(i + 1) };
+  };
+
+  // The exits follow the build: after a change the routing query lists
+  // whatever the marble now reaches from the same input.
+  function exitsFrom(data) {
+    const source = data.routing_query?.source;
+    if (!source) return null;
+    try {
+      const graph = MarbleRouting.buildGraph(data, catalog);
+      return MarbleRouting.analyzeOutcomes(data, catalog, graph, source.component_id + ":" + source.port).exits;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function withCurrentExits(data) {
+    const exits = exitsFrom(data);
+    if (exits) data.routing_query = { ...data.routing_query, sinks: exits.map(e => splitNode(e.node)) };
+    return data;
+  }
+
+  function validateData(data) {
+    const q = data.routing_query || {};
+    const key = ref => ref.component_id + ":" + ref.port;
+    try {
+      return MarbleValidation.validateLayout(data, catalog,
+        q.source && q.sinks?.length ? { source: key(q.source), sinks: q.sinks.map(key) } : {}).valid;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function commitEdit(next, note) {
+    edit.undo.push(fullLayout);
+    edit.redo = [];
+    edit.note = note || "";
+    setLayout(withCurrentExits(next), { edit: true });
+    refreshRailOps();
+  }
+
+  function undoEdit() {
+    if (!edit.undo.length || edit.busy) return;
+    edit.redo.push(fullLayout);
+    edit.note = "Undone.";
+    setLayout(edit.undo.pop(), { edit: true });
+    refreshRailOps();
+  }
+
+  function redoEdit() {
+    if (!edit.redo.length || edit.busy) return;
+    edit.undo.push(fullLayout);
+    edit.note = "Redone.";
+    setLayout(edit.redo.pop(), { edit: true });
+    refreshRailOps();
+  }
+
+  function selectEdit(id) {
+    edit.selected = id;
+    renderAll();
+  }
+
+  // ---- block edits
+  function blockHeight(type) {
+    const spec = catalog.routing_blocks?.[type] || catalog.structural_parts?.[type];
+    return spec?.height != null ? Number(spec.height) : null;
+  }
+
+  function swapChoices(type) {
+    const height = blockHeight(type);
+    if (height == null) return [];
+    return [...Object.keys(catalog.routing_blocks || {}), ...Object.keys(catalog.structural_parts || {})]
+      .filter(t => t !== type && blockHeight(t) === height);
+  }
+
+  function rotatePart(id, delta) {
+    const data = editedClone();
+    const part = data.parts.find(p => p.id === id);
+    if (!part) return;
+    part.rotation_deg = (((Number(part.rotation_deg) || 0) + delta) % 360 + 360) % 360;
+    if (!part.rotation_deg) delete part.rotation_deg;
+    commitEdit(data, "Rotated " + id + " by " + delta + "°.");
+  }
+
+  function retypePart(id, type) {
+    const data = editedClone();
+    const part = data.parts.find(p => p.id === id);
+    if (!part) return;
+    const was = part.part_type;
+    part.part_type = type;
+    commitEdit(data, id + ": " + partName(was) + " → " + partName(type) + ".");
+  }
+
+  // A free-standing stack (counterweight) that does not hold the input.
+  function freeStackOf(id) {
+    const source = fullLayout.routing_query?.source?.component_id;
+    const support = (fullLayout.supports || []).find(s =>
+      s.upper_rail_id == null && (s.stack_part_ids || []).includes(id));
+    if (!support || (support.stack_part_ids || []).includes(source)) return null;
+    return support;
+  }
+
+  function removeFreeStack(id) {
+    const support = freeStackOf(id);
+    if (!support) return;
+    const data = editedClone();
+    const gone = new Set(support.stack_part_ids);
+    data.parts = data.parts.filter(p => !gone.has(p.id));
+    data.supports = data.supports.filter(s => !(s.upper_rail_id == null && (s.stack_part_ids || []).includes(id)));
+    edit.selected = null;
+    commitEdit(data, "Removed the free-standing stack " + [...gone].join(", ") + ".");
+  }
+
+  function toggleCover(railId, index) {
+    const data = editedClone();
+    const rail = data.rails.find(r => r.id === railId);
+    const states = { ...(rail.hole_states || {}) };
+    const state = states[index] ?? "open";
+    if (state === "open") states[index] = "covered";
+    else if (state === "covered") delete states[index];
+    else return;
+    rail.hole_states = states;
+    commitEdit(data, railId + " hole " + index + ": " + (state === "open" ? "cover added" : "cover removed") + ".");
+  }
+
+  // ---- rail rewrites (Python, in the worker)
+  function pyEdit(op) {
+    const id = "edit-" + (++editRequestId);
+    return new Promise((resolve, reject) => {
+      edit.pending.set(id, { resolve, reject });
+      pyWorker(editListener).postMessage({
+        type: "edit", id, base: new URL(DATA_ROOT, window.location.href).href,
+        request: { layout: fullLayout, op },
+      });
+    });
+  }
+
+  function editListener(message) {
+    if (message.type === "status" && edit.on && (edit.busy || edit.railOpsBusy)) {
+      edit.note = message.text;
+      renderEditPanel();
+    }
+    const pending = edit.pending.get(message.id);
+    if (!pending) return;
+    edit.pending.delete(message.id);
+    if (message.type === "edited") pending.resolve(message.response);
+    else if (message.type === "error") pending.reject(new Error(message.message));
+  }
+
+  async function refreshRailOps() {
+    if (!edit.on) return;
+    const forLayout = fullLayout;
+    edit.railOpsBusy = true;
+    renderEditPanel();
+    try {
+      const response = await pyEdit({ op: "options" });
+      if (fullLayout !== forLayout) return;
+      edit.railOps = response.options || {};
+      if (edit.note === "Loading Python (first time only)…" || edit.note === "Loading the solver…") edit.note = "";
+    } catch (error) {
+      edit.railOps = {};
+      edit.note = "Rail tools unavailable: " + error.message;
+    } finally {
+      if (fullLayout === forLayout) {
+        edit.railOpsBusy = false;
+        renderEditPanel();
+      }
+    }
+  }
+
+  async function railEdit(op, railId, turn) {
+    if (edit.busy) return;
+    edit.busy = true;
+    edit.note = "Working…";
+    renderEditPanel();
+    try {
+      const response = await pyEdit({ op, rail: railId, turn });
+      if (response.error) throw new Error(response.error);
+      const base = editedClone();
+      const trials = response.candidates.map(c => withCurrentExits({ ...structuredClone(base), ...c }));
+      const chosen = trials.find(validateData) || trials[0];
+      edit.busy = false;
+      commitEdit(chosen, railId + ": " + (op === "curve" ? "curve to the " + turn : "shortened") +
+        (trials.length > 1 ? " (" + trials.length + " placements tried)" : "") + ".");
+    } catch (error) {
+      edit.busy = false;
+      edit.note = error.message;
+      renderEditPanel();
+    }
+  }
+
+  // ---- panel and highlight
+  function decorateEdit() {
+    if (!edit.selected) return;
+    for (const mesh of scene.meshes) {
+      if (mesh.isDisposed() || mesh.metadata?.owner !== edit.selected || mesh.metadata?.info?.id !== edit.selected) continue;
+      mesh.renderOutline = true;
+      mesh.outlineColor = BABYLON.Color3.FromHexString("#facc15");
+      mesh.outlineWidth = 0.14;
+    }
+  }
+
+  function shortages() {
+    if (!edit.available) return [];
+    const need = {};
+    for (const [type, n] of Object.entries(MarbleAssembly.billOfMaterials(fullLayout))) {
+      const key = POOLED[type] || type;
+      need[key] = (need[key] || 0) + n;
+    }
+    return Object.entries(need)
+      .filter(([key, n]) => n > (edit.available[key] ?? 0))
+      .map(([key, n]) => ({ part: key, needed: n, available: edit.available[key] ?? 0 }));
+  }
+
+  function editChecksHtml() {
+    const lines = [];
+    const valid = lastValidation?.valid;
+    lines.push(valid ? "<b>Valid</b>: stands, routes and clears."
+      : "<b>Not valid</b>:<br>" + (lastValidation?.reasons || []).slice(0, 6).map(esc).join("<br>"));
+    const exits = exitsFrom(fullLayout) || [];
+    const open = exits.filter(e => e.kind === "rail_end");
+    lines.push("Exits: " + exits.length + (exits.length > 2 ? ' <span class="edit-warn">(more than 2)</span>' : "") +
+      (open.length ? ' <span class="edit-warn">· ' + open.length + " roll off a rail end</span>" : ""));
+    const short = shortages();
+    if (edit.available) {
+      lines.push(short.length
+        ? '<span class="edit-short">Short: ' + short.map(r => esc(partName(r.part)) + " " + r.needed + "/" + r.available).join(", ") + "</span>"
+        : "Parts: within the sets.");
+    }
+    return { html: lines.join("<br>"), ok: valid && exits.length <= 2 && !open.length && !short.length };
+  }
+
+  function button(label, attrs, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = label;
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "disabled") b.disabled = Boolean(v); else b.setAttribute(k, v);
+    }
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function row(label, ...children) {
+    const div = document.createElement("div");
+    div.className = "edit-row";
+    const span = document.createElement("span");
+    span.className = "label";
+    span.textContent = label;
+    div.append(span, ...children);
+    return div;
+  }
+
+  function renderEditPanel() {
+    const toggle = document.getElementById("editToggle");
+    toggle.textContent = edit.on ? "Exit edit" : "Edit";
+    toggle.setAttribute("aria-pressed", String(edit.on));
+    document.getElementById("editPanel").hidden = !edit.on;
+    document.getElementById("editBar").hidden = !edit.on;
+    if (!edit.on || !fullLayout) return;
+    document.getElementById("editUndo").disabled = !edit.undo.length || edit.busy;
+    document.getElementById("editRedo").disabled = !edit.redo.length || edit.busy;
+    const checks = editChecksHtml();
+    const box = document.getElementById("editCheck");
+    box.className = "validation-status " + (checks.ok ? "ok" : lastValidation?.valid ? "warn" : "bad");
+    box.innerHTML = (edit.undo.length ? edit.undo.length + " change" + (edit.undo.length > 1 ? "s" : "") + " · " : "") + checks.html;
+    document.getElementById("editNote").textContent = edit.note;
+    const body = document.getElementById("editBody");
+    body.replaceChildren();
+    const found = edit.selected && componentOf(edit.selected);
+    if (!found) {
+      body.innerHTML = '<p class="muted">Nothing selected. Click a rail or a block in the 3D view.</p>';
+      return;
+    }
+    const title = document.createElement("h3");
+    const item = found.item;
+    const type = found.kind === "rail" ? item.rail_type : item.part_type;
+    title.innerHTML = swatch(type) + esc(partName(type)) + ' <span class="muted">' + esc(item.id) + "</span>";
+    body.append(title);
+    if (found.kind === "part") {
+      const special = catalog.special_parts?.[type] || catalog.special_rails?.[type];
+      if (special) {
+        body.append(row("", Object.assign(document.createElement("span"), {
+          className: "muted", textContent: "Special part: no edits yet." })));
+      } else {
+        body.append(row("Rotate",
+          button("↺ 90°", { title: "Rotate counter-clockwise (Shift+R)" }, () => rotatePart(item.id, -90)),
+          button("↻ 90°", { title: "Rotate clockwise (R)" }, () => rotatePart(item.id, 90)),
+          Object.assign(document.createElement("span"), { className: "muted", textContent: (item.rotation_deg || 0) + "°" })));
+        const choices = swapChoices(type);
+        if (choices.length) {
+          body.append(row("Swap to", ...choices.map(t =>
+            button(swatch(t) + esc(partName(t)), { title: "Same height: the stack stays closed" }, () => retypePart(item.id, t)))));
+        }
+        if (freeStackOf(item.id)) {
+          body.append(row("Stack", button("Remove free-standing stack", {}, () => removeFreeStack(item.id))));
+        }
+      }
+    } else {
+      const ops = edit.railOps?.[item.id];
+      const waiting = edit.railOpsBusy || !edit.railOps;
+      const can = op => !waiting && !edit.busy && (ops || []).includes(op);
+      body.append(row("Rewrite",
+        button("Curve left", { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
+        button("Curve right", { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
+        button("Shorten", { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
+      if (waiting) body.append(Object.assign(document.createElement("p"), { className: "muted small-note", textContent: "Checking which rewrites fit…" }));
+      else if (!(ops || []).length) body.append(Object.assign(document.createElement("p"), {
+        className: "muted small-note",
+        textContent: "No rewrite keeps this rail's holes and links (curves need a straight with free ends; shorten needs a long straight)." }));
+      const spec = railSpec(item.rail_type);
+      const chips = (spec?.hole_positions_cm || []).map((_, i) => {
+        const state = (item.hole_states || {})[i] ?? "open";
+        const editable = state === "open" || state === "covered";
+        return button(String(i), {
+          class: "hole-chip", "data-state": state, disabled: !editable || edit.busy,
+          title: "hole " + i + ": " + state + (editable ? " (click to " + (state === "open" ? "cover" : "uncover") + ")" : ""),
+        }, () => toggleCover(item.id, i));
+      });
+      if (chips.length) body.append(row("Covers", ...chips));
+    }
+  }
+
+  function setEditMode(on) {
+    if (on && build.on) {
+      build.on = false;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("mode");
+      url.searchParams.delete("step");
+      window.history.replaceState(null, "", url);
+    }
+    edit.on = on;
+    if (!on) edit.selected = null;
+    renderAll();
+    if (on && !edit.railOps) refreshRailOps();
+  }
+
+  function exportEdited() {
+    const data = structuredClone(fullLayout);
+    if (edit.undo.length) {
+      data.edited_from = edit.origin;
+      delete data.metrics;
+      delete data.inventory_used;
+      const used = MarbleAssembly.billOfMaterials(data);
+      data.bill_of_materials = { used };
+      if (edit.available) {
+        const need = {};
+        for (const [type, n] of Object.entries(used)) need[POOLED[type] || type] = (need[POOLED[type] || type] || 0) + n;
+        data.bill_of_materials.check = Object.entries(need).map(([part, needed]) => ({
+          part, needed, available: edit.available[part] ?? 0, short: Math.max(0, needed - (edit.available[part] ?? 0)) }));
+      }
+    }
+    const stem = (edit.origin || "layout") + (edit.undo.length ? "-edited" : "");
+    downloadYaml(data, stem + ".yaml");
+  }
+
+  document.getElementById("editToggle").addEventListener("click", () => setEditMode(!edit.on));
+  document.getElementById("editUndo").addEventListener("click", undoEdit);
+  document.getElementById("editRedo").addEventListener("click", redoEdit);
+  document.getElementById("editSave").addEventListener("click", exportEdited);
+  window.addEventListener("keydown", event => {
+    if (!edit.on || event.target.closest?.("input, select, textarea, dialog")) return;
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); (event.shiftKey ? redoEdit : undoEdit)(); }
+    else if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redoEdit(); }
+    else if (event.key === "Escape") selectEdit(null);
+    else if (!mod && event.key.toLowerCase() === "r" && edit.selected && componentOf(edit.selected)?.kind === "part") {
+      const type = componentOf(edit.selected).item.part_type;
+      if (!catalog.special_parts?.[type] && !catalog.special_rails?.[type]) rotatePart(edit.selected, event.shiftKey ? -90 : 90);
+    }
+  });
+
   // ---- Generate in the browser (viewer/generator-worker.js runs the Python
   // generator under Pyodide) ------------------------------------------------
   const generatedLayouts = new Map();  // "generated:<id>" -> layout data
   let generatorWorker = null;
+  let generatorListening = false;
   let generationId = 0;
+  const workerListeners = new Set();
+
+  // One Python worker for generation and edit-mode rail rewrites; messages
+  // go to every listener, each picks its own.
+  function pyWorker(listener) {
+    if (listener) workerListeners.add(listener);
+    if (!generatorWorker) {
+      generatorWorker = new Worker("./generator-worker.js");
+      generatorWorker.onmessage = event => { for (const l of workerListeners) l(event.data); };
+    }
+    return generatorWorker;
+  }
 
   async function populateGenerateSets() {
     const box = document.getElementById("genSets");
@@ -2343,11 +2773,11 @@
     };
   }
 
-  function downloadYaml(data) {
+  function downloadYaml(data, filename) {
     const blob = new Blob([jsyaml.dump(data, { lineWidth: 120 })], { type: "text/yaml" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = (data.layout_id || "layout") + ".yaml";
+    link.download = filename || (data.layout_id || "layout") + ".yaml";
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
@@ -2400,11 +2830,10 @@
     const progress = document.getElementById("genProgress");
     const run = document.getElementById("genRun");
     if (!options.sets.length) { status.textContent = "Pick at least one set."; return; }
-    if (!generatorWorker) {
-      generatorWorker = new Worker("./generator-worker.js");
-      generatorWorker.onmessage = event => {
-        const message = event.data;
-        if (message.id !== undefined && message.id !== generationId) return;
+    if (!generatorListening) {
+      generatorListening = true;
+      pyWorker(message => {
+        if (message.type === "edited" || (message.id !== undefined && message.id !== generationId)) return;
         if (message.type === "status") status.textContent = message.text;
         else if (message.type === "progress") {
           progress.max = message.total;
@@ -2420,14 +2849,14 @@
           run.disabled = false;
           status.textContent = "Error: " + message.message;
         }
-      };
+      });
     }
     generationId += 1;
     run.disabled = true;
     progress.value = 0;
     document.getElementById("genResults").replaceChildren();
     const base = new URL(DATA_ROOT, window.location.href).href;
-    generatorWorker.postMessage({ type: "generate", id: generationId, base, options });
+    pyWorker().postMessage({ type: "generate", id: generationId, base, options });
   }
 
   document.getElementById("generateOpen").addEventListener("click", async () => {
@@ -2503,10 +2932,16 @@
     const picked = pointerInfo.pickInfo?.pickedMesh;
     // Clicking a drop marker, or the rim/cap of a valid input hole, selects
     // that hole as the marble input.
-    const inputKey = picked?.metadata?.inputHoleKey
+    const inputKey = edit.on ? null : picked?.metadata?.inputHoleKey
       ?? (picked?.metadata?.info?.kind === "rail_hole" ? picked.metadata.info.id : null);
     // Copy the info first: selecting re-renders the route and disposes the marker.
     const pickedInfo = picked?.metadata?.info;
+    if (edit.on) {
+      const id = pickedInfo?.kind === "rail_hole" ? pickedInfo.rail_id : picked?.metadata?.owner;
+      selectEdit(id && componentOf(id) ? id : null);
+      if (pickedInfo) document.getElementById("selection").textContent = JSON.stringify(pickedInfo, null, 2);
+      return;
+    }
     if (inputKey && selectInputHole(inputKey)) {
       document.getElementById("selection").textContent =
         JSON.stringify({ selected_input_hole: inputKey, ...pickedInfo }, null, 2);

@@ -247,3 +247,24 @@ button, select, input { font: inherit; }
 .gen-tunables .plus { color: #16a34a; }
 .gen-tunables .minus { color: #dc2626; }
 .gen-dialog { overflow-y: auto; }
+
+/* Edit mode */
+.edit-panel .validation-status { margin: 4px 0 10px; }
+.edit-body { display: grid; gap: 10px; font-size: 13px; }
+.edit-body h3 { margin: 0; font-size: 14px; }
+.edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.edit-row > span.label { min-width: 70px; color: var(--muted); font-size: 12px; }
+.edit-body button {
+  min-height: 30px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: Canvas; color: CanvasText; font-size: 13px; cursor: pointer;
+}
+.edit-body button:hover:not(:disabled) { border-color: var(--accent); }
+.edit-body button:disabled { opacity: .45; cursor: default; }
+.edit-body button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, Canvas); border-color: var(--accent); }
+.edit-body .swatch { margin-right: 4px; vertical-align: -1px; }
+.hole-chip { font-variant-numeric: tabular-nums; }
+.hole-chip[data-state="covered"] { background: color-mix(in srgb, #f59e0b 22%, Canvas); }
+.hole-chip[data-state="block_connected"] { background: color-mix(in srgb, #22d3ee 18%, Canvas); }
+.edit-warn { color: #b45309; }
+.edit-short { color: #dc2626; font-weight: 600; }
+.validation-status.warn { border-color: #f59e0b; color: #b45309; background: color-mix(in srgb, #f59e0b 10%, Canvas); }

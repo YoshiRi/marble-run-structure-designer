@@ -257,3 +257,19 @@ bracing, exit style). Both lists come from the Python source
 Settings can be saved as named profiles in the browser, reset to the defaults,
 and exported/imported as JSON. A generated layout records the weights and rules
 it was made with under `generator`.
+
+## Edit mode
+
+**Edit** in the toolbar turns the viewer into a small editor. Click a rail or a
+block, then:
+
+- block: rotate 90° (keys `R` / `Shift+R`), swap to another block of the same
+  height, or remove a free-standing stack (counterweight);
+- rail: curve left/right or shorten (the generator's own Python passes, run in
+  the worker; the first use loads Python), and cover/uncover open holes.
+
+Every change re-derives the exits from the same input and is validated live
+(`validation.js`); the panel shows validity, the exit count and kind, and
+parts beyond the sets. Undo/redo (`Ctrl+Z` / `Ctrl+Shift+Z`) and **Save YAML**
+are in the toolbar; a saved file records `edited_from`. See
+`docs/generator-design.md` §5.

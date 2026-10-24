@@ -209,17 +209,30 @@ by score. It never changes a build.
   - `min_roll_cm` is effectively off.
   - The rail-to-block feed links that only the removed hook entry used are
     still in the code.
-- **Browser parity covers routing only.**
-  - Assembly, statics and inventory exist in Python only, so an editor in the
-    viewer cannot check edits live.
-  - Porting them, with parity tests like routing, is the prerequisite for an
-    edit mode.
 - **The search is top-down and greedy.** Builds tend to be one chain per exit;
   with two exits and no right-angle splitter, they are small. A different
   search (bottom-up, or proposing a footprint pattern first) is a layer-2
   change and does not touch the other layers.
 
-## 5. Decisions
+## 5. Edit mode (viewer)
+
+The editor is a person doing layer-2 work by hand; it uses the same layers.
+
+| Edit | Where it runs | Notes |
+| --- | --- | --- |
+| block rotate, block swap (same height) | viewer (field change) | same height keeps every stack closed |
+| cover / uncover an open hole | viewer | block-connected holes are left alone |
+| remove a free-standing stack | viewer | not the one holding the input |
+| curve left/right, shorten | Python passes `substitute`, `shorten` via the worker (`web.edit_json`) | one geometry implementation |
+
+After every edit the routing query's exits are recomputed from the same
+input, then `viewer/validation.js` (layer 1) checks the result. Invalid
+results are kept and explained; undo goes back. The panel also shows the
+layer-3 checks (exit count and kind, parts within the sets). A saved edit
+records `edited_from` and a fresh bill of materials; stale metrics are
+dropped.
+
+## 6. Decisions
 
 | Question | Decision |
 | --- | --- |
@@ -228,7 +241,7 @@ by score. It never changes a build.
 | Edit mode | port the validators to **JavaScript** with Python parity tests, like routing |
 | Learning from review marks | **not yet** |
 
-## 6. Open questions
+## 7. Open questions
 
 - Which patterns first, and their exact geometry (the triangle: rail ends on
   the triangle's sides, the middle hole on the perpendicular).

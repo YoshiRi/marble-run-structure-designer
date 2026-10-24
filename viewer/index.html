@@ -33,6 +33,12 @@
         <a class="toolbar-link" href="./gallery.html">Gallery</a>
         <button id="generateOpen" type="button" title="Generate new layouts in the browser">Generate</button>
         <button id="buildToggle" type="button" aria-pressed="false" title="Step-by-step build instructions">Build</button>
+        <button id="editToggle" type="button" aria-pressed="false" title="Change rails and blocks; every change is validated">Edit</button>
+        <div id="editBar" class="build-bar" hidden>
+          <button id="editUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+          <button id="editRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+          <button id="editSave" type="button" title="Download the edited layout as YAML">Save YAML</button>
+        </div>
         <div id="buildBar" class="build-bar" hidden>
           <button id="buildPrev" type="button" aria-label="Previous step">←</button>
           <span id="buildBarStep" class="build-bar-step">Step 0 / 0</span>
@@ -59,6 +65,14 @@
       </section>
 
       <aside class="sidebar">
+        <section id="editPanel" class="build-panel edit-panel" hidden>
+          <h2>Edit</h2>
+          <div id="editCheck" class="validation-status" aria-live="polite"></div>
+          <div id="editBody" class="edit-body"></div>
+          <p id="editNote" class="muted small-note" aria-live="polite"></p>
+          <p class="muted small-note">Click a rail or block. Keys: R rotate, Ctrl+Z undo, Esc deselect.
+            Rail rewrites run the generator's own Python passes (loaded once).</p>
+        </section>
         <section id="buildPanel" class="build-panel" hidden>
           <h2 id="buildStepTitle">Build</h2>
           <div class="build-nav">
