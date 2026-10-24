@@ -1122,11 +1122,17 @@ def generate(
     attempts: int = 500,
     seed: int = 0,
     keep: int = 3,
+    stats: dict[str, int] | None = None,
 ) -> list[Candidate]:
+    """`stats` (optional) receives counts: attempts, valid (validated builds)."""
+    stats = stats if stats is not None else {}
+    stats.setdefault("attempts", 0)
+    stats.setdefault("valid", 0)
     rng = random.Random(seed)
     generator = CascadeGenerator(catalog, budget, config, rng)
     found: dict[tuple, Candidate] = {}
     for attempt in range(attempts):
+        stats["attempts"] += 1
         state = generator.build_once()
         if state is None or len(state.rails) < 2:
             continue
@@ -1150,6 +1156,7 @@ def generate(
         layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
         if layout is None:
             continue
+        stats["valid"] += 1
         solids = component_solids(layout, catalog)  # the final rails, after swaps
         usage = layout_usage(layout)
         metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
