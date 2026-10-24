@@ -389,6 +389,8 @@ Each step adds a fixture and a test at its layer (§3).
 
 ## 8. Open questions
 
+- TODO (user, 2026-10-24): register several **good-design combinations** as
+  patterns (§6.2). Waiting for the user's examples.
 - The triangle's exact geometry: which holes sit at the corners, the side
   length, the level of each side, and whether there is a center column (the
   earlier note: rail ends on the triangle's sides, the middle hole on the
