@@ -281,3 +281,21 @@ def test_generate_reports_attempt_counts():
     stats = {}
     generate(CATALOG, budget, config=GeneratorConfig(), attempts=20, seed=1, keep=2, stats=stats)
     assert stats["attempts"] == 20 and 0 <= stats["valid"] <= 20
+
+
+def test_seesaw_diamond_builds_validate_and_merge():
+    """Design doc §6.1: a seesaw split whose two arms feed one collector rail."""
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    from quadrilla_solver.validation import validate_layout
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005", "QDE6008AB05"]))
+    config = GeneratorConfig(exclude_parts=("red_right_angle",), seesaw_probability=1.0,
+                             weights={"merges": 25.0})
+    found = [c for c in generate(CATALOG, budget, config=config, attempts=120, seed=1, keep=20)
+             if any(p.part_type == "seesaw" for p in c.layout.parts)]
+    assert found, "no seesaw diamond in 120 attempts"
+    for c in found:
+        assert c.metrics["merges"] >= 1
+        rails = {r.flow_direction for r in c.layout.rails}
+        assert {"from_hole", "to_hole"} <= rails
+        result = validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks)
+        assert result.valid

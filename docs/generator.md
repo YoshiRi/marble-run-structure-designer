@@ -126,6 +126,20 @@ Effect: with two exits, no right-angle splitter and no thin towers, builds are
 small (4-6 rails, mostly one exit). Growing them needs bracing (perpendicular
 rails at tall stacks) and longer horizontal runs per level.
 
+## Seesaw diamond (split and merge)
+
+`CascadeGenerator._seesaw_diamond`: instead of ending a branch with a dive,
+the marble falls (6–12 levels, 8 tried first) onto a seesaw on the center hole
+of a center-hole long rail H (`from_hole`). At H's holes 0 and 4 a yellow block
+stands on a collector rail C directly below (`to_hole`), holding H and facing
+inward. The seesaw sends the marble to either end of H. That end's block takes
+it from H's hole and drops it onto C, and both routes merge at C's center hole.
+From there the branch continues with a normal drop column (C is then held at
+hole 0 and the center), or it dives (C is held at both ends). Holes 1 and 3 of
+both rails are covered. The diamond is placed only if it fits the footprint and
+hits nothing. Its rolled stretches count toward the rolled length. Pivot rails
+are never swapped for curves.
+
 ## Exits
 
 `exit_style: contained` (default, user rule) ends a branch only where a marble
