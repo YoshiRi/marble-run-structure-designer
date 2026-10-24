@@ -51,6 +51,7 @@
     polygon: [],
     structure: [],
     build: [],
+    review: [],
   };
 
   // Show the z=0 datum explicitly instead of relying on a plain ground plane.
@@ -78,6 +79,7 @@
   const groundLevelGrid = createGroundLevelGrid();
 
   let catalog = null;
+  let layoutOrigin = "";  // where the open layout came from (review notes cite it)
   let layout = null;
   // The loaded layout. In Build mode `layout` is the part placed so far.
   let fullLayout = null;
@@ -2038,6 +2040,7 @@
 
   function setBuildMode(on) {
     if (on && edit.on) edit.on = false;
+    if (on && review.on) review.on = false;
     build.on = on;
     build.reframe = on;
     if (on) {
@@ -2055,6 +2058,7 @@
   function setLayout(data, opts = {}) {
     if (!opts.edit) resetEdit(data);
     fullLayout = data;
+    if (!opts.edit) { review.draft = null; review.open = null; loadReview(); }
     layout = data;
     build.plan = MarbleAssembly.buildPlan(fullLayout);
     build.graph = MarbleRouting.buildGraph(fullLayout, catalog);
@@ -2123,6 +2127,7 @@
     else if (changed) for (const mesh of scene.meshes) if (mesh.metadata?.owner !== undefined) mesh.visibility = 1;
     renderBuildPanel();
     renderEditPanel();
+    renderReview();
   }
 
   function applyVisibility() {
@@ -2148,6 +2153,7 @@
   async function loadExample(path) {
     const response = await fetch(DATA_ROOT + path);
     if (!response.ok) throw new Error("Failed to load " + path);
+    layoutOrigin = path;
     setLayout(jsyaml.load(await response.text()));
   }
 
@@ -2183,7 +2189,7 @@
 
   document.getElementById("exampleSelect").addEventListener("change", event => {
     const generated = generatedLayouts.get(event.target.value);
-    if (generated) { build.step = 0; setLayout(structuredClone(generated)); return; }
+    if (generated) { build.step = 0; layoutOrigin = "generated in the browser"; setLayout(structuredClone(generated)); return; }
     loadExample(event.target.value).catch(console.error);
   });
 
@@ -2584,8 +2590,8 @@
     placeEditPopup();
   }
 
-  // Screen rectangle (in the viewport panel) covered by the selected part.
-  function selectedScreenBox() {
+  // Screen rectangle (in the viewport panel) covered by an owner's meshes.
+  function ownerScreenBox(owner) {
     const rect = canvas.getBoundingClientRect();
     const host = canvas.parentElement.getBoundingClientRect();
     const k = rect.width / engine.getRenderWidth();
@@ -2593,7 +2599,7 @@
     const transform = scene.getTransformMatrix();
     let box = null;
     for (const mesh of scene.meshes) {
-      if (mesh.isDisposed() || mesh.metadata?.owner !== edit.selected) continue;
+      if (mesh.isDisposed() || owner == null || mesh.metadata?.owner !== owner) continue;
       mesh.computeWorldMatrix(true);
       for (const v of mesh.getBoundingInfo().boundingBox.vectorsWorld) {
         const p = BABYLON.Vector3.Project(v, BABYLON.Matrix.Identity(), transform, viewport);
@@ -2608,12 +2614,26 @@
   // Put the popup beside the selected part, never on it: right, left,
   // below or above, whichever fits; tap point as a fallback.
   function placeEditPopup() {
-    const popup = document.getElementById("editPopup");
+    placePopup(document.getElementById("editPopup"), edit.selected, edit.popupAt);
+  }
+
+  // Screen point (in the viewport panel) of a world position.
+  function screenPoint(v) {
+    const rect = canvas.getBoundingClientRect();
+    const host = canvas.parentElement.getBoundingClientRect();
+    const k = rect.width / engine.getRenderWidth();
+    const p = BABYLON.Vector3.Project(v, BABYLON.Matrix.Identity(), scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    return { x: rect.left - host.left + p.x * k, y: rect.top - host.top + p.y * k };
+  }
+
+  // anchor: {x, y} in the panel, used when the owner has no meshes.
+  function placePopup(popup, owner, anchor) {
     if (popup.hidden) return;
     const host = popup.parentElement.getBoundingClientRect();
     const w = popup.offsetWidth, h = popup.offsetHeight, gap = 16, pad = 8;
-    const box = selectedScreenBox() ||
-      { l: edit.popupAt.x, r: edit.popupAt.x, t: edit.popupAt.y, b: edit.popupAt.y };
+    const box = ownerScreenBox(owner) || (anchor
+      ? { l: anchor.x - 6, r: anchor.x + 6, t: anchor.y - 6, b: anchor.y + 6 } : { l: pad, r: pad, t: pad, b: pad });
     const clampY = y => Math.max(pad, Math.min(host.height - h - pad, y));
     const clampX = x => Math.max(pad, Math.min(host.width - w - pad, x));
     const midY = (box.t + box.b) / 2 - h / 2, midX = (box.l + box.r) / 2 - w / 2;
@@ -2636,6 +2656,7 @@
       url.searchParams.delete("step");
       window.history.replaceState(null, "", url);
     }
+    if (on && review.on) review.on = false;
     edit.on = on;
     if (!on) { edit.selected = null; edit.popupAt = null; }
     renderAll();
@@ -2674,6 +2695,331 @@
       const type = componentOf(edit.selected).item.part_type;
       if (!catalog.special_parts?.[type] && !catalog.special_rails?.[type]) rotatePart(edit.selected, event.shiftKey ? -90 : 90);
     }
+  });
+
+  // ---- Review mode -----------------------------------------------------
+  // Notes pinned to a part, rail, rail hole, block port or a point in space,
+  // with a kind that maps onto the generator design's layers (a physics
+  // fact, a taste/style judgment, something good, an idea). Kept per layout
+  // in this browser; "Copy for Claude" turns them into text for the chat.
+  const REVIEW_STORE = "marble-run-review-v1:";
+  const REVIEW_KINDS = {
+    physics: { label: "Physics", hint: "wrong: would not stand or roll like this", color: "#ef4444" },
+    taste: { label: "Taste", hint: "works, but I would not want it", color: "#f59e0b" },
+    good: { label: "Good", hint: "keep doing this", color: "#22c55e" },
+    idea: { label: "Idea", hint: "try something here", color: "#3b82f6" },
+  };
+  const VERDICTS = ["", "good", "doubtful", "bad"];
+  const review = { on: false, notes: [], verdict: "", comment: "", open: null, draft: null };
+
+  function reviewKey() {
+    return REVIEW_STORE + (fullLayout?.layout_id || fullLayout?.name || "layout");
+  }
+
+  function loadReview() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(reviewKey()) || "null");
+      Object.assign(review, { notes: saved?.notes || [], verdict: saved?.verdict || "", comment: saved?.comment || "" });
+    } catch (error) {
+      Object.assign(review, { notes: [], verdict: "", comment: "" });
+    }
+  }
+
+  function saveReview() {
+    try {
+      localStorage.setItem(reviewKey(), JSON.stringify({ notes: review.notes, verdict: review.verdict, comment: review.comment }));
+    } catch (error) { /* storage blocked: notes live for this page only */ }
+  }
+
+  const round2 = v => Math.round(v * 100) / 100;
+
+  // What was clicked, as a target a person and the solver can both read.
+  function reviewTarget(mesh, point) {
+    const info = mesh.metadata?.info;
+    const at = { x_cm: round2(point.x), y_cm: round2(point.z), z_units: round2(point.y / HEIGHT_SCALE_CM) };
+    if (info?.kind === "rail_hole") return { kind: "rail_hole", id: info.rail_id, hole: info.hole_index, at };
+    if (info?.kind === "block_port") return { kind: "block_port", id: info.part_id, port: info.port, at };
+    const owner = mesh.metadata?.owner;
+    const found = owner !== undefined && componentOf(owner);
+    if (found) return { kind: found.kind, id: owner, at };
+    return { kind: "point", at };
+  }
+
+  function describeTarget(t) {
+    const found = t.id && componentOf(t.id);
+    const item = found?.item;
+    if (t.kind === "rail_hole") {
+      const state = item?.hole_states?.[t.hole] ?? "open";
+      return t.id + " hole " + t.hole + " (" + state + ")";
+    }
+    if (t.kind === "block_port") return t.id + " port " + t.port + (item ? " (" + partName(item.part_type) + ")" : "");
+    if (t.kind === "rail" && item) return t.id + " (" + partName(item.rail_type) + ", z" + item.z_units + ")";
+    if (t.kind === "part" && item) {
+      return t.id + " (" + partName(item.part_type) + ", z" + item.z_units + (item.rotation_deg ? ", " + item.rotation_deg + "°" : "") + ")";
+    }
+    if (t.id) return t.id + " (no longer in this layout)";
+    return "point (" + t.at.x_cm + ", " + t.at.y_cm + ") cm at z" + t.at.z_units;
+  }
+
+  function noteAnchor(note) {
+    return new BABYLON.Vector3(note.target.at.x_cm, note.target.at.z_units * HEIGHT_SCALE_CM, note.target.at.y_cm);
+  }
+
+  function startReviewNote(mesh, point) {
+    review.draft = { target: reviewTarget(mesh, point), kind: "taste", text: "" };
+    review.open = null;
+    renderReview();
+    document.querySelector("#reviewPopup textarea")?.focus();
+  }
+
+  function openReviewNote(n) {
+    const note = review.notes.find(x => x.n === n);
+    if (!note) return;
+    review.draft = { ...note, target: { ...note.target } };
+    review.open = n;
+    renderReview();
+  }
+
+  function closeReviewNote() {
+    review.draft = null;
+    review.open = null;
+    renderReview();
+  }
+
+  function commitReviewNote() {
+    const d = review.draft;
+    if (!d || !d.text.trim()) return closeReviewNote();
+    if (review.open) {
+      const note = review.notes.find(x => x.n === review.open);
+      Object.assign(note, { kind: d.kind, text: d.text.trim() });
+    } else {
+      const n = review.notes.reduce((m, x) => Math.max(m, x.n), 0) + 1;
+      review.notes.push({ n, kind: d.kind, text: d.text.trim(), target: d.target, label: describeTarget(d.target) });
+    }
+    saveReview();
+    closeReviewNote();
+  }
+
+  function deleteReviewNote(n) {
+    review.notes = review.notes.filter(x => x.n !== n);
+    saveReview();
+    closeReviewNote();
+  }
+
+  // Numbered pins at each note's point, colored by kind.
+  function drawReviewPins() {
+    for (const mesh of groups.review) if (!mesh.isDisposed()) mesh.dispose();
+    groups.review.length = 0;
+    if (!review.on) return;
+    const pins = [...review.notes];
+    if (review.draft && !review.open) pins.push({ n: "+", kind: review.draft.kind, target: review.draft.target });
+    for (const note of pins) {
+      const color = REVIEW_KINDS[note.kind]?.color || "#94a3b8";
+      const tex = new BABYLON.DynamicTexture("review-pin-tex-" + note.n, { width: 128, height: 128 }, scene, true);
+      tex.hasAlpha = true;
+      const ctx = tex.getContext();
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(64, 64, 58, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 8; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 64px system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(note.n), 64, 68);
+      tex.update();
+      const plane = BABYLON.MeshBuilder.CreatePlane("review-pin-" + note.n, { size: 3.4 }, scene);
+      plane.position = noteAnchor(note).add(new BABYLON.Vector3(0, 2.2, 0));
+      plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+      const mat = new BABYLON.StandardMaterial("review-pin-mat-" + note.n, scene);
+      mat.diffuseTexture = tex;
+      mat.emissiveColor = BABYLON.Color3.White();
+      mat.disableLighting = true;
+      mat.useAlphaFromDiffuseTexture = true;
+      mat.backFaceCulling = false;
+      plane.material = mat;
+      plane.renderingGroupId = 1;
+      plane.metadata = { reviewNote: note.n === "+" ? null : note.n };
+      plane.isPickable = note.n !== "+";
+      const stem = BABYLON.MeshBuilder.CreateLines("review-stem-" + note.n,
+        { points: [noteAnchor(note), plane.position] }, scene);
+      stem.color = BABYLON.Color3.FromHexString(color);
+      stem.isPickable = false;
+      groups.review.push(plane, stem);
+    }
+  }
+
+  function highlightOwner(id, on) {
+    for (const mesh of scene.meshes) {
+      if (mesh.isDisposed() || mesh.metadata?.owner !== id || mesh.metadata?.info?.id !== id) continue;
+      mesh.renderOutline = on;
+      mesh.outlineColor = BABYLON.Color3.FromHexString("#facc15");
+      mesh.outlineWidth = 0.16;
+    }
+  }
+
+  function renderReviewPopup() {
+    const popup = document.getElementById("reviewPopup");
+    const d = review.on && review.draft;
+    popup.hidden = !d;
+    for (const mesh of scene.meshes) if (mesh.metadata?.reviewOutline) { mesh.renderOutline = false; mesh.metadata.reviewOutline = false; }
+    if (!d) return;
+    if (d.target.id) {
+      highlightOwner(d.target.id, true);
+      for (const mesh of scene.meshes) if (mesh.renderOutline && mesh.metadata?.owner === d.target.id) mesh.metadata.reviewOutline = true;
+    }
+    const title = document.createElement("h3");
+    title.textContent = (review.open ? "#" + review.open + " · " : "New note · ") + describeTarget(d.target);
+    const close = button("✕", { class: "popup-close", "aria-label": "Close" }, closeReviewNote);
+    const kinds = row("Kind", ...Object.entries(REVIEW_KINDS).map(([k, v]) => {
+      const b = button('<i class="swatch" style="background:' + v.color + '"></i>' + v.label,
+        { "aria-pressed": String(d.kind === k), title: v.hint }, () => { d.kind = k; renderReview(); });
+      return b;
+    }));
+    const text = document.createElement("textarea");
+    text.rows = 3;
+    text.placeholder = "What is wrong or right here? (Ctrl+Enter to save)";
+    text.value = d.text;
+    text.addEventListener("input", () => { d.text = text.value; });
+    text.addEventListener("keydown", e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); commitReviewNote(); }
+      if (e.key === "Escape") { e.preventDefault(); closeReviewNote(); }
+    });
+    const actions = row("",
+      button("Save", { class: "primary" }, commitReviewNote),
+      ...(review.open ? [button("Delete", {}, () => deleteReviewNote(review.open))] : []),
+      button("Cancel", {}, closeReviewNote));
+    popup.replaceChildren(close, title, kinds, text, actions);
+    placeReviewPopup();
+  }
+
+  function placeReviewPopup() {
+    const d = review.draft;
+    if (!d) return;
+    const t = d.target;
+    const owner = t.id && componentOf(t.id) ? t.id : null;
+    placePopup(document.getElementById("reviewPopup"), owner, screenPoint(noteAnchor({ target: t })));
+  }
+
+  function reviewDocument() {
+    const doc = {
+      review: {
+        layout: fullLayout.layout_id || fullLayout.name || "unnamed",
+        source: layoutOrigin || "unknown",
+        ...(fullLayout.edited_from || edit.undo.length ? { edited_from: fullLayout.edited_from || edit.origin } : {}),
+        ...(review.verdict ? { verdict: review.verdict } : {}),
+        ...(review.comment.trim() ? { comment: review.comment.trim() } : {}),
+        notes: review.notes.map(x => ({
+          pin: x.n, kind: x.kind, target: describeTarget(x.target),
+          ...(x.target.id ? { component: x.target.id } : {}),
+          ...(x.target.hole != null ? { hole: x.target.hole } : {}),
+          ...(x.target.port ? { port: x.target.port } : {}),
+          at_cm: "(" + [x.target.at.x_cm, x.target.at.y_cm, round2(x.target.at.z_units * HEIGHT_SCALE_CM)].join(", ") + ")",
+          text: x.text,
+        })),
+      },
+    };
+    // Layouts that exist only in this browser travel with the review.
+    if (!/^(examples|tests)\//.test(layoutOrigin) || edit.undo.length) {
+      const data = structuredClone(fullLayout);
+      delete data.metrics;
+      doc.layout_data = data;
+    }
+    return doc;
+  }
+
+  function reviewText() {
+    return "Review of " + (fullLayout.layout_id || fullLayout.name) + " (viewer Review mode)\n\n```yaml\n" +
+      jsyaml.dump(reviewDocument(), { lineWidth: 120, noRefs: true }) + "```\n";
+  }
+
+  async function copyReview() {
+    const status = document.getElementById("reviewStatus");
+    const text = reviewText();
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = "Copied. Paste it into the chat with Claude.";
+    } catch (error) {
+      const area = document.getElementById("reviewExport");
+      area.hidden = false;
+      area.value = text;
+      area.select();
+      status.textContent = "Clipboard blocked: select the text below and copy it.";
+    }
+  }
+
+  function renderReview() {
+    const toggle = document.getElementById("reviewToggle");
+    toggle.textContent = review.on ? "Exit review" : "Review";
+    toggle.setAttribute("aria-pressed", String(review.on));
+    document.getElementById("reviewPanel").hidden = !review.on;
+    drawReviewPins();
+    renderReviewPopup();
+    if (!review.on || !fullLayout) return;
+    document.getElementById("reviewTitle").textContent = "Review · " + (fullLayout.layout_id || fullLayout.name || "layout");
+    const verdict = document.getElementById("reviewVerdict");
+    if (verdict.value !== review.verdict) verdict.value = review.verdict;
+    const comment = document.getElementById("reviewComment");
+    if (document.activeElement !== comment) comment.value = review.comment;
+    const list = document.getElementById("reviewList");
+    list.replaceChildren(...review.notes.map(note => {
+      const li = document.createElement("li");
+      const kind = REVIEW_KINDS[note.kind] || {};
+      li.innerHTML = '<span class="review-pin" style="background:' + kind.color + '">' + note.n + "</span>" +
+        '<div><div class="review-target">' + esc(kind.label || note.kind) + " · " + esc(describeTarget(note.target)) + "</div>" +
+        '<div class="review-text">' + esc(note.text) + "</div></div>";
+      li.tabIndex = 0;
+      li.addEventListener("click", () => openReviewNote(note.n));
+      li.addEventListener("keydown", e => { if (e.key === "Enter") openReviewNote(note.n); });
+      li.addEventListener("mouseenter", () => note.target.id && highlightOwner(note.target.id, true));
+      li.addEventListener("mouseleave", () => note.target.id && highlightOwner(note.target.id, false));
+      return li;
+    }));
+    document.getElementById("reviewEmpty").hidden = review.notes.length > 0;
+    document.getElementById("reviewCopy").disabled = !review.notes.length && !review.verdict && !review.comment.trim();
+  }
+
+  function setReviewMode(on) {
+    if (on) {
+      if (build.on) setBuildMode(false);
+      if (edit.on) setEditMode(false);
+      loadReview();
+    }
+    review.on = on;
+    review.draft = null;
+    review.open = null;
+    document.getElementById("reviewExport").hidden = true;
+    document.getElementById("reviewStatus").textContent = "";
+    renderReview();
+  }
+
+  document.getElementById("reviewToggle").addEventListener("click", () => setReviewMode(!review.on));
+  document.getElementById("reviewVerdict").addEventListener("change", e => { review.verdict = e.target.value; saveReview(); renderReview(); });
+  document.getElementById("reviewComment").addEventListener("input", e => { review.comment = e.target.value; saveReview(); renderReview(); });
+  document.getElementById("reviewCopy").addEventListener("click", copyReview);
+  document.getElementById("reviewDownload").addEventListener("click", () => {
+    const blob = new Blob([jsyaml.dump(reviewDocument(), { lineWidth: 120, noRefs: true })], { type: "text/yaml" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = (fullLayout.layout_id || "layout") + ".review.yaml";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+  document.getElementById("reviewClear").addEventListener("click", () => {
+    if (!review.notes.length && !review.comment && !review.verdict) return;
+    review.cleared = { notes: review.notes, verdict: review.verdict, comment: review.comment };
+    Object.assign(review, { notes: [], verdict: "", comment: "", draft: null, open: null });
+    saveReview();
+    renderReview();
+    const status = document.getElementById("reviewStatus");
+    status.replaceChildren("Cleared. ", button("Undo", {}, () => {
+      Object.assign(review, review.cleared);
+      saveReview();
+      status.textContent = "";
+      renderReview();
+    }));
+  });
+  window.addEventListener("keydown", event => {
+    if (review.on && event.key === "Escape" && review.draft && !event.target.closest?.("textarea")) closeReviewNote();
   });
 
   // ---- Generate in the browser (viewer/generator-worker.js runs the Python
@@ -2928,6 +3274,7 @@
     }
     select.value = key;
     build.step = 0;
+    layoutOrigin = "generated in the browser";
     setLayout(structuredClone(data));
   }
 
@@ -3011,6 +3358,7 @@
     reader.onload = () => {
       try {
         build.step = 0;
+        layoutOrigin = "file " + file.name;
         setLayout(jsyaml.load(String(reader.result)));
       } catch (error) {
         alert("YAML parse error: " + error);
@@ -3070,6 +3418,11 @@
       ?? (picked?.metadata?.info?.kind === "rail_hole" ? picked.metadata.info.id : null);
     // Copy the info first: selecting re-renders the route and disposes the marker.
     const pickedInfo = picked?.metadata?.info;
+    if (review.on) {
+      if (picked?.metadata?.reviewNote) openReviewNote(picked.metadata.reviewNote);
+      else if (picked && pointerInfo.pickInfo.pickedPoint) startReviewNote(picked, pointerInfo.pickInfo.pickedPoint);
+      return;
+    }
     if (edit.on) {
       const id = pickedInfo?.kind === "rail_hole" ? pickedInfo.rail_id : picked?.metadata?.owner;
       const rect = canvas.getBoundingClientRect();
@@ -3099,8 +3452,11 @@
     canvas.style.cursor = pick?.hit ? "pointer" : "";
   });
 
-  window.addEventListener("resize", () => { engine.resize(); if (edit.on) placeEditPopup(); });
-  camera.onViewMatrixChangedObservable.add(() => { if (edit.on && edit.popupAt) placeEditPopup(); });
+  window.addEventListener("resize", () => { engine.resize(); if (edit.on) placeEditPopup(); if (review.on) placeReviewPopup(); });
+  camera.onViewMatrixChangedObservable.add(() => {
+    if (edit.on && edit.popupAt) placeEditPopup();
+    if (review.on) placeReviewPopup();
+  });
   engine.runRenderLoop(() => scene.render());
   initialize();
 })();

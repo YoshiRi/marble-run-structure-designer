@@ -286,3 +286,23 @@ button, select, input { font: inherit; }
 .edit-popup .popup-status.bad { color: #f87171; }
 .edit-popup p.small-note { display: none; }
 .edit-popup .popup-status { overflow-wrap: anywhere; }
+
+/* Review mode */
+.review-field { display: grid; gap: 4px; margin: 8px 0; font-size: 12px; color: var(--muted); }
+.review-field select, .review-field textarea, .review-popup textarea, .review-export {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px;
+  background: Canvas; color: CanvasText; font: inherit; font-size: 13px;
+}
+.review-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.review-list li { display: flex; gap: 8px; align-items: flex-start; padding: 6px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
+.review-list li:hover, .review-list li:focus-visible { border-color: var(--accent); outline: none; }
+.review-pin { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; }
+.review-target { font-size: 12px; color: var(--muted); }
+.review-text { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-actions button { min-height: 32px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; cursor: pointer; }
+.review-actions button.primary, .review-popup button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.review-actions button:disabled { opacity: .45; cursor: default; }
+.review-popup textarea { background: rgba(30, 41, 59, .95); color: #e2e8f0; border-color: rgba(148, 163, 184, .35); margin: 4px 0 6px; resize: vertical; }
+.review-popup h3 { font-size: 13px; }
+.edit-popup button[aria-pressed="true"] { background: rgba(59, 130, 246, .35); border-color: #60a5fa; color: #fff; }
