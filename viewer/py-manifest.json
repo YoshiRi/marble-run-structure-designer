@@ -18,6 +18,7 @@
     "src/quadrilla_solver/stability.py",
     "src/quadrilla_solver/statics.py",
     "src/quadrilla_solver/substitution.py",
+    "src/quadrilla_solver/supports.py",
     "src/quadrilla_solver/validation.py",
     "src/quadrilla_solver/web.py",
     "catalog/parts.yaml",

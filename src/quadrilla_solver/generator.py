@@ -146,6 +146,10 @@ class GeneratorConfig:
     # marble falls onto a seesaw, both arms feed one collector rail below, and
     # the branch continues from the collector's center hole (a merge).
     seesaw_probability: float = 0.5
+    # Re-solve the columns the marble never touches for all rails at once
+    # (supports.py), dropping greedy braces; kept only if it validates and
+    # scores better (design doc §6.3 support phase).
+    solve_supports: bool = False
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
     weights: Mapping[str, float] | None = None
 
@@ -1247,6 +1251,13 @@ def generate(
         if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
             continue
         paths = result.connectivity.paths
+        resolved = False
+        if config.solve_supports:
+            from .supports import resolve_supports
+            counts = {k: v for k, v in generator.budget.counts.items()}
+            better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False)
+            if better is not None:
+                layout, resolved = better, True
         layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
         layout = add_curves(layout, catalog, budget, rng, source, sinks, keep_straight=state.braces)
         layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
@@ -1260,6 +1271,8 @@ def generate(
         metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
         metrics["covers"] = usage.get("cover", 0)
         metrics.update(layout_metrics(layout, catalog, source))
+        if resolved:
+            metrics["braces"] = sum(1 for r in layout.rails if r.id in state.braces)
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
                      metrics["curved_rails"],
                      tuple(sorted(Counter(p.part_type for p in layout.parts).items())))
