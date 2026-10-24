@@ -2087,35 +2087,32 @@
       : special?.shape === "seesaw" ? renderSeesaw(part, special) : renderPart(part)));
   }
 
-  // Seesaw: a stand on the rail's center hole and a tilted board along the
-  // rail (drawn tipped toward end B; the real one switches every few marbles).
+  // Seesaw: a rhombus (user) seen from the side, 19 cm long and 8 cm tall,
+  // 3 cm thick, standing on its lower corner over the rail's center hole and
+  // lying along the rail.
   function renderSeesaw(part, spec) {
     const length = Number(spec.footprint_cm?.length ?? 19);
     const width = Number(spec.footprint_cm?.width ?? 3);
     const height = geometryValue(spec.body_height_cm, 8);
-    const root = new BABYLON.TransformNode("seesaw-" + part.id, scene);
-    root.position = world(part.x_cm, part.y_cm, Number(part.z_units));
-    root.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
-    const red = material("seesawMat", palette.seesaw);
-    const stand = BABYLON.MeshBuilder.CreateBox("seesaw-stand-" + part.id,
-      { width: 2.2, height: height - 1.6, depth: width * 0.8 }, scene);
-    stand.parent = root;
-    stand.position.y = (height - 1.6) / 2;
-    stand.material = red;
-    const board = BABYLON.MeshBuilder.CreateBox("seesaw-board-" + part.id,
-      { width: length, height: 1.0, depth: width }, scene);
-    board.parent = root;
-    board.position.y = height - 1.1;
-    board.rotation.z = -0.13;
-    board.material = red;
-    const info = {
+    const L = length / 2, H = height;
+    const shape = [new BABYLON.Vector3(-L, H / 2, 0), new BABYLON.Vector3(0, H, 0),
+      new BABYLON.Vector3(L, H / 2, 0), new BABYLON.Vector3(0, 0, 0), new BABYLON.Vector3(-L, H / 2, 0)];
+    const body = BABYLON.MeshBuilder.ExtrudeShape("seesaw-" + part.id, {
+      shape, path: [new BABYLON.Vector3(0, 0, -width / 2), new BABYLON.Vector3(0, 0, width / 2)],
+      cap: BABYLON.Mesh.CAP_ALL, sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+    }, scene);
+    body.position = world(part.x_cm, part.y_cm, Number(part.z_units));
+    body.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
+    body.material = material("seesawMat", palette.seesaw);
+    body.enableEdgesRendering();
+    body.edgesWidth = 2;
+    body.edgesColor = new BABYLON.Color4(0.45, 0.05, 0.05, 1);
+    addSelectable(body, {
       id: part.id, kind: "part", type: part.part_type, mass_g: blockMass(part.part_type),
       z_units: part.z_units, rotation_deg: part.rotation_deg || 0,
-      footprint_cm: { length, width }, body_height_cm: height,
+      footprint_cm: { length, width }, body_height_cm: height, shape: "rhombus",
       routing: "random distributor (real seesaw switches every ~5 marbles)",
-    };
-    addSelectable(board, info);
-    addSelectable(stand, info);
+    });
   }
 
   // Dispose the meshes of some owners only (edit mode redraws what changed).

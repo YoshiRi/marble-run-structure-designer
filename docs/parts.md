@@ -257,7 +257,9 @@ Modeled (user, 2026-10-24) as a **random distributor**:
 
 The real seesaw tips after about 4–5 marbles and then sends a batch the other way (hysteresis). The routing does not model that; it treats each marble as a 50/50 split.
 
-Open question: whether a column may still hold the rail up from below at the same center hole. It is allowed for now.
+Shape: a rhombus seen from the side (19 cm long, 8 cm tall), standing on its lower corner. Collisions use its 19 × 3 × 8 cm box.
+
+The rail's underside is free: a column may hold the host rail up from below at the same center hole (user).
 
 ### Rail direction
 
