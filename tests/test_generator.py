@@ -273,3 +273,11 @@ def test_brace_rails_stay_straight():
               for r in c.layout.rails if not r.hole_states and r.id not in linked(c)]
     assert braces
     assert all(r.rail_type.startswith("straight_") for r in braces)
+
+
+def test_generate_reports_attempt_counts():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005"]))
+    stats = {}
+    generate(CATALOG, budget, config=GeneratorConfig(), attempts=20, seed=1, keep=2, stats=stats)
+    assert stats["attempts"] == 20 and 0 <= stats["valid"] <= 20

@@ -281,6 +281,31 @@ Rules:
   more incoming edges. Source: official builds. Merges also lower the exit
   count, which `max_exits` already rewards indirectly.
 
+Measured before building it (2026-10-24, `scripts/eval_generator.py`, seeds
+1–5, 150 attempts, 10 kept per seed; 50 builds):
+
+- Baseline: 1.16 exits per build on average, so almost every build is a single
+  chain with nothing to merge. 0 merges. 79.5 % of attempts validate, 10 ms per
+  attempt.
+- Opportunities in finished builds, i.e. a block outlet that could reach a free
+  side inlet of another column (upper bound, no collision check):
+  - with one straight rail: 0 of 50 builds. Only 17 outlet/inlet pairs even
+    face each other on a line, and their distance misses a rail length by a
+    median of 8.5 cm;
+  - with rail, drop column, rail: 8 of 50 geometrically, 4 of 50 once the
+    heights work.
+
+So merges will not come from searching locally toward the existing
+structure (the "target-driven routing" idea). The lengths are fixed and the
+grid is orthogonal, so routes coincide by luck only. A merge has to be
+**planned**: decide where the routes meet first, then build both routes so
+they arrive there. One way to make them meet by construction is **mirror
+symmetry**: build one branch after a splitter, mirror it to make the
+other, and join both on the mirror plane at a block with two inlets
+(natural_drop: front and rear both lead to bottom). That is also the shape
+of the official triangle build (two mirrored sides ending on one bottom
+rail).
+
 ### 6.2 Patterns
 
 A **pattern** is a template in local coordinates:
