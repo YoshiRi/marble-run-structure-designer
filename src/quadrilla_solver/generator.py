@@ -111,7 +111,7 @@ def resolve_set_paths(repo_root: Path, set_ids: Sequence[str]) -> list[Path]:
 
 @dataclass(frozen=True)
 class GeneratorConfig:
-    max_height_units: int = 30   # 36 cm (1 level = 1.2 cm)
+    max_height_units: int = 30   # 36 cm (1 level = 1.2 cm); up to 60 (~10 blocks) allowed
     footprint_cm: tuple[float, float] = (90.0, 90.0)
     split_probability: float = 0.45
     pass_through_probability: float = 0.35

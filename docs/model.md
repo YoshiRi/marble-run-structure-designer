@@ -85,9 +85,7 @@ not added to the effective stacked height.
 
 The rail height of **1 level (1.2 cm)** is confirmed by the user. The twist
 still spans 3 levels from its chute to its center hole.
-Thin/foundation pieces are also modeled as 1 unit, but their physical heights
-have not been directly verified. The catalog records this distinction in
-`geometry_cm`.
+Purple drop blocks and the wooden foundation are 1 level each (user-confirmed).
 
 ## Ports and routes
 

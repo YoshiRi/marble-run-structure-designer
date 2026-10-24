@@ -5,7 +5,7 @@ geometry_cm:
     value: 1.2
     source: user_measurement_2026-10-24  # one level is 1.2 cm; five rails or purple blocks stack to one 6 cm block
     confidence: measured
-    note: discrete stacking scale; rails and purple drop blocks are 1 level each, a standard block 5 levels; (was 1.5 cm and 4 levels per block until 2026-10-24, a measurement mistake); foundation height remains provisional
+    note: discrete stacking scale; rails and purple drop blocks are 1 level each, a standard block 5 levels; (was 1.5 cm and 4 levels per block until 2026-10-24, a measurement mistake); the wooden foundation is 1 level (user confirmed)
   standard_block_footprint:
     width_cm: 4.5
     depth_cm: 4.5
@@ -63,7 +63,7 @@ height_units:
     value: 3 # user: still 3 levels from in to out
     confidence: tentative
   purple_drop_block: 1 # user confirmed; 1.2 cm, matching a rail
-  wooden_foundation: 1
+  wooden_foundation: 1 # user confirmed 2026-10-24: one level
 
 routing_blocks:
   yellow:

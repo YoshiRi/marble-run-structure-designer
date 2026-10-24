@@ -63,7 +63,7 @@ The center-hole rail includes a cataloged center position at 25 cm.
   5 levels (6 cm), rails and purple blocks 1 level each
 - rail height: **1.2 cm (1 level)**, user-confirmed
 - purple thin/drop block height: **1.2 cm (1 level)**, user-confirmed and rendered from an explicit catalog dimension
-- wooden foundation height remains unverified in centimeters
+- wooden foundation height: **1 level (1.2 cm)**, user-confirmed
 - block port diameter = **1.8 cm provisional**, borrowed from the approximate
   rail-hole diameter; actual block port diameters have not been measured
 - block side exit placement = **face center**, as specified by the user
