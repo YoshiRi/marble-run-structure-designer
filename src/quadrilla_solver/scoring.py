@@ -79,6 +79,28 @@ def _merges(ctx: MetricContext) -> float:
     return float(sum(1 for k in incoming.values() if k >= 2))
 
 
+@layout_metric("shared_towers")
+def _shared_towers(ctx: MetricContext) -> float:
+    """Spots (top view) where columns holding two or more different rails
+    stand on top of each other: a tower through several rails (user idea,
+    2026-10-25). Distances are 2D, so this works on any lattice."""
+    spots: list[tuple[float, float, set[str]]] = []
+    parts = ctx.layout.part_map()
+    for s in ctx.layout.supports:
+        if s.upper_rail_id is None or not s.stack_part_ids:
+            continue
+        p = parts.get(s.stack_part_ids[0])
+        if p is None:
+            continue
+        for x, y, rails in spots:
+            if (x - p.x_cm) ** 2 + (y - p.y_cm) ** 2 < 0.35 ** 2:
+                rails.add(s.upper_rail_id)
+                break
+        else:
+            spots.append((p.x_cm, p.y_cm, {s.upper_rail_id}))
+    return float(sum(1 for _, _, rails in spots if len(rails) >= 2))
+
+
 # One linear score. Each term: sign (+ reward, - penalty), default weight,
 # label and help for the viewer, and where it came from.
 SCORE_TERMS: tuple[dict[str, Any], ...] = (
@@ -92,6 +114,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
      "help": "per random splitter", "source": "goal"},
     {"key": "merges", "sign": 1, "weight": 8.0, "label": "Merges",
      "help": "per place two routes join", "source": "official builds"},
+    {"key": "shared_towers", "sign": 1, "weight": 3.0, "label": "Shared towers",
+     "help": "per spot where columns hold two or more rails one above the other",
+     "source": "user idea (cohesion)"},
     {"key": "columns_on_rails", "sign": 1, "weight": 2.0, "label": "Stacked columns",
      "help": "per column standing on a rail", "source": "goal"},
     {"key": "curved_rails", "sign": 1, "weight": 3.0, "label": "Curves",

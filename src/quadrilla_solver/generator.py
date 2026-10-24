@@ -150,6 +150,15 @@ class GeneratorConfig:
     # (supports.py), dropping greedy braces; kept only if it validates and
     # scores better (design doc §6.3 support phase).
     solve_supports: bool = False
+    # Search schedule (user idea, 2026-10-25): branch early, align later.
+    # Placements whose holes lie over/under existing holes in top view (a
+    # tower the support solver can stack through) are tried first, with a
+    # pull growing from align_start_depth to align_full_depth. Distances are
+    # 2D, not grid steps, so a triangular lattice will work the same way.
+    align_weight: float = 0.0
+    align_start_depth: int = 2
+    align_full_depth: int = 5
+    early_split_boost: float = 0.0   # extra splitter chance up to align_start_depth
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
     weights: Mapping[str, float] | None = None
 
@@ -475,8 +484,10 @@ class CascadeGenerator:
         return self.rng.choice(((block, "purple_drop"), (block, "purple_drop", "purple_drop"),
                                 (block, "orange_vertical")))
 
-    def _block_order(self) -> list[str]:
+    def _block_order(self, depth: int = 0) -> list[str]:
         p = self.config.split_probability
+        if depth <= self.config.align_start_depth:
+            p = min(0.95, p + self.config.early_split_boost)
         keyed = []
         for name, outlets in self.drop_blocks.items():
             weight = p if len(outlets) > 1 else 1.0 - p
@@ -493,7 +504,7 @@ class CascadeGenerator:
                 else ["ground", "landing"]
         room = self.config.max_exits - self._branches(state)
         for mode in modes:
-            for block in self._block_order():
+            for block in self._block_order(depth):
                 outlets = self.drop_blocks[block]
                 if len(outlets) - 1 > room:
                     continue  # would exceed the branch outputs allowed
@@ -525,6 +536,34 @@ class CascadeGenerator:
         outlets = [self._outlet(column, port, d, block_z, depth) for port, d in dirs.items()]
         return trial, outlets
 
+    # ---- alignment (towers) ------------------------------------------------
+    def _align_pull(self, depth: int) -> float:
+        c = self.config
+        if c.align_weight <= 0 or depth <= c.align_start_depth:
+            return 0.0
+        span = max(1, c.align_full_depth - c.align_start_depth)
+        return c.align_weight * min(1.0, (depth - c.align_start_depth) / span)
+
+    def _spots(self, state: _State) -> list[tuple[float, float]]:
+        out = [(col.x, col.y) for col in state.columns.values()]
+        for r in state.rails.values():
+            spec = self.catalog.rails[r.rail_type]
+            out += [self._point(r, h) for h in spec.holes_cm]
+        return out
+
+    def _alignment(self, spots, kind: str, sx: float, sy: float, d: int) -> float:
+        """Holes of a candidate rail over or under existing holes/columns in
+        top view (1 each), or one block width beside them (0.3 each)."""
+        score = 0.0
+        for h in self.catalog.rails[kind].holes_cm:
+            x, y = sx + h * _DIRS[d][0], sy + h * _DIRS[d][1]
+            best = min((((x - a) ** 2 + (y - b) ** 2) ** 0.5 for a, b in spots), default=99.0)
+            if best < 0.35:
+                score += 1.0
+            elif 4.0 <= best <= 5.5:
+                score += 0.3
+        return score
+
     def _landing_drop(self, state, rail, hole, hx, hy, block, top_types, block_z, rotation, dirs, depth):
         """The drop block stands on a new rail and lands the marble on it."""
         ports = list(dirs)
@@ -538,64 +577,77 @@ class CascadeGenerator:
         # can land the marble on it, which then circles into the funnel.
         if self._twists_left(state) and self.rng.random() < self.config.twist_probability:
             kinds = ["spiral"] + kinds
+        candidates = []
         for kind in kinds:
             spec = self.catalog.rails[kind]
-            twist = spec.shape == "twist"
             ready = self._curve_ready(kind)
             order = self.rng.sample(range(len(spec.holes_cm)), len(spec.holes_cm))
             order.sort(key=lambda h: h not in ready)
-            if twist:
+            if spec.shape == "twist":
                 order = [h for h in order if h < len(spec.holes_cm) - 1]
-            for k in order:
-                # The block stands on hole k: the rail's placement level sits
-                # below it by one unit plus that hole's mount level.
-                rail_z = block_z - 1 - spec.hole_level(k)
-                if rail_z < 1:
+            candidates += [(kind, k) for k in order]
+        pull = self._align_pull(depth)
+        if pull > 0:
+            spots = self._spots(state)
+            keyed = []
+            for i, (kind, k) in enumerate(candidates):
+                h = self.catalog.rails[kind].holes_cm[k]
+                a = self._alignment(spots, kind, hx - h * _DIRS[d][0], hy - h * _DIRS[d][1], d)
+                keyed.append((-(pull * a + self.rng.random()), i))
+            candidates = [candidates[i] for _, i in sorted(keyed)]
+        for kind, k in candidates:
+            spec = self.catalog.rails[kind]
+            twist = spec.shape == "twist"
+            ready = self._curve_ready(kind)
+            # The block stands on hole k: the rail's placement level sits
+            # below it by one unit plus that hole's mount level.
+            rail_z = block_z - 1 - spec.hole_level(k)
+            if rail_z < 1:
+                continue
+            landing = spec.holes_cm[k] + self.half
+            downstream = [i for i, hx_ in enumerate(spec.holes_cm)
+                          if hx_ > landing + self.config.min_roll_cm]
+            preferred = [i for i in downstream if i in ready] or downstream
+            can_continue = len(state.rails) < self.config.max_rails
+            stops = [("drop", self.rng.choice(preferred))] if downstream and can_continue else []
+            ends = self._terminal_stops(spec, downstream, rail_z)
+            if twist:  # the funnel always drops through its center hole
+                stops = [("drop", len(spec.holes_cm) - 1)] if can_continue else []
+                ends = []
+            stops = stops + ends
+            for how, stop in stops:
+                trial = state.copy()
+                sx = hx - spec.holes_cm[k] * _DIRS[d][0]
+                sy = hy - spec.holes_cm[k] * _DIRS[d][1]
+                lower = self._place_rail(trial, kind, sx, sy, rail_z, d, landing, stop,
+                                         keep_free=(k,), dive=how == "dive")
+                if lower is None:
                     continue
-                landing = spec.holes_cm[k] + self.half
-                downstream = [i for i, hx_ in enumerate(spec.holes_cm)
-                              if hx_ > landing + self.config.min_roll_cm]
-                preferred = [i for i in downstream if i in ready] or downstream
-                can_continue = len(state.rails) < self.config.max_rails
-                stops = [("drop", self.rng.choice(preferred))] if downstream and can_continue else []
-                ends = self._terminal_stops(spec, downstream, rail_z)
-                if twist:  # the funnel always drops through its center hole
-                    stops = [("drop", len(spec.holes_cm) - 1)] if can_continue else []
-                    ends = []
-                stops = stops + ends
-                for how, stop in stops:
-                    trial = state.copy()
-                    sx = hx - spec.holes_cm[k] * _DIRS[d][0]
-                    sy = hy - spec.holes_cm[k] * _DIRS[d][1]
-                    lower = self._place_rail(trial, kind, sx, sy, rail_z, d, landing, stop,
-                                             keep_free=(k,), dive=how == "dive")
-                    if lower is None:
+                column = Column(trial.new_id("c"), hx, hy, lower.id, k, block_z, rail.id, hole,
+                                self._level(rail, hole), top_types, rotation)
+                if column.filler_units(self.heights) < 0 or self._hits(trial, [column.solid(self.half)]):
+                    continue
+                trial.columns[column.id] = column
+                if not self._feasible(trial):
+                    continue
+                outlets = []
+                for port, pd in dirs.items():
+                    if port == land_port:
                         continue
-                    column = Column(trial.new_id("c"), hx, hy, lower.id, k, block_z, rail.id, hole,
-                                    self._level(rail, hole), top_types, rotation)
-                    if column.filler_units(self.heights) < 0 or self._hits(trial, [column.solid(self.half)]):
-                        continue
-                    trial.columns[column.id] = column
-                    if not self._feasible(trial):
-                        continue
-                    outlets = []
-                    for port, pd in dirs.items():
-                        if port == land_port:
+                    if not self._room_for_rail(hx, hy, pd):
+                        break
+                    outlets.append(self._outlet(column, port, pd, block_z, depth))
+                else:
+                    trial.max_depth = max(trial.max_depth, depth + 1)
+                    if how != "drop":
+                        end = self._finish(trial, lower, how, stop, d, depth + 1)
+                        if end is None:
                             continue
-                        if not self._room_for_rail(hx, hy, pd):
-                            break
-                        outlets.append(self._outlet(column, port, pd, block_z, depth))
-                    else:
-                        trial.max_depth = max(trial.max_depth, depth + 1)
-                        if how != "drop":
-                            end = self._finish(trial, lower, how, stop, d, depth + 1)
-                            if end is None:
-                                continue
-                            return end[0], outlets + end[1]
-                        sub = self._drop(trial, lower, stop, d, depth + 1)
-                        if sub is not None:
-                            next_state, more = sub
-                            return next_state, outlets + more
+                        return end[0], outlets + end[1]
+                    sub = self._drop(trial, lower, stop, d, depth + 1)
+                    if sub is not None:
+                        next_state, more = sub
+                        return next_state, outlets + more
         return None
 
     # ---- rail ends and the twist --------------------------------------------
@@ -802,6 +854,11 @@ class CascadeGenerator:
         can_continue = len(state.rails) < self.config.max_rails
         options = [(z, kind) for z in (outlet.floor_z - 1, outlet.floor_z - 2) for kind in _RAIL_KINDS]
         self.rng.shuffle(options)
+        pull = self._align_pull(outlet.depth)
+        if pull > 0:
+            spots = self._spots(state)
+            options.sort(key=lambda o: -(pull * self._alignment(spots, o[1], outlet.x_cm, outlet.y_cm,
+                                                                 outlet.direction) + self.rng.random()))
         if self._twists_left(state) and self.rng.random() < self.config.twist_probability:
             # Try a twist first, fed at its tip like any rail: its chute runs
             # at its placement level + 3.

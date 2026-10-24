@@ -403,6 +403,17 @@ be planned in the route phase** (patterns: switchback, frame), and the
 support phase then turns the aligned holes into towers. `solve_supports` is
 off by default for now (2.6x slower; lower valid rate at 30 levels).
 
+**Search schedule** (user idea, 2026-10-25): branch early, align later.
+`align_weight` makes later placements try rails whose holes lie over or
+under existing holes first (2D distances, ready for a triangular lattice);
+`early_split_boost` raises the splitter chance near the top. The score gains
+`shared_towers` (+3 per spot where columns hold two or more rails one above
+the other). Measured: the bias barely changes alignment (4.6 aligned hole
+pairs per build at weight 8 vs 3.9 at 0) and the towers stay around 2. The
+moves leave too few choices: the rail type, a hole and the direction. With
+fixed rail lengths, a rail's other holes rarely land over earlier holes. Off
+by default. Alignment has to come from moves that create it: patterns.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

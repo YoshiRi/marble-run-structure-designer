@@ -40,3 +40,14 @@ def test_merges_metric_matches_the_gallery_records():
         assert merges == data["metrics"].get("merges", 0)
         merged += merges > 0
     assert merged >= 1  # the gallery covers the "merged" bucket
+
+
+def test_shared_towers_counts_spots_holding_two_rails():
+    from quadrilla_solver.model import Layout, PlacedPart, PlacedRail, SupportLink
+    rails = (PlacedRail("low", "straight_short", 0, 0, 5), PlacedRail("high", "straight_short", 0, 0, 11))
+    parts = (PlacedPart("g", "wooden_foundation", 2, 0, 0), PlacedPart("b", "blue", 2, 0, 6))
+    supports = (SupportLink("low", 0, ("g",), name="under"),
+                SupportLink("high", 0, ("b",), "low", 0, name="over"))
+    layout = Layout("t", rails=rails, parts=parts, supports=supports)
+    from quadrilla_solver.model import PortRef
+    assert scoring.layout_metrics(layout, CATALOG, PortRef("high", "end_a"))["shared_towers"] == 1
