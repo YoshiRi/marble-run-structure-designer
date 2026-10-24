@@ -177,6 +177,11 @@ by score. It never changes a build.
 
 ## 3. How a review comment becomes a change
 
+Reviews come in from the gallery (verdict per layout ID) or from the viewer's
+Review mode, which pins notes to components (rail, hole, block, port or a
+point) with a kind: Physics, Taste, Good, Idea. The kind is the user's first
+guess at the layer; step 1 confirms it.
+
 1. **Classify** the comment:
    - a physics fact → layer 0–1
    - "never like this" → layer 3
