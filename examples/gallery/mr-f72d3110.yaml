@@ -12,7 +12,7 @@ generator:
   - red_right_angle
   config: balanced
   seed: 1
-  score: 109.6
+  score: 106.6
 metrics:
   levels: 5
   rails: 5
@@ -29,10 +29,9 @@ metrics:
   columns_on_rails: 6
   footprint_area_cm2: 2420
   dead_area_cm2: 108
-  thin_towers: 0
   braces: 1
   weak_towers: 0
-  idle_rail_cm: 55.8
+  idle_rail_cm: 28.8
   covers: 4
   parts: 23
   curved_rails: 0

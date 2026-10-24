@@ -31,10 +31,9 @@ metrics:
   columns_on_rails: 2
   footprint_area_cm2: 4896
   dead_area_cm2: 171
-  thin_towers: 0
   braces: 1
   weak_towers: 0
-  idle_rail_cm: 36.0
+  idle_rail_cm: 9.0
   covers: 10
   parts: 37
   curved_rails: 0
