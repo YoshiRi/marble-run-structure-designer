@@ -273,3 +273,21 @@ Every change re-derives the exits from the same input and is validated live
 parts beyond the sets. Undo/redo (`Ctrl+Z` / `Ctrl+Shift+Z`) and **Save YAML**
 are in the toolbar; a saved file records `edited_from`. See
 `docs/generator-design.md` §5.
+
+## Review mode
+
+**Review** pins notes to the build. Click a part, a rail hole, a block port or
+an empty spot (e.g. unused area), choose a kind and write the note:
+
+| Kind | Meaning | Usually becomes (generator design) |
+| --- | --- | --- |
+| Physics | would not stand or roll like this | layer 0–1: catalog or validator fix |
+| Taste | works, but not wanted | layer 3 rule or layer 4 score term |
+| Good | keep doing this | layer 4 / patterns |
+| Idea | try something here | layer 2 move or pattern |
+
+Notes, an overall verdict (Good / Doubtful / Bad) and a layout comment are kept
+per layout in this browser. **Copy for Claude** puts them on the clipboard as
+YAML (component IDs, hole and port, position in cm, the text); paste that into
+the chat. Layouts that exist only in the browser (generated, loaded from a
+file, or edited) are included in full. **Download** saves the same YAML.

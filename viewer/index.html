@@ -33,6 +33,7 @@
         <a class="toolbar-link" href="./gallery.html">Gallery</a>
         <button id="generateOpen" type="button" title="Generate new layouts in the browser">Generate</button>
         <button id="buildToggle" type="button" aria-pressed="false" title="Step-by-step build instructions">Build</button>
+        <button id="reviewToggle" type="button" aria-pressed="false" title="Pin notes to parts and send them to Claude">Review</button>
         <button id="editToggle" type="button" aria-pressed="false" title="Change rails and blocks; every change is validated">Edit</button>
         <div id="editBar" class="build-bar" hidden>
           <button id="editUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
@@ -63,9 +64,36 @@
         <div id="groundLevelLabel" class="ground-level-label" aria-live="polite">Ground level: z=0 (0 cm)</div>
         <div id="partsBoard" class="parts-board" hidden></div>
         <div id="editPopup" class="edit-body edit-popup" role="dialog" aria-label="Edit part" hidden></div>
+        <div id="reviewPopup" class="edit-body edit-popup review-popup" role="dialog" aria-label="Review note" hidden></div>
       </section>
 
       <aside class="sidebar">
+        <section id="reviewPanel" class="build-panel review-panel" hidden>
+          <h2 id="reviewTitle">Review</h2>
+          <p class="muted small-note">Click a part, a rail hole, a block port or an empty spot to pin a note.
+            Kinds: <b>Physics</b> (would not stand or roll), <b>Taste</b> (works, but not wanted),
+            <b>Good</b>, <b>Idea</b>.</p>
+          <label class="review-field">Overall
+            <select id="reviewVerdict">
+              <option value="">—</option>
+              <option value="good">Good</option>
+              <option value="doubtful">Doubtful</option>
+              <option value="bad">Bad</option>
+            </select>
+          </label>
+          <label class="review-field">Comment on the whole layout
+            <textarea id="reviewComment" rows="2" placeholder="Optional"></textarea>
+          </label>
+          <ol id="reviewList" class="review-list"></ol>
+          <p id="reviewEmpty" class="muted small-note">No notes yet.</p>
+          <div class="edit-row review-actions">
+            <button id="reviewCopy" type="button" class="primary">Copy for Claude</button>
+            <button id="reviewDownload" type="button">Download</button>
+            <button id="reviewClear" type="button">Clear</button>
+          </div>
+          <p id="reviewStatus" class="muted small-note" aria-live="polite"></p>
+          <textarea id="reviewExport" class="review-export" rows="8" readonly hidden></textarea>
+        </section>
         <section id="editPanel" class="build-panel edit-panel" hidden>
           <h2>Edit</h2>
           <div id="editCheck" class="validation-status" aria-live="polite"></div>
