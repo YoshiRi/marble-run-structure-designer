@@ -404,26 +404,37 @@ accessories:
 
 special_parts:
   seesaw:
-    implementation_scope: deferred
+    # Red seesaw (user, 2026-10-24). Modeled as a random distributor: the
+    # real one tips after about 5 marbles and sends them the other way.
+    implementation_scope: modeled
+    shape: seesaw
+    footprint_cm: { length: 19.0, width: 3.0 }
+    body_height_cm: 8.0
+    height: 5               # whole levels for stacking; geometry uses body_height_cm
+    mass_g:
+      value: 106
+      source: user estimate (about two blocks)
+      confidence: approximate
     mount:
-      location: rail_center
-      requires:
-        - center_hole
-        - center_groove_or_mount
-      confidence: confirmed_partial
-    ports: [top, left_end, right_end]
+      rails: [straight_long_center]
+      hole: 2               # the center hole only
+      aligned_with_rail: true
+      confidence: user_confirmed
+    arm_reach_cm: 9.5       # the marble leaves each arm this far from the pivot
+    feed:
+      sources: [open_hole, rail_end]   # any open hole, or a rail end, above it
+      max_drop_units: 12               # from the seesaw base (usually 8)
+      confidence: user_confirmed
+    ports: [top, a_side, b_side]       # a_side: toward the host rail's end A
     routes:
       - from: top
-        to_any_of: [left_end, right_end]
-        selection: hysteretic_state
+        to_any_of: [a_side, b_side]
+        selection: random              # really hysteretic (see state); modeled as a random split
+    blocks_rail_through: true          # marbles rolling along the rail stop at it
     state:
       type: hysteretic_direction
       approximate_switch_scale_marbles: [4, 5]
       confidence: approximate
-      todo: define exact switching rule and threshold
-    simplified_solver_model:
-      allowed_for_reachability: true
-      approximation: branch_to_either_rail_end
 
   melody_step:
     implementation_scope: deferred
@@ -441,6 +452,5 @@ deferred:
   - curved_rails
   - s_rails
   - seesaw_detailed_state_machine
-  - seesaw_geometry
   - spiral_geometry
   - funny_function_special_geometry

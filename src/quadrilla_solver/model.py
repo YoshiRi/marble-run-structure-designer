@@ -41,6 +41,11 @@ class PlacedRail:
     x_cm/y_cm is end-A of the rail centerline.
     z_units is the bottom/support-plane elevation of the rail.
     yaw_deg is the travel direction at end A (continuous in plan view).
+    flow_direction: how marbles move on it. Rails have no direction of their
+    own (a marble rolls whichever way it enters); the model labels each rail:
+    "a_to_b", "b_to_a", or around a pivot hole `flow_hole`: "to_hole" (from
+    both ends into that hole: a collector) or "from_hole" (outward from it to
+    both ends: under a seesaw).
     turn ("left"/"right") is the side a curved rail first bends toward;
     ignored for straight rails.
     """
@@ -54,6 +59,7 @@ class PlacedRail:
     flow_direction: str = "a_to_b"
     hole_states: Mapping[int, str] = field(default_factory=dict)
     turn: str = "left"
+    flow_hole: int | None = None
 
 
 @dataclass(frozen=True)
@@ -205,6 +211,7 @@ def layout_from_dict(data: dict[str, Any], default_name: str = "layout") -> Layo
                 for k, v in (x.get("hole_states", {}) or {}).items()
             },
             turn=str(x.get("turn", "left")),
+            flow_hole=int(x["flow_hole"]) if x.get("flow_hole") is not None else None,
         )
         for x in data.get("rails", ())
     )
@@ -268,3 +275,44 @@ def layout_from_dict(data: dict[str, Any], default_name: str = "layout") -> Layo
         route_links=route_links,
         routing_options=dict(data.get("routing_options", {}) or {}),
     )
+
+
+FLOW_MODES = ("a_to_b", "b_to_a", "to_hole", "from_hole")
+PIVOT_MODES = ("to_hole", "from_hole")
+
+
+def flow_sequences(rail: PlacedRail, hole_count: int) -> list[list[str]]:
+    """Stations (ports) in the order a marble passes them, per stretch.
+
+    One stretch for a_to_b / b_to_a. Two for a pivot rail: to_hole runs from
+    each end into the pivot hole; from_hole runs from the pivot outward to
+    each end (the pivot itself is under the seesaw, not a station)."""
+    stations = ["end_a"] + [f"hole:{i}" for i in range(hole_count)] + ["end_b"]
+    if rail.flow_direction == "b_to_a":
+        return [stations[::-1]]
+    if rail.flow_direction in PIVOT_MODES and rail.flow_hole is not None and 0 <= rail.flow_hole < hole_count:
+        k = rail.flow_hole + 1  # index of the pivot in `stations`
+        if rail.flow_direction == "to_hole":
+            return [stations[:k + 1], stations[k:][::-1]]
+        return [stations[:k][::-1], stations[k + 1:]]
+    return [stations]
+
+
+def flow_sign(rail: PlacedRail, holes_cm, x_cm: float) -> int:
+    """+1 if a marble at x (cm along the rail) rolls toward end B, -1 toward end A."""
+    if rail.flow_direction == "b_to_a":
+        return -1
+    if rail.flow_direction in PIVOT_MODES and rail.flow_hole is not None and 0 <= rail.flow_hole < len(holes_cm):
+        pivot = holes_cm[rail.flow_hole]
+        toward = 1 if x_cm < pivot else -1
+        return toward if rail.flow_direction == "to_hole" else -toward
+    return 1
+
+
+def rail_end_is_exit(rail: PlacedRail, end: str) -> bool:
+    """Whether marbles leave the rail at this end (rather than enter)."""
+    if rail.flow_direction == "from_hole":
+        return True
+    if rail.flow_direction == "to_hole":
+        return False
+    return end == ("end_a" if rail.flow_direction == "b_to_a" else "end_b")

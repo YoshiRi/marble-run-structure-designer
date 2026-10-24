@@ -61,7 +61,9 @@ The validators decide, for any layout:
   covered holes carry it on. Joints are real port contacts: a side outlet
   lands on a rail beneath, a bottom outlet drops through a hole into the
   column below, and a side exit can drop one unit. The twist's chute is a
-  plain rail and its center hole is the outlet.
+  plain rail and its center hole is the outlet. Rails have no direction of
+  their own; each is labelled one way, or around a pivot hole: a collector
+  (both ends into the hole) or outward (the rail under a seesaw).
 - **statics**: per rail, moments about its two supports with everything resting
   on it; a global center of mass inside the ground support hull.
 - **clearance**: nothing stands where the marble rolls.
@@ -261,7 +263,7 @@ official builds merge routes and hang them on a recognizable frame.
 | 7 | symmetry | random | later (score or pattern property) |
 | 8 | a collector rail at the bottom | scattered exits | follows from 2 |
 | 9 | red slope covers in front of block outlets | not modeled (`covered_slope` semantics open) | parts work (layer 0–1), needs measuring |
-| 10 | red seesaw | not in the catalog | parts work, needs measuring |
+| 10 | red seesaw | modeled (random distributor; docs/parts.md) | generator move: later |
 
 ### 6.1 Merge (join move)
 

@@ -66,7 +66,38 @@ def _mutations(name, data):
         m = copy.deepcopy(data)
         m["rails"][0]["x_cm"] = float(m["rails"][0]["x_cm"]) + 0.7  # off its columns
         out.append((name + "+railshift", m))
+    if any(p["part_type"] == "seesaw" for p in data.get("parts", [])):
+        out.extend(_seesaw_mutations(name, data))
     return out
+
+
+def _seesaw_mutations(name, data):
+    """Seesaw and pivot-rail rules: mount, alignment, flow, feed height."""
+    def variant(tag, fn):
+        m = copy.deepcopy(data)
+        fn(m)
+        return (f"{name}+{tag}", m)
+
+    def seesaw(m):
+        return next(p for p in m["parts"] if p["part_type"] == "seesaw")
+
+    def host(m):
+        sid = seesaw(m)["id"]
+        rid = next(s["lower_rail_id"] for s in m["supports"] if sid in s["stack_part_ids"])
+        return next(r for r in m["rails"] if r["id"] == rid)
+
+    def others(m):
+        return [r for r in m["rails"] if r["id"] != host(m)["id"]]
+
+    return [
+        variant("turned", lambda m: seesaw(m).update(rotation_deg=90)),
+        variant("hostflow", lambda m: host(m).update(flow_direction="a_to_b")),
+        variant("nopivot", lambda m: host(m).update(flow_hole=None)),
+        variant("collector", lambda m: host(m).update(flow_direction="to_hole")),
+        variant("toohigh", lambda m: [r.update(z_units=float(r["z_units"]) + 8) for r in others(m)]),
+        variant("covered", lambda m: [r.setdefault("hole_states", {}).update({i: "covered" for i in range(4)})
+                                      for r in others(m)]),
+    ]
 
 
 def _python(data, source, sinks, tmp_path):

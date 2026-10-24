@@ -6,7 +6,10 @@ from math import cos, hypot, radians, sin
 from typing import Mapping, Sequence
 
 from .catalog import PartCatalog
-from .model import Layout, PortRef, rail_hole_world, rail_pose
+from .model import (
+    Layout, PortRef, flow_sequences, flow_sign, rail_end_is_exit, rail_hole_world,
+    rail_pose,
+)
 from .routing_geometry import port_pose, validate_route_link_geometry
 
 
@@ -70,40 +73,39 @@ def build_routing_graph(
         if spec is None:
             continue
 
-        sequence = ["end_a"] + [
-            f"hole:{i}" for i in range(len(spec.holes_cm))
-        ] + ["end_b"]
-        if rail.flow_direction == "b_to_a":
-            sequence.reverse()
+        if rail.flow_direction == "to_hole" and rail.flow_hole is not None \
+                and rail.hole_states.get(rail.flow_hole, "open") == "covered":
+            reasons.append(f"collector_hole_covered:{rail.id}:{rail.flow_hole}")
 
-        for node in sequence:
+        for node in ["end_a", *(f"hole:{i}" for i in range(len(spec.holes_cm))), "end_b"]:
             graph.setdefault(_rail_node(rail.id, node), set())
 
-        for i in range(len(sequence) - 1):
-            current = sequence[i]
-            nxt = sequence[i + 1]
-            current_key = _rail_node(rail.id, current)
+        for sequence in flow_sequences(rail, len(spec.holes_cm)):
+            for i in range(len(sequence) - 1):
+                current = sequence[i]
+                nxt = sequence[i + 1]
+                current_key = _rail_node(rail.id, current)
 
-            if current.startswith("hole:"):
-                hole_index = int(current.split(":", 1)[1])
-                state = rail.hole_states.get(hole_index, "open")
-                if state == "covered":
+                if current.startswith("hole:"):
+                    hole_index = int(current.split(":", 1)[1])
+                    state = rail.hole_states.get(hole_index, "open")
+                    if state == "covered":
+                        _add_edge(
+                            graph,
+                            current_key,
+                            _rail_node(rail.id, nxt),
+                        )
+                    elif state == "covered_slope":
+                        reasons.append(
+                            f"unsupported_covered_slope_semantics:{rail.id}:{hole_index}"
+                        )
+                    # open and block_connected intentionally stop on the hole.
+                else:
                     _add_edge(
                         graph,
                         current_key,
                         _rail_node(rail.id, nxt),
                     )
-                elif state == "covered_slope":
-                    reasons.append(
-                        f"unsupported_covered_slope_semantics:{rail.id}:{hole_index}"
-                    )
-                # open and block_connected intentionally stop on the hole.
-            else:
-                _add_edge(
-                    graph,
-                    current_key,
-                    _rail_node(rail.id, nxt),
-                )
 
     # Only infer a drop through a real rail hole and a physically aligned
     # block top. Support declarations alone do not establish a route.
@@ -192,6 +194,13 @@ def build_routing_graph(
         for source, target in _landing_edges(layout, catalog, support, explicit_sources):
             _add_edge(graph, source, target)
 
+    unit = catalog.raw.get("geometry_cm", {}).get("height_unit", {})
+    unit = float(unit.get("value", 1.5)) if isinstance(unit, Mapping) else float(unit or 1.5)
+    seesaw_edges, seesaw_reasons = _seesaw_edges(layout, catalog, unit)
+    for source, target in seesaw_edges:
+        _add_edge(graph, source, target)
+    reasons.extend(seesaw_reasons)
+
     # Explicit connections must mate actual catalogued openings at the same
     # physical position and opposite facing normals. No teleport edges.
     known_components = layout.component_ids()
@@ -265,20 +274,87 @@ def _landing_edges(layout, catalog, support, explicit_sources):
         half_block = abs((pose.position_cm[0] - part.x_cm) * axis[0]
                          + (pose.position_cm[1] - part.y_cm) * axis[1])
         landing = spec.holes_cm[hole] + (half_block if along > 0 else -half_block)
-        stations = [("end_a", 0.0)] + [
-            (f"hole:{i}", x) for i, x in enumerate(spec.holes_cm)
-        ] + [("end_b", spec.length_cm)]
-        if along > 0 and rail.flow_direction == "a_to_b":
-            ahead = [name for name, x in stations if x > landing + 1e-6]
-            nxt = ahead[0] if ahead else None
-        elif along < 0 and rail.flow_direction == "b_to_a":
-            ahead = [name for name, x in stations if x < landing - 1e-6]
-            nxt = ahead[-1] if ahead else None
+        sign = 1 if along > 0 else -1
+        if flow_sign(rail, spec.holes_cm, landing) == sign:
+            nxt = _station_ahead(spec, landing, sign)
         else:
             nxt = None  # Outlet faces against the rail's flow.
         if nxt is not None:
             edges.append((f"{part.id}:{port}", _rail_node(rail.id, nxt)))
     return edges
+
+
+def _station_ahead(spec, x_cm: float, sign: int) -> str | None:
+    """The first station (end or hole) past x in the direction of travel."""
+    stations = [("end_a", 0.0)] + [(f"hole:{i}", h) for i, h in enumerate(spec.holes_cm)] \
+        + [("end_b", spec.length_cm)]
+    if sign > 0:
+        ahead = [name for name, x in stations if x > x_cm + 1e-6]
+        return ahead[0] if ahead else None
+    ahead = [name for name, x in stations if x < x_cm - 1e-6]
+    return ahead[-1] if ahead else None
+
+
+def _seesaw_edges(layout, catalog, unit_cm: float) -> tuple[list[tuple[str, str]], list[str]]:
+    """A seesaw (simplified to a random distributor) on the pivot hole of its
+    rail: a marble falling onto it from an open hole or a rail end above
+    (within the drop limit) goes to either arm, and rolls on along the rail
+    from below that arm toward that end. Rolling along the rail into it stops."""
+    edges: list[tuple[str, str]] = []
+    reasons: list[str] = []
+    rails = layout.rail_map()
+    for support in layout.supports:
+        for part_id in support.stack_part_ids:
+            part = layout.part_map().get(part_id)
+            spec = catalog.part_spec(part.part_type) if part is not None else None
+            if not spec or spec.get("shape") != "seesaw":
+                continue
+            host = rails.get(support.lower_rail_id) if support.lower_rail_id is not None else None
+            host_spec = catalog.rails.get(host.rail_type) if host is not None else None
+            if host_spec is None or support.lower_hole_index is None:
+                continue  # assembly reports the mount
+            pivot = host_spec.holes_cm[support.lower_hole_index]
+            reach = float(spec.get("arm_reach_cm", 9.5))
+            for port, sign in (("a_side", -1), ("b_side", 1)):
+                x = pivot + sign * reach
+                if flow_sign(host, host_spec.holes_cm, x) != sign:
+                    reasons.append(f"seesaw_against_rail_flow:{part.id}:{host.id}")
+                    continue
+                ahead = _station_ahead(host_spec, x, sign)
+                if ahead is not None:
+                    edges.append((f"{part.id}:{port}", _rail_node(host.id, ahead)))
+            # Feeds: open holes and exit ends of other rails above it.
+            feed = spec.get("feed") or {}
+            max_drop = float(feed.get("max_drop_units", 12))
+            body = spec.get("body_height_cm", 8.0)
+            min_drop = float(body.get("value") if isinstance(body, Mapping) else body) / unit_cm
+            fp = spec.get("footprint_cm") or {}
+            half_l, half_w = float(fp.get("length", 19.0)) / 2, float(fp.get("width", 3.0)) / 2
+            margin = 1.5
+            theta = radians(part.rotation_deg)
+            for rail in layout.rails:
+                rspec = catalog.rails.get(rail.rail_type)
+                if rail.id == host.id or rspec is None or rspec.shape == "twist":
+                    continue
+                points = []
+                for i, _ in enumerate(rspec.holes_cm):
+                    if rail.hole_states.get(i, "open") == "open":
+                        hx, hy, _ = rail_hole_world(rail, catalog, i)
+                        points.append((f"hole:{i}", hx, hy, rail.z_units + rspec.hole_level(i)))
+                for end, local in (("end_a", 0.0), ("end_b", rspec.length_cm)):
+                    if rail_end_is_exit(rail, end):
+                        ex, ey, _ = rail_pose(rail, rspec, local)
+                        points.append((end, ex, ey, rail.z_units + rspec.end_level(end)))
+                for station, px, py, pz in points:
+                    drop = pz - part.z_units
+                    if not (min_drop - 1e-6 <= drop <= max_drop + 1e-6):
+                        continue
+                    dx, dy = px - part.x_cm, py - part.y_cm
+                    along = dx * cos(theta) + dy * sin(theta)
+                    across = -dx * sin(theta) + dy * cos(theta)
+                    if abs(along) <= half_l + margin and abs(across) <= half_w + margin:
+                        edges.append((_rail_node(rail.id, station), f"{part.id}:top"))
+    return edges, reasons
 
 
 def validate_connectivity(
