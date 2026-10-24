@@ -2139,12 +2139,12 @@
   // one implementation. Every change is validated by viewer/validation.js;
   // invalid results are kept (and shown) so the user can see why, then undo.
   const edit = { on: false, selected: null, undo: [], redo: [], available: null, origin: null,
-                 railOps: null, railOpsBusy: false, busy: false, note: "", pending: new Map() };
+                 pyReady: false, busy: false, note: "", pending: new Map() };
   let editRequestId = 0;
   const POOLED = { straight_long_center: "straight_long", spiral_large: "spiral", spiral_small: "spiral" };
 
   function resetEdit(data) {
-    Object.assign(edit, { selected: null, undo: [], redo: [], note: "", railOps: null, busy: false });
+    Object.assign(edit, { selected: null, undo: [], redo: [], note: "", busy: false });
     edit.origin = data?.layout_id || data?.name || null;
     const check = data?.bill_of_materials?.check;
     edit.available = check ? Object.fromEntries(check.map(r => [r.part, r.available])) : null;
@@ -2208,7 +2208,6 @@
     edit.redo = [];
     edit.note = note || "";
     setLayout(withCurrentExits(next), { edit: true });
-    refreshRailOps();
   }
 
   function undoEdit() {
@@ -2216,7 +2215,6 @@
     edit.redo.push(fullLayout);
     edit.note = "Undone.";
     setLayout(edit.undo.pop(), { edit: true });
-    refreshRailOps();
   }
 
   function redoEdit() {
@@ -2224,12 +2222,13 @@
     edit.undo.push(fullLayout);
     edit.note = "Redone.";
     setLayout(edit.redo.pop(), { edit: true });
-    refreshRailOps();
   }
 
+  // Selecting only moves the outline and redraws the panel: no scene rebuild.
   function selectEdit(id) {
     edit.selected = id;
-    renderAll();
+    decorateEdit();
+    renderEditPanel();
   }
 
   // ---- block edits
@@ -2308,7 +2307,7 @@
   }
 
   function editListener(message) {
-    if (message.type === "status" && edit.on && (edit.busy || edit.railOpsBusy)) {
+    if (message.type === "status" && edit.on && edit.busy) {
       edit.note = message.text;
       renderEditPanel();
     }
@@ -2319,34 +2318,16 @@
     else if (message.type === "error") pending.reject(new Error(message.message));
   }
 
-  async function refreshRailOps() {
-    if (!edit.on) return;
-    const forLayout = fullLayout;
-    edit.railOpsBusy = true;
-    renderEditPanel();
-    try {
-      const response = await pyEdit({ op: "options" });
-      if (fullLayout !== forLayout) return;
-      edit.railOps = response.options || {};
-      if (edit.note === "Loading Python (first time only)…" || edit.note === "Loading the solver…") edit.note = "";
-    } catch (error) {
-      edit.railOps = {};
-      edit.note = "Rail tools unavailable: " + error.message;
-    } finally {
-      if (fullLayout === forLayout) {
-        edit.railOpsBusy = false;
-        renderEditPanel();
-      }
-    }
-  }
-
   async function railEdit(op, railId, turn) {
     if (edit.busy) return;
     edit.busy = true;
     edit.note = "Working…";
     renderEditPanel();
     try {
+      if (!edit.pyReady) edit.note = "Loading Python for rail rewrites (first time only, ~10 s)…";
+      renderEditPanel();
       const response = await pyEdit({ op, rail: railId, turn });
+      edit.pyReady = true;
       if (response.error) throw new Error(response.error);
       const base = editedClone();
       const trials = response.candidates.map(c => withCurrentExits({ ...structuredClone(base), ...c }));
@@ -2362,13 +2343,18 @@
   }
 
   // ---- panel and highlight
+  // Selected component in color with an outline; the rest fades back.
   function decorateEdit() {
-    if (!edit.selected) return;
     for (const mesh of scene.meshes) {
-      if (mesh.isDisposed() || mesh.metadata?.owner !== edit.selected || mesh.metadata?.info?.id !== edit.selected) continue;
-      mesh.renderOutline = true;
-      mesh.outlineColor = BABYLON.Color3.FromHexString("#facc15");
-      mesh.outlineWidth = 0.14;
+      const owner = mesh.metadata?.owner;
+      if (owner === undefined || mesh.isDisposed()) continue;
+      const mine = edit.selected && owner === edit.selected;
+      mesh.visibility = !edit.selected || mine ? 1 : 0.28;
+      mesh.renderOutline = Boolean(mine && mesh.metadata?.info?.id === owner);
+      if (mesh.renderOutline) {
+        mesh.outlineColor = BABYLON.Color3.FromHexString("#facc15");
+        mesh.outlineWidth = 0.18;
+      }
     }
   }
 
@@ -2439,9 +2425,20 @@
     document.getElementById("editNote").textContent = edit.note;
     const body = document.getElementById("editBody");
     body.replaceChildren();
+    const pick = document.createElement("select");
+    pick.setAttribute("aria-label", "Select a rail or block");
+    pick.innerHTML = '<option value="">Select a rail or block…</option>' +
+      '<optgroup label="Rails">' + (fullLayout.rails || []).map(r =>
+        '<option value="' + esc(r.id) + '">' + esc(r.id + " · " + partName(r.rail_type) + " · z" + r.z_units) + "</option>").join("") + "</optgroup>" +
+      '<optgroup label="Blocks">' + (fullLayout.parts || []).map(p =>
+        '<option value="' + esc(p.id) + '">' + esc(p.id + " · " + partName(p.part_type) + " · z" + p.z_units) + "</option>").join("") + "</optgroup>";
+    pick.value = edit.selected || "";
+    pick.addEventListener("change", () => selectEdit(pick.value || null));
+    body.append(pick);
     const found = edit.selected && componentOf(edit.selected);
     if (!found) {
-      body.innerHTML = '<p class="muted">Nothing selected. Click a rail or a block in the 3D view.</p>';
+      body.append(Object.assign(document.createElement("p"), { className: "muted",
+        textContent: "Click a rail or block in the 3D view, or pick one above." }));
       return;
     }
     const title = document.createElement("h3");
@@ -2469,17 +2466,16 @@
         }
       }
     } else {
-      const ops = edit.railOps?.[item.id];
-      const waiting = edit.railOpsBusy || !edit.railOps;
-      const can = op => !waiting && !edit.busy && (ops || []).includes(op);
+      const straight = /^straight_/.test(item.rail_type);
+      const can = op => !edit.busy && straight && (op === "curve" || item.rail_type !== "straight_short");
       body.append(row("Rewrite",
         button("Curve left", { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
         button("Curve right", { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
         button("Shorten", { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
-      if (waiting) body.append(Object.assign(document.createElement("p"), { className: "muted small-note", textContent: "Checking which rewrites fit…" }));
-      else if (!(ops || []).length) body.append(Object.assign(document.createElement("p"), {
+      body.append(Object.assign(document.createElement("p"), {
         className: "muted small-note",
-        textContent: "No rewrite keeps this rail's holes and links (curves need a straight with free ends; shorten needs a long straight)." }));
+        textContent: straight ? "Rewrites keep every hole in use; if one cannot, the note below says why. The first rewrite loads Python (~10 s)."
+          : "Only straight rails can be rewritten." }));
       const spec = railSpec(item.rail_type);
       const chips = (spec?.hole_positions_cm || []).map((_, i) => {
         const state = (item.hole_states || {})[i] ?? "open";
@@ -2504,7 +2500,6 @@
     edit.on = on;
     if (!on) edit.selected = null;
     renderAll();
-    if (on && !edit.railOps) refreshRailOps();
   }
 
   function exportEdited() {

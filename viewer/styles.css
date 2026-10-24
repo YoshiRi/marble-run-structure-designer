@@ -268,3 +268,4 @@ button, select, input { font: inherit; }
 .edit-warn { color: #b45309; }
 .edit-short { color: #dc2626; font-weight: 600; }
 .validation-status.warn { border-color: #f59e0b; color: #b45309; background: color-mix(in srgb, #f59e0b 10%, Canvas); }
+.edit-body select { width: 100%; min-height: 32px; border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; }
