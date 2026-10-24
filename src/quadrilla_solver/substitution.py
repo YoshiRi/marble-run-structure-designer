@@ -45,6 +45,8 @@ def eligible_rails(layout: Layout) -> list[str]:
     for rail in layout.rails:
         if rail.rail_type not in CURVE_FOR_STRAIGHT or rail.id in linked:
             continue
+        if rail.flow_direction not in ("a_to_b", "b_to_a"):
+            continue  # pivot rails (collector, under a seesaw) stay straight
         _, hole_map = CURVE_FOR_STRAIGHT[rail.rail_type]
         if not _used_holes(layout, rail) <= set(hole_map):
             continue

@@ -142,6 +142,10 @@ class GeneratorConfig:
     min_support_reaction_g: float = 20.0
     # Tie weak towers with brace rails across them (user idea, review 3).
     brace_towers: bool = True
+    # Chance to end a dive on a seesaw diamond instead (design doc §6.1): the
+    # marble falls onto a seesaw, both arms feed one collector rail below, and
+    # the branch continues from the collector's center hole (a merge).
+    seesaw_probability: float = 0.5
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
     weights: Mapping[str, float] | None = None
 
@@ -222,7 +226,7 @@ class CascadeGenerator:
         self.half = float(footprint.get("width_cm", 4.5)) / 2.0
         self.heights = {
             name: int(spec["height"])
-            for group in ("routing_blocks", "structural_parts")
+            for group in ("routing_blocks", "structural_parts", "special_parts")
             for name, spec in (catalog.raw.get(group) or {}).items()
             if isinstance(spec, Mapping) and spec.get("height") is not None
         }
@@ -611,10 +615,142 @@ class CascadeGenerator:
         """End a rail: as a dive through an open hole, or off its end B
         (exit_style "any")."""
         if how == "dive":
+            if (self.budget.counts.get("seesaw", 0) > sum(1 for c in state.columns.values()
+                                                          if c.top_types[:1] == ("seesaw",))
+                    and self.rng.random() < self.config.seesaw_probability):
+                diamond = self._seesaw_diamond(state, rail, stop, depth)
+                if diamond is not None:
+                    return diamond
             state.leaves.append(f"{rail.id}:hole:{stop}")
         else:
             state.leaves.append(f"{rail.id}:end_b")
         return state, []
+
+    # ---- seesaw diamond (split and merge) ---------------------------------
+    _DIAMOND_RAIL = "straight_long_center"
+
+    def _seesaw_diamond(self, state: _State, rail: PlacedRail, stop: int,
+                        depth: int) -> tuple[_State, list[_Outlet]] | None:
+        """Under the dive hole of `rail`: a seesaw on the center hole of rail H,
+        H held at its end holes by two drop blocks standing on a collector
+        rail C directly below. The seesaw sends the marble along H to either
+        end; the blocks there drop it onto C facing inward; C runs from both
+        ends into its center hole, where the two routes merge. The branch then
+        continues from C's center hole (a drop column) or dives there.
+
+        Mirror symmetry is what makes the two routes meet (design doc §6.1:
+        merges have to be planned, not found)."""
+        kind = self._DIAMOND_RAIL
+        spec = self.catalog.rails[kind]
+        seesaw = self.catalog.part_spec("seesaw") or {}
+        if len(state.rails) + 2 > self.config.max_rails or not seesaw:
+            return None
+        holes = spec.holes_cm
+        if len(holes) != 5:
+            return None
+        hx, hy = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[stop])
+        top = self._level(rail, stop)
+        body_cm = float((seesaw.get("body_height_cm") or 8.0))
+        min_drop = body_cm / _UNIT_CM
+        max_drop = float((seesaw.get("feed") or {}).get("max_drop_units", 12))
+        block = "yellow"
+        block_h = self.heights[block]
+        # Usual drop first (8 levels from the seesaw base), then nearby ones.
+        drops = sorted((d for d in range(int(min_drop) + 1, int(max_drop) + 1)), key=lambda d: (abs(d - 8), d))
+        for drop in drops:
+            h_z = top - drop - 1          # seesaw base = H top = H.z + 1
+            c_z = h_z - block_h - 1       # the blocks stand on C and hold H
+            if c_z < 1:
+                continue
+            for d in self.rng.sample(range(4), 4):
+                trial = self._try_diamond(state, rail, stop, depth, hx, hy, h_z, c_z, d, block, body_cm)
+                if trial is not None:
+                    return trial
+        return None
+
+    def _try_diamond(self, state, rail, stop, depth, hx, hy, h_z, c_z, d, block, body_cm):
+        kind = self._DIAMOND_RAIL
+        spec = self.catalog.rails[kind]
+        holes = spec.holes_cm
+        center = holes[2]
+        ex, ey = hx - center * _DIRS[d][0], hy - center * _DIRS[d][1]
+        trial = state.copy()
+        # The dive's fall now ends on the seesaw, not the ground.
+        fall_id = f"{rail.id}#dive#marble"
+        seesaw_top_cm = (h_z + 1) * _UNIT_CM + body_cm
+        r = _MARBLE_DIAMETER_CM / 2.0
+        trial.corridors[fall_id] = Solid(fall_id, (hx, hy), (r, r), 0.0, seesaw_top_cm, rail.z_units * _UNIT_CM)
+        h = PlacedRail(trial.new_id("rail"), kind, ex, ey, h_z, yaw_deg=90.0 * d,
+                       flow_direction="from_hole", flow_hole=2,
+                       hole_states={0: "block_connected", 1: "covered", 3: "covered", 4: "block_connected"})
+        continue_down = len(trial.rails) + 3 <= self.config.max_rails
+        c_states = {1: "covered", 3: "covered", 2: "block_connected" if continue_down else "open"}
+        c = PlacedRail(trial.new_id("rail"), kind, ex, ey, c_z, yaw_deg=90.0 * d,
+                       flow_direction="to_hole", flow_hole=2, hole_states=c_states)
+        reach = float((self.catalog.part_spec("seesaw") or {}).get("arm_reach_cm", 9.5))
+        new_solids: list[Solid] = []
+        for placed in (h, c):
+            body = rail_solids(placed, self.catalog)
+            if not all(self._in_footprint(piece) for piece in body):
+                return None
+            new_solids += body
+        corridors = [
+            self._corridor(h, holes[0], center - reach), self._corridor(h, center + reach, holes[4]),
+            self._corridor(c, holes[0] + self.half, center), self._corridor(c, center, holes[4] - self.half),
+        ]
+        corridors = [Solid(f"{(h if i < 2 else c).id}#roll{i}#marble", x.center_xy, x.half_extents_xy, x.angle_rad,
+                           x.z_min_cm, x.z_max_cm)
+                     for i, x in enumerate(corridors)]
+        seesaw_body = Solid(f"{h.id}#seesaw", (hx, hy), (9.5, 1.5), radians(90.0 * d),
+                            (h_z + 1) * _UNIT_CM, seesaw_top_cm)
+        level = {i: (h_z) for i in (0, 4)}
+        columns = []
+        for hole, facing in ((0, d), (4, (d + 2) % 4)):
+            x, y = self._point(h, holes[hole])
+            rotation = (90 * facing + _PORT_ROTATION_OFFSET["front"]) % 360
+            columns.append(Column(trial.new_id("c"), x, y, c.id, hole, c_z + 1, h.id, hole,
+                                  level[hole], (block,), rotation))
+        # C from the ground: at both ends, or at one end when the drop column
+        # under its center hole will be the second support (statics takes
+        # exactly two supports per rail).
+        ground_holes = (0,) if continue_down else (0, 4)
+        ground = [self._plain_column(trial, c, hole) for hole in ground_holes]
+        columns += ground
+        seesaw_col = Column(trial.new_id("c"), hx, hy, h.id, 2, h_z + 1, None, None,
+                            h_z + 1 + self.heights["seesaw"], ("seesaw",), int(90 * d) % 360)
+        candidates = new_solids + [col.solid(self.half) for col in columns] + [seesaw_body] + corridors
+        if self._hits(trial, candidates, ignore={fall_id}):
+            return None
+        trial.rails[h.id] = h
+        trial.rails[c.id] = c
+        for corridor in corridors:
+            trial.corridors[corridor.id] = corridor
+        trial.corridors[seesaw_body.id] = seesaw_body
+        for col in columns + [seesaw_col]:
+            trial.columns[col.id] = col
+        trial.covers += 4
+        if not self._feasible(trial):
+            return None
+        trial.max_depth = max(trial.max_depth, depth + 2)
+        if continue_down:
+            sub = self._drop(trial, c, 2, d, depth + 2)
+            if sub is not None:
+                return sub
+        # Dive at the collector's center instead, held at both ends.
+        if continue_down:
+            extra = self._plain_column(trial, c, 4)
+            if self._hits(trial, [extra.solid(self.half)]):
+                return None
+            trial.columns[extra.id] = extra
+            if not self._feasible(trial):
+                return None
+        trial.rails[c.id] = replace(c, hole_states={**c_states, 2: "open"})
+        fall = Solid(f"{c.id}#dive#marble", self._point(c, center), (r, r), 0.0, 0.0, c_z * _UNIT_CM)
+        if self._hits(trial, [fall]):
+            return None
+        trial.corridors[fall.id] = fall
+        trial.leaves.append(f"{c.id}:hole:2")
+        return trial, []
 
     def _block_exit(self, state: _State, outlet: _Outlet) -> _State | None:
         """End a branch at a block's centered side outlet if the marble has a
@@ -928,6 +1064,12 @@ _TWIST_ROLL_CM = 60.0
 
 def _roll_lengths(state: _State, catalog: PartCatalog) -> dict[str, float]:
     out = {rid: c.half_extents_xy[0] * 2 for rid, c in state.corridors.items() if rid in state.rails}
+    # Rails rolled in more than one stretch (the seesaw diamond) keep one
+    # corridor per stretch: "<rail>#roll<i>".
+    for cid, c in state.corridors.items():
+        rid, _, tag = cid.partition("#")
+        if tag.startswith("roll") and rid in state.rails:
+            out[rid] = out.get(rid, 0.0) + c.half_extents_xy[0] * 2
     for rid, rail in state.rails.items():
         if catalog.rails[rail.rail_type].shape == "twist":
             out[rid] = _TWIST_ROLL_CM
@@ -1027,7 +1169,7 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
              block_ids: Mapping[str, str]) -> dict[str, Any]:
     roll = _roll_lengths(state, catalog)
     splits = sum(1 for c in state.columns.values()
-                 if len(c.top_types) and c.top_types[0] in ("red_random_split", "red_right_angle"))
+                 if len(c.top_types) and c.top_types[0] in ("red_random_split", "red_right_angle", "seesaw"))
     # Rolling distance from the start to each exit, and the exit height.
     exit_paths, exit_levels = [], []
     parts = layout.part_map()
