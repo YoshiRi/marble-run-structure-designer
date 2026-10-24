@@ -115,6 +115,22 @@
     const spec = partSpec(catalog, part.part_type);
     if (!spec || !(spec.ports || []).includes(ref.port)) return null;
     if (spec.height == null) return null;
+    if (spec.shape === "seesaw") {
+      // Top: where a falling marble hits it; a_side/b_side: arm ends (local x
+      // along the host rail), just above the rail groove.
+      const reach = Number(spec.arm_reach_cm ?? 9.5);
+      const h = geometryValue(spec.body_height_cm, 8);
+      const local = { top: [0, h, [0, 0, 1]], a_side: [-reach, scale * 0.6, [-1, 0, 0]],
+        b_side: [reach, scale * 0.6, [1, 0, 0]] }[ref.port];
+      if (!local) return null;
+      const angle = Number(part.rotation_deg || 0) * Math.PI / 180;
+      const c = Math.cos(angle), sn = Math.sin(angle);
+      return {
+        position: [Number(part.x_cm) + local[0] * c, Number(part.y_cm) + local[0] * sn,
+          Number(part.z_units) * scale + local[1]],
+        normal: [local[2][0] * c, local[2][0] * sn, local[2][2]],
+      };
+    }
     const footprint = catalog.geometry_cm?.standard_block_footprint || {};
     const width = Number(footprint.width_cm ?? 4.5);
     const depth = Number(footprint.depth_cm ?? 4.5);
@@ -146,12 +162,53 @@
     };
   }
 
+  // ---- rail flow (mirror of model.flow_sequences / flow_sign / rail_end_is_exit)
+  // Rails have no direction of their own; each is labelled a_to_b, b_to_a,
+  // or around a pivot hole: to_hole (collector) / from_hole (under a seesaw).
+  const PIVOT_MODES = new Set(["to_hole", "from_hole"]);
+  function pivotIndex(rail, holeCount) {
+    const k = rail.flow_hole;
+    return PIVOT_MODES.has(rail.flow_direction) && k != null && Number.isInteger(Number(k)) &&
+      Number(k) >= 0 && Number(k) < holeCount ? Number(k) : null;
+  }
+  function flowSequences(rail, holeCount) {
+    const stations = ["end_a", ...Array.from({ length: holeCount }, (_, i) => "hole:" + i), "end_b"];
+    if (rail.flow_direction === "b_to_a") return [stations.slice().reverse()];
+    const pivot = pivotIndex(rail, holeCount);
+    if (pivot != null) {
+      const k = pivot + 1;
+      if (rail.flow_direction === "to_hole") return [stations.slice(0, k + 1), stations.slice(k).reverse()];
+      return [stations.slice(0, k).reverse(), stations.slice(k + 1)];
+    }
+    return [stations];
+  }
+  function flowSign(rail, holes, x) {
+    if (rail.flow_direction === "b_to_a") return -1;
+    const pivot = pivotIndex(rail, holes.length);
+    if (pivot != null) {
+      const toward = x < Number(holes[pivot]) ? 1 : -1;
+      return rail.flow_direction === "to_hole" ? toward : -toward;
+    }
+    return 1;
+  }
+  function railEndIsExit(rail, end) {
+    if (rail.flow_direction === "from_hole") return true;
+    if (rail.flow_direction === "to_hole") return false;
+    return end === (rail.flow_direction === "b_to_a" ? "end_a" : "end_b");
+  }
+  function stationAhead(spec, x, sign) {
+    const stations = [["end_a", 0], ...(spec.hole_positions_cm || []).map((h, i) => ["hole:" + i, Number(h)]),
+      ["end_b", Number(spec.length_cm)]];
+    if (sign > 0) return stations.find(([, sx]) => sx > x + 1e-6)?.[0] ?? null;
+    const ahead = stations.filter(([, sx]) => sx < x - 1e-6);
+    return ahead.length ? ahead[ahead.length - 1][0] : null;
+  }
+
   function supportsFlow(layout, catalog, ref, output) {
     const rail = (layout.rails || []).find(r => r.id === ref.component_id);
     if (rail) {
-      const downstream = rail.flow_direction === "b_to_a" ? "end_a" : "end_b";
-      const upstream = rail.flow_direction === "b_to_a" ? "end_b" : "end_a";
-      return ref.port === (output ? downstream : upstream);
+      if (ref.port !== "end_a" && ref.port !== "end_b") return false;
+      return railEndIsExit(rail, ref.port) === output;
     }
     const part = (layout.parts || []).find(p => p.id === ref.component_id);
     if (!part) return false;
@@ -274,25 +331,29 @@
     for (const rail of layout.rails || []) {
       const spec = railGeometry(catalog, rail.rail_type);
       if (!spec) continue;
-      const sequence = [
-        "end_a",
-        ...(spec.hole_positions_cm || []).map((_, index) => "hole:" + index),
-        "end_b",
-      ];
-      if (rail.flow_direction === "b_to_a") sequence.reverse();
-      for (const port of sequence) ensure(rail.id + ":" + port);
-      for (let i = 0; i + 1 < sequence.length; i++) {
-        const current = sequence[i];
-        const next = sequence[i + 1];
-        if (current.startsWith("hole:")) {
-          const index = Number(current.slice(5));
-          const state = rail.hole_states?.[index] ?? "open";
-          if (state === "covered") edge(rail.id + ":" + current, rail.id + ":" + next);
-          else if (state === "covered_slope") {
-            reasons.push("unsupported_covered_slope_semantics:" + rail.id + ":" + index);
+      const holeCount = (spec.hole_positions_cm || []).length;
+      const pivot = pivotIndex(rail, holeCount);
+      if (rail.flow_direction === "to_hole" && pivot != null &&
+          (rail.hole_states?.[pivot] ?? rail.hole_states?.[String(pivot)] ?? "open") === "covered") {
+        reasons.push("collector_hole_covered:" + rail.id + ":" + pivot);
+      }
+      for (const port of ["end_a", ...Array.from({ length: holeCount }, (_, i) => "hole:" + i), "end_b"]) {
+        ensure(rail.id + ":" + port);
+      }
+      for (const sequence of flowSequences(rail, holeCount)) {
+        for (let i = 0; i + 1 < sequence.length; i++) {
+          const current = sequence[i];
+          const next = sequence[i + 1];
+          if (current.startsWith("hole:")) {
+            const index = Number(current.slice(5));
+            const state = rail.hole_states?.[index] ?? "open";
+            if (state === "covered") edge(rail.id + ":" + current, rail.id + ":" + next);
+            else if (state === "covered_slope") {
+              reasons.push("unsupported_covered_slope_semantics:" + rail.id + ":" + index);
+            }
+          } else {
+            edge(rail.id + ":" + current, rail.id + ":" + next);
           }
-        } else {
-          edge(rail.id + ":" + current, rail.id + ":" + next);
         }
       }
     }
@@ -396,17 +457,66 @@
         const halfBlock = Math.abs((pose.position[0] - Number(part.x_cm)) * axis[0] +
           (pose.position[1] - Number(part.y_cm)) * axis[1]);
         const landing = Number(railSpec.hole_positions_cm[hole]) + (along > 0 ? halfBlock : -halfBlock);
-        const stations = [["end_a", 0],
-          ...(railSpec.hole_positions_cm || []).map((x, i) => ["hole:" + i, Number(x)]),
-          ["end_b", Number(railSpec.length_cm)]];
-        let next = null;
-        if (along > 0 && rail.flow_direction !== "b_to_a") {
-          next = stations.find(([, x]) => x > landing + 1e-6)?.[0] ?? null;
-        } else if (along < 0 && rail.flow_direction === "b_to_a") {
-          const ahead = stations.filter(([, x]) => x < landing - 1e-6);
-          next = ahead.length ? ahead[ahead.length - 1][0] : null;
-        }
+        const sign = along > 0 ? 1 : -1;
+        const next = flowSign(rail, (railSpec.hole_positions_cm || []).map(Number), landing) === sign
+          ? stationAhead(railSpec, landing, sign) : null;
         if (next) edge(part.id + ":" + port, rail.id + ":" + next);
+      }
+    }
+
+    // Mirror of _seesaw_edges: a seesaw on the pivot hole of its rail takes a
+    // marble falling from an open hole or rail end above (within the drop
+    // limit) to either arm, which lands it on the rail rolling outward.
+    for (const support of layout.supports || []) {
+      for (const partId of support.stack_part_ids || []) {
+        const part = parts.get(partId);
+        const spec = part && partSpec(catalog, part.part_type);
+        if (!spec || spec.shape !== "seesaw") continue;
+        const host = support.lower_rail_id != null ? rails.get(support.lower_rail_id) : null;
+        const hostSpec = host && railGeometry(catalog, host.rail_type);
+        if (!hostSpec || support.lower_hole_index == null) continue;
+        const holes = (hostSpec.hole_positions_cm || []).map(Number);
+        const pivot = holes[Number(support.lower_hole_index)];
+        const reach = Number(spec.arm_reach_cm ?? 9.5);
+        for (const [port, sign] of [["a_side", -1], ["b_side", 1]]) {
+          const x = pivot + sign * reach;
+          if (flowSign(host, holes, x) !== sign) {
+            reasons.push("seesaw_against_rail_flow:" + part.id + ":" + host.id);
+            continue;
+          }
+          const ahead = stationAhead(hostSpec, x, sign);
+          if (ahead) edge(part.id + ":" + port, host.id + ":" + ahead);
+        }
+        const maxDrop = Number(spec.feed?.max_drop_units ?? 12);
+        const minDrop = geometryValue(spec.body_height_cm, 8) / unitCm;
+        const halfL = Number(spec.footprint_cm?.length ?? 19) / 2, halfW = Number(spec.footprint_cm?.width ?? 3) / 2;
+        const margin = 1.5;
+        const theta = Number(part.rotation_deg || 0) * Math.PI / 180;
+        for (const rail of layout.rails || []) {
+          const rspec = railGeometry(catalog, rail.rail_type);
+          if (rail.id === host.id || !rspec || rspec.shape === "twist") continue;
+          const points = [];
+          (rspec.hole_positions_cm || []).forEach((h, i) => {
+            if ((rail.hole_states?.[i] ?? rail.hole_states?.[String(i)] ?? "open") !== "open") return;
+            const [px, py] = railPose(catalog, rail, Number(h));
+            points.push(["hole:" + i, px, py, Number(rail.z_units) + holeLevel(rspec, i)]);
+          });
+          for (const [end, local] of [["end_a", 0], ["end_b", Number(rspec.length_cm)]]) {
+            if (!railEndIsExit(rail, end)) continue;
+            const [px, py] = railPose(catalog, rail, local);
+            points.push([end, px, py, Number(rail.z_units) + endLevel(rspec, end)]);
+          }
+          for (const [station, px, py, pz] of points) {
+            const drop = pz - Number(part.z_units);
+            if (!(drop >= minDrop - 1e-6 && drop <= maxDrop + 1e-6)) continue;
+            const dx = px - Number(part.x_cm), dy = py - Number(part.y_cm);
+            const alongS = dx * Math.cos(theta) + dy * Math.sin(theta);
+            const across = -dx * Math.sin(theta) + dy * Math.cos(theta);
+            if (Math.abs(alongS) <= halfL + margin && Math.abs(across) <= halfW + margin) {
+              edge(rail.id + ":" + station, part.id + ":top");
+            }
+          }
+        }
       }
     }
 
@@ -714,5 +824,6 @@
     return { path, exit: null, complete: false, reason: "step_limit:" + node };
   }
 
-  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose, holeLevel };
+  return { buildGraph, trace, portPose, listInputHoles, analyzeOutcomes, sampleRun, railGeometry, railPose, holeLevel,
+    flowSign, flowSequences, railEndIsExit };
 });

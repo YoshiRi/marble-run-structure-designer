@@ -1209,6 +1209,8 @@ def _rail_dict(r: PlacedRail, num) -> dict[str, Any]:
         out.update(x_cm=round(r.x_cm, 7), y_cm=round(r.y_cm, 7), yaw_deg=round(r.yaw_deg, 7), turn=r.turn)
     out.update(z_units=num(r.z_units), flow_direction=r.flow_direction,
                hole_states=dict(sorted(r.hole_states.items())))
+    if r.flow_hole is not None:
+        out["flow_hole"] = r.flow_hole
     return out
 
 

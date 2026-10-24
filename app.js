@@ -101,6 +101,7 @@
     natural_drop: "#d6b98c",
     red_random_split: "#dc2626",
     red_right_angle: "#b91c1c",
+    seesaw: "#dc2626",
     orange_vertical: "#f97316",
     purple_drop: "#7c3aed",
     wooden_foundation: "#d8c39e",
@@ -166,7 +167,7 @@
   }
 
   function blockMass(partType) {
-    const groups = [catalog.routing_blocks, catalog.structural_parts];
+    const groups = [catalog.routing_blocks, catalog.structural_parts, catalog.special_parts];
     for (const group of groups) {
       const spec = group && group[partType];
       if (!spec) continue;
@@ -1662,7 +1663,7 @@
     blue: "blue", green: "green", cyan: "cyan", yellow: "yellow",
     straight_short: "short straight", straight_long: "long straight",
     straight_long_center: "long straight (center hole)", curved_short: "short curve",
-    curved_long: "long curve", s_curve: "S-curve", spiral: "twist", cover: "cover",
+    curved_long: "long curve", s_curve: "S-curve", spiral: "twist", cover: "cover", seesaw: "seesaw",
   };
   const partName = type => PART_NAMES[type] || type;
 
@@ -2082,7 +2083,36 @@
     const part = (layout.parts || []).find(p => p.id === id);
     if (!part) return;
     const special = catalog.special_parts?.[part.part_type];
-    owned(part.id, () => (special?.shape === "twist_funnel" ? renderTwist(part, special) : renderPart(part)));
+    owned(part.id, () => (special?.shape === "twist_funnel" ? renderTwist(part, special)
+      : special?.shape === "seesaw" ? renderSeesaw(part, special) : renderPart(part)));
+  }
+
+  // Seesaw: a rhombus (user) seen from the side, 19 cm long and 8 cm tall,
+  // 3 cm thick, standing on its lower corner over the rail's center hole and
+  // lying along the rail.
+  function renderSeesaw(part, spec) {
+    const length = Number(spec.footprint_cm?.length ?? 19);
+    const width = Number(spec.footprint_cm?.width ?? 3);
+    const height = geometryValue(spec.body_height_cm, 8);
+    const L = length / 2, H = height;
+    const shape = [new BABYLON.Vector3(-L, H / 2, 0), new BABYLON.Vector3(0, H, 0),
+      new BABYLON.Vector3(L, H / 2, 0), new BABYLON.Vector3(0, 0, 0), new BABYLON.Vector3(-L, H / 2, 0)];
+    const body = BABYLON.MeshBuilder.ExtrudeShape("seesaw-" + part.id, {
+      shape, path: [new BABYLON.Vector3(0, 0, -width / 2), new BABYLON.Vector3(0, 0, width / 2)],
+      cap: BABYLON.Mesh.CAP_ALL, sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+    }, scene);
+    body.position = world(part.x_cm, part.y_cm, Number(part.z_units));
+    body.rotation.y = -(Number(part.rotation_deg || 0) * Math.PI) / 180;
+    body.material = material("seesawMat", palette.seesaw);
+    body.enableEdgesRendering();
+    body.edgesWidth = 2;
+    body.edgesColor = new BABYLON.Color4(0.45, 0.05, 0.05, 1);
+    addSelectable(body, {
+      id: part.id, kind: "part", type: part.part_type, mass_g: blockMass(part.part_type),
+      z_units: part.z_units, rotation_deg: part.rotation_deg || 0,
+      footprint_cm: { length, width }, body_height_cm: height, shape: "rhombus",
+      routing: "random distributor (real seesaw switches every ~5 marbles)",
+    });
   }
 
   // Dispose the meshes of some owners only (edit mode redraws what changed).

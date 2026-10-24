@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from math import cos, hypot, radians, sin, sqrt
 
 from .catalog import PartCatalog
-from .model import Layout, PortRef, RouteLink, rail_pose
+from .model import rail_end_is_exit, Layout, PortRef, RouteLink, rail_pose
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,22 @@ def port_pose(layout: Layout, catalog: PartCatalog, ref: PortRef) -> PortPose | 
     height_units = catalog.height_units(part.part_type)
     if height_units is None:
         return None
+    if spec.get("shape") == "seesaw":
+        # Mirror of routing.js: top where a falling marble hits it, the arm
+        # ends just above the host rail's groove (local x along the rail).
+        reach = float(spec.get("arm_reach_cm", 9.5))
+        body = spec.get("body_height_cm", 8.0)
+        body = float(body.get("value") if isinstance(body, dict) else body)
+        local_s = {"top": (0.0, body, (0.0, 0.0, 1.0)), "a_side": (-reach, height_scale * 0.6, (-1.0, 0.0, 0.0)),
+                   "b_side": (reach, height_scale * 0.6, (1.0, 0.0, 0.0))}.get(ref.port)
+        if local_s is None:
+            return None
+        angle = radians(part.rotation_deg)
+        return PortPose(
+            (part.x_cm + local_s[0] * cos(angle), part.y_cm + local_s[0] * sin(angle),
+             part.z_units * height_scale + local_s[1]),
+            (local_s[2][0] * cos(angle), local_s[2][0] * sin(angle), local_s[2][2]),
+        )
 
     width = 4.5
     depth = 4.5
@@ -97,9 +113,9 @@ def _supports_flow(
 ) -> bool:
     rail = layout.rail_map().get(ref.component_id)
     if rail is not None:
-        downstream = "end_b" if rail.flow_direction == "a_to_b" else "end_a"
-        upstream = "end_a" if rail.flow_direction == "a_to_b" else "end_b"
-        return ref.port == (downstream if output else upstream)
+        if ref.port not in ("end_a", "end_b"):
+            return False
+        return rail_end_is_exit(rail, ref.port) == output
     part = layout.part_map().get(ref.component_id)
     if part is None:
         return False

@@ -7,7 +7,7 @@ from math import hypot
 from .catalog import PartCatalog
 from .collision import solid_collisions
 from .geometry import valid_support_pairs
-from .model import Layout, rail_hole_world
+from .model import FLOW_MODES, PIVOT_MODES, Layout, rail_hole_world
 
 
 @dataclass(frozen=True)
@@ -38,11 +38,14 @@ def validate_assembly(
         if rail.rail_type not in catalog.rails:
             reasons.append(f"unknown_rail_type:{rail.id}:{rail.rail_type}")
             continue
-        if rail.flow_direction not in {"a_to_b", "b_to_a"}:
+        spec = catalog.rails[rail.rail_type]
+        if rail.flow_direction not in FLOW_MODES:
             reasons.append(
                 f"invalid_flow_direction:{rail.id}:{rail.flow_direction}"
             )
-        spec = catalog.rails[rail.rail_type]
+        elif rail.flow_direction in PIVOT_MODES and (
+                rail.flow_hole is None or not 0 <= rail.flow_hole < len(spec.holes_cm)):
+            reasons.append(f"invalid_flow_hole:{rail.id}:{rail.flow_hole}")
         for idx, state in rail.hole_states.items():
             if not 0 <= idx < len(spec.holes_cm):
                 reasons.append(f"invalid_hole_index:{rail.id}:{idx}")
@@ -221,6 +224,8 @@ def validate_assembly(
         if part.part_type == "wooden_foundation" and part.id not in foundation_usage:
             reasons.append(f"unused_or_elevated_foundation:{part.id}")
 
+    reasons.extend(_seesaw_reasons(layout, catalog))
+
     # Coarse bounding-box check: bodies may touch but not interpenetrate.
     reasons.extend(solid_collisions(layout, catalog))
 
@@ -266,4 +271,32 @@ def _free_stack_reasons(support, label, layout, catalog, used_stack_parts,
         if part.part_type == "wooden_foundation":
             reasons.append(f"foundation_not_ground_base:{label}:{part_id}")
         expected_z += height
+    return reasons
+
+
+def _seesaw_reasons(layout: Layout, catalog: PartCatalog) -> list[str]:
+    """A seesaw stands alone, free, on the mount hole of an allowed rail,
+    along that rail, and the rail carries marbles outward from it."""
+    reasons: list[str] = []
+    rails = layout.rail_map()
+    holder = {pid: s for s in layout.supports for pid in s.stack_part_ids}
+    for part in layout.parts:
+        spec = catalog.part_spec(part.part_type)
+        if not spec or spec.get("shape") != "seesaw":
+            continue
+        support = holder.get(part.id)
+        if support is None or support.upper_rail_id is not None or len(support.stack_part_ids) != 1:
+            reasons.append(f"seesaw_must_stand_alone_on_a_rail:{part.id}")
+            continue
+        host = rails.get(support.lower_rail_id) if support.lower_rail_id is not None else None
+        mount = spec.get("mount") or {}
+        if host is None or host.rail_type not in (mount.get("rails") or ()) \
+                or support.lower_hole_index != mount.get("hole"):
+            reasons.append(f"seesaw_needs_center_hole:{part.id}")
+            continue
+        turn = (part.rotation_deg - host.yaw_deg) % 180
+        if min(turn, 180 - turn) > 0.5:
+            reasons.append(f"seesaw_not_along_rail:{part.id}:{host.id}")
+        if host.flow_direction != "from_hole" or host.flow_hole != support.lower_hole_index:
+            reasons.append(f"seesaw_rail_must_flow_outward:{part.id}:{host.id}")
     return reasons
