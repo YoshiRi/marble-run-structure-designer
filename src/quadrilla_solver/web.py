@@ -147,7 +147,7 @@ def rail_edits(data: Mapping[str, Any], root: str | Path) -> dict[str, list[str]
         ops = []
         if rail.id in curves:
             ops.append("curve")
-        if shorten(layout, catalog, rail.id):
+        if shorten(layout, catalog, rail.id) or shorten(layout, catalog, rail.id, move_columns=True):
             ops.append("shorten")
         out[rail.id] = ops
     return out
@@ -171,7 +171,8 @@ def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path
         turn = "right" if op.get("turn") == "right" else "left"
         candidates = [substitute(layout, catalog, rail_id, turn)]
     elif kind == "shorten":
-        candidates = shorten(layout, catalog, rail_id)
+        # In place first; else moving a ground column along the rail.
+        candidates = shorten(layout, catalog, rail_id) + shorten(layout, catalog, rail_id, move_columns=True)
         if not candidates:
             raise ValueError(f"{rail_id} cannot be shortened: its holes in use do not fit a short rail")
     else:

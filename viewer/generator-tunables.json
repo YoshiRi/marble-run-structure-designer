@@ -75,10 +75,10 @@
     {
       "key": "idle_rail_cm",
       "sign": -1,
-      "weight": 0.05,
+      "weight": 0.2,
       "label": "Idle rail",
-      "help": "per cm of rail the marble never rolls on",
-      "source": "reviews 3, dense-stack"
+      "help": "per cm of rail the marble never rolls on (braces excluded)",
+      "source": "reviews 3, dense-stack, layered-tower"
     },
     {
       "key": "dead_area_cm2",
