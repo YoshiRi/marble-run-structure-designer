@@ -109,8 +109,16 @@ Review 3 refinements:
   end and the marble's stretch fits; holes it now rolls over get covers. Each
   swap is validated. About a quarter of long rails shrink; the dense-stack
   sample lost two (rail6, rail7).
-- **idle rail**: rail length the marble never rolls on costs 0.1 point per cm
-  (a long rail held up by an extra column for a 3 cm roll).
+  A long straight's holes sit only near its ends (2, 7, 43, 48 cm), so a rail
+  whose marble rolls a few cm at one end but whose other support is a ground
+  column at the far end cannot shrink in place. Then (`move_columns`, review
+  of generated-layered-tower) such a column, if it holds only this rail, moves
+  along the rail onto the short rail's free hole nearest to where it stood;
+  the swap is validated like any other (collisions, statics, routing). The
+  dense-stack sample loses a third long rail (rail8) this way.
+- **idle rail**: rail length the marble never rolls on costs 0.2 point per cm
+  (a long rail held up by an extra column for a 3 cm roll). Brace rails are
+  idle on purpose and are not counted.
 - **exclude_parts** (`--exclude`): parts the user does not have; the gallery
   excludes the right-angle splitter (`red_right_angle`).
 
@@ -160,7 +168,7 @@ were valued; high drops, very short branches and sprawling builds were not):
 10 x levels + 0.2 x rolling length (cm) + 0.15 x shortest start-to-exit roll (cm)
 + 4 x random branches + 2 x columns standing on rails + 3 x curves + 5 x twists
 - 1.5 x sum of exit levels (units) - 0.002 x footprint bounding-box area (cm2)
-- 15 x weak towers - 0.05 x idle rail length (cm)
+- 15 x weak towers - 0.2 x idle rail length (cm, braces excluded)
 - 0.02 x unused top-view area (cm2)
 ```
 
@@ -215,3 +223,10 @@ Reviews reported by ID feed the scoring and future pattern weights.
   the top block's rail (mr-dab9cd16), tower shape fragile (mr-aef20353), a
   long rail where a short one would do (mr-58269e6d), space-inefficient
   (mr-a86b7d93, mr-9554bf4c); compact is good (mr-2724d8e4).
+- Review of generated-layered-tower (2026-10-24, viewer Review mode; an
+  example from the v2 generator): verdict Bad. rail10, rail6 and rail1 are long
+  rails the marble barely uses ("too long", "takes too much area"). Each is
+  long only because one support is a ground column at the far end. Classified
+  Taste. Led to shortening with column moves (`move_columns`), idle rail
+  excluding braces at 0.2 per cm, and replacing the viewer's default examples
+  (all from the v2 generator) with current gallery layouts.

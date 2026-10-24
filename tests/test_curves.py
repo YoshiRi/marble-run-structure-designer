@@ -208,9 +208,35 @@ def test_long_rails_used_for_nothing_become_short():
     budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005"]))
     short = shorten_rails(layout, CATALOG, budget, layout_source(data), layout_sinks(data))
     changed = {r.id for r, s in zip(layout.rails, short.rails) if r.rail_type != s.rail_type}
-    assert changed == {"rail6", "rail7"}
+    # rail6, rail7 in place; rail8 by moving a ground column along it.
+    assert changed == {"rail6", "rail7", "rail8"}
     assert all(s.rail_type == "straight_short" for s in short.rails if s.id in changed)
     result = validate_layout(short, CATALOG, source=layout_source(data), sinks=layout_sinks(data))
     assert result.valid
-    # Everything else stays where it was.
-    assert short.parts == layout.parts
+    # Only parts of columns under a shortened rail move.
+    moved = {p.id for p, q in zip(layout.parts, short.parts) if p != q}
+    under = {pid for s in layout.supports if s.upper_rail_id in changed and s.lower_rail_id is None
+             for pid in s.stack_part_ids}
+    assert moved <= under
+
+
+def test_rails_long_only_to_reach_a_far_column_become_short():
+    """Review of generated-layered-tower: rail1, rail6, rail10 roll the marble a
+    few cm but span 50 cm to reach a ground column; moving the column along
+    the rail lets a short rail do."""
+    import yaml
+    from quadrilla_solver.generator import Budget, layout_sinks, layout_source, resolve_set_paths, shorten_rails
+    from quadrilla_solver.substitution import shorten
+
+    path = ROOT / "tests" / "fixtures" / "layered-tower-far-columns.yaml"
+    data = yaml.safe_load(path.read_text())
+    layout = load_layout(path)
+    for rail_id in ("rail1", "rail6", "rail10"):
+        assert not shorten(layout, CATALOG, rail_id)  # not without moving a column
+        assert shorten(layout, CATALOG, rail_id, move_columns=True)
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005"]))
+    short = shorten_rails(layout, CATALOG, budget, layout_source(data), layout_sinks(data))
+    changed = {r.id for r, s in zip(layout.rails, short.rails) if r.rail_type != s.rail_type}
+    assert {"rail1", "rail6", "rail10"} <= changed
+    result = validate_layout(short, CATALOG, source=layout_source(data), sinks=layout_sinks(data))
+    assert result.valid

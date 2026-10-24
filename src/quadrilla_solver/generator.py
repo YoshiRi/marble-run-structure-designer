@@ -876,8 +876,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
      "help": "per unit of height the marble leaves from (all exits)", "source": "review 1"},
     {"key": "weak_towers", "sign": -1, "weight": 15.0, "label": "Weak towers",
      "help": "per stack of 5+ blocks braced along one axis", "source": "reviews 2, 3"},
-    {"key": "idle_rail_cm", "sign": -1, "weight": 0.05, "label": "Idle rail",
-     "help": "per cm of rail the marble never rolls on", "source": "reviews 3, dense-stack"},
+    {"key": "idle_rail_cm", "sign": -1, "weight": 0.2, "label": "Idle rail",
+     "help": "per cm of rail the marble never rolls on (braces excluded)",
+     "source": "reviews 3, dense-stack, layered-tower"},
     {"key": "dead_area_cm2", "sign": -1, "weight": 0.02, "label": "Unused area",
      "help": "per cm2 of top view taken by parts no marble rolls on", "source": "review 3"},
     {"key": "footprint_area_cm2", "sign": -1, "weight": 0.002, "label": "Footprint",
@@ -926,15 +927,23 @@ def shorten_rails(layout: Layout, catalog: PartCatalog, budget: Budget, source: 
                   sinks: Sequence[PortRef]) -> Layout:
     """Swap long straights for short ones wherever the build stays the same
     (user review of the dense-stack example: long rails used for nothing
-    widen the build). Each swap is validated; the inventory is respected."""
+    widen the build). When a far ground column is all that keeps a rail long,
+    that column moves along the rail (`shorten(move_columns=True)`). Each swap is validated; the
+    inventory is respected."""
+    def ok(trial: Layout) -> bool:
+        if not _within_budget(layout_usage(trial), budget.counts):
+            return False
+        result = validate_layout(trial, catalog, source=source, sinks=sinks)
+        return result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}
+
     for rail in list(layout.rails):
-        for trial in shorten(layout, catalog, rail.id):
-            if not _within_budget(layout_usage(trial), budget.counts):
-                continue
-            result = validate_layout(trial, catalog, source=source, sinks=sinks)
-            if result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}:
-                layout = trial
-                break
+        done = next((t for t in shorten(layout, catalog, rail.id) if ok(t)), None)
+        if done is None:
+            # A rail long only to reach a far ground column: move the column
+            # along the rail (review of generated-layered-tower).
+            done = next((t for t in shorten(layout, catalog, rail.id, move_columns=True) if ok(t)), None)
+        if done is not None:
+            layout = done
     return layout
 
 
@@ -1096,9 +1105,10 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "dead_area_cm2": round(_dead_area(state, catalog, solids)),
         "braces": len(state.braces),
         "weak_towers": weak_towers(layout, catalog),
+        # Brace rails are idle on purpose (they hold a tower); not counted.
         "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(r.id, 0.0)
                                   for r in layout.rails
-                                  if catalog.rails[r.rail_type].shape != "twist"), 1),
+                                  if catalog.rails[r.rail_type].shape != "twist" and r.id not in state.braces), 1),
         "covers": state.covers,
         "parts": len(layout.parts),
     }

@@ -104,12 +104,18 @@ def substitute(layout: Layout, catalog: PartCatalog, rail_id: str, turn: str) ->
 _SHORTER = {"straight_long": "straight_short", "straight_long_center": "straight_short"}
 
 
-def shorten(layout: Layout, catalog: PartCatalog, rail_id: str) -> list[Layout]:
+def shorten(layout: Layout, catalog: PartCatalog, rail_id: str, move_columns: bool = False) -> list[Layout]:
     """Candidate layouts with long straight `rail_id` replaced by a short one
     laid along the same line, so that every hole in use (supports, blocks on
     it, drop/dive holes, covers) and every linked end lands on the short
     rail's matching hole or end. Holes the marble now rolls over get covers.
-    The caller validates each candidate."""
+
+    move_columns: a ground column that holds only this rail may move along
+    the rail to a free hole of the short rail (the one nearest to where it
+    stood). A long straight's holes sit only near its ends, so a rail long
+    just to reach a far column (review of generated-layered-tower) can be
+    shortened only by moving that column. The caller validates each
+    candidate (collisions, statics, routing)."""
     rail = layout.rail_map()[rail_id]
     if rail.rail_type not in _SHORTER or rail.flow_direction != "a_to_b":
         return []
@@ -117,6 +123,75 @@ def shorten(layout: Layout, catalog: PartCatalog, rail_id: str) -> list[Layout]:
     short_type = _SHORTER[rail.rail_type]
     short = catalog.rails[short_type]
     holes = long_spec.holes_cm
+    used, ends, start, end = _stretch(layout, catalog, rail)
+    standing = {s.lower_hole_index for s in layout.supports if s.lower_rail_id == rail_id}
+    movable = {}
+    if move_columns:
+        for s in layout.supports:
+            i = s.upper_hole_index
+            if (s.upper_rail_id == rail_id and s.lower_rail_id is None and i not in standing
+                    and rail.hole_states.get(i) is None):
+                movable[i] = s
+    fixed = used - set(movable)
+
+    offsets = {round(holes[i] - x, 6) for i in fixed for x in short.holes_cm} if fixed else \
+        {round(start - 0.0, 6), round(end - short.length_cm, 6)}
+    if "end_a" in ends:
+        offsets = {o for o in offsets if abs(o) < 1e-6}
+    if "end_b" in ends:
+        offsets = {o for o in offsets if abs(o + short.length_cm - long_spec.length_cm) < 1e-6}
+    heading = radians(rail.yaw_deg)
+    out = []
+    for o in sorted(offsets):
+        if o < -1e-6 or o + short.length_cm > long_spec.length_cm + 1e-6:
+            continue
+        if start < o - 1e-6 or end > o + short.length_cm + 1e-6:
+            continue  # the marble would roll off the shorter rail
+        on_short = lambda pos: next((j for j, x in enumerate(short.holes_cm) if abs(x + o - pos) < 1e-6), None)
+        index = {i: on_short(holes[i]) for i in fixed}
+        if any(j is None for j in index.values()):
+            continue
+        shift: dict[str, tuple[float, float]] = {}
+        for i, sup in sorted(movable.items()):
+            j = on_short(holes[i])
+            if j is None or j in index.values():
+                free = [j for j in range(len(short.holes_cm)) if j not in index.values()]
+                if not free:
+                    break
+                j = min(free, key=lambda j: abs(short.holes_cm[j] + o - holes[i]))
+                d = short.holes_cm[j] + o - holes[i]
+                for part_id in sup.stack_part_ids:
+                    shift[part_id] = (d * _cos(heading), d * _sin(heading))
+            index[i] = j
+        else:
+            states = {}
+            for i, st in rail.hole_states.items():
+                if int(i) in index:
+                    states[index[int(i)]] = st
+            for j, x in enumerate(short.holes_cm):
+                if j not in states and start < x + o < end:
+                    states[j] = "covered"
+            new = replace(rail, rail_type=short_type,
+                          x_cm=rail.x_cm + o * _cos(heading), y_cm=rail.y_cm + o * _sin(heading),
+                          hole_states=dict(sorted(states.items())))
+            supports = tuple(
+                replace(s,
+                        upper_hole_index=index[s.upper_hole_index] if s.upper_rail_id == rail_id else s.upper_hole_index,
+                        lower_hole_index=index[s.lower_hole_index] if s.lower_rail_id == rail_id else s.lower_hole_index)
+                for s in layout.supports)
+            parts = tuple(replace(p, x_cm=p.x_cm + shift[p.id][0], y_cm=p.y_cm + shift[p.id][1])
+                          if p.id in shift else p for p in layout.parts)
+            rails = tuple(new if r.id == rail_id else r for r in layout.rails)
+            out.append((len(shift), replace(layout, rails=rails, parts=parts, supports=supports)))
+    # Fewest columns moved first.
+    return [l for _, l in sorted(out, key=lambda t: t[0])]
+
+
+def _stretch(layout: Layout, catalog: PartCatalog, rail: PlacedRail) -> tuple[set[int], set[str], float, float]:
+    """Holes in use, linked ends, and the stretch [start, end] (cm along the
+    rail) the marble rolls or must stay covered on."""
+    rail_id = rail.id
+    holes = catalog.rails[rail.rail_type].holes_cm
     used = {s.upper_hole_index for s in layout.supports if s.upper_rail_id == rail_id}
     standing = {s.lower_hole_index for s in layout.supports if s.lower_rail_id == rail_id}
     used |= standing
@@ -128,49 +203,13 @@ def shorten(layout: Layout, catalog: PartCatalog, rail_id: str) -> list[Layout]:
     # standing on the rail, to the stop hole or end B.
     half = 2.25
     start = 0.0 if "end_a" in ends else min((holes[i] + half for i in standing), default=0.0)
-    end = min(stops) if stops else long_spec.length_cm
+    end = min(stops) if stops else catalog.rails[rail.rail_type].length_cm
     covered = {holes[int(i)] for i, st in rail.hole_states.items() if st == "covered"}
     if covered:
         start = min(start, min(covered))
         end = max(end, max(covered))
+    return used, ends, start, end
 
-    offsets = {round(holes[i] - x, 6) for i in used for x in short.holes_cm} if used else {0.0}
-    if "end_a" in ends:
-        offsets = {o for o in offsets if abs(o) < 1e-6}
-    if "end_b" in ends:
-        offsets = {o for o in offsets if abs(o + short.length_cm - long_spec.length_cm) < 1e-6}
-    out = []
-    for o in sorted(offsets):
-        if o < -1e-6 or o + short.length_cm > long_spec.length_cm + 1e-6:
-            continue
-        index = {}
-        for i in used:
-            j = next((j for j, x in enumerate(short.holes_cm) if abs(x + o - holes[i]) < 1e-6), None)
-            if j is None:
-                break
-            index[i] = j
-        else:
-            if start < o - 1e-6 or end > o + short.length_cm + 1e-6:
-                continue  # the marble would roll off the shorter rail
-            states = {}
-            for i, st in rail.hole_states.items():
-                if int(i) in index:
-                    states[index[int(i)]] = st
-            for j, x in enumerate(short.holes_cm):
-                if j not in states and start < x + o < end:
-                    states[j] = "covered"
-            heading = radians(rail.yaw_deg)
-            new = replace(rail, rail_type=short_type,
-                          x_cm=rail.x_cm + o * _cos(heading), y_cm=rail.y_cm + o * _sin(heading),
-                          hole_states=dict(sorted(states.items())))
-            supports = tuple(
-                replace(s,
-                        upper_hole_index=index[s.upper_hole_index] if s.upper_rail_id == rail_id else s.upper_hole_index,
-                        lower_hole_index=index[s.lower_hole_index] if s.lower_rail_id == rail_id else s.lower_hole_index)
-                for s in layout.supports)
-            rails = tuple(new if r.id == rail_id else r for r in layout.rails)
-            out.append(replace(layout, rails=rails, supports=supports))
-    return out
 
 
 def _cos(a: float) -> float:

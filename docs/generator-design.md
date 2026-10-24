@@ -126,7 +126,7 @@ whole build still validates.
 | --- | --- | --- |
 | trim input | remove the input rail and its columns; marble goes into the top block | review 2 |
 | brace | lay a marble-free rail across a weak tower | review 3 |
-| shorten | long straight -> short straight when nothing changes | dense-stack review |
+| shorten | long straight -> short straight when nothing changes; else move a far ground column that holds only this rail along it | dense-stack, layered-tower reviews |
 | curves | straight -> curve on the same holes | user idea |
 | balance | counterweight blocks for overhanging loads | review 3 |
 
@@ -157,7 +157,7 @@ weight and a source. No preference is hidden inside construction moves.
 | shortest start-to-exit roll | + | review 1 (short branches) |
 | random branches, twists, curves, columns on rails | + | goal / variety |
 | exit height | - | review 1 (marble from high up) |
-| unused top-view area, footprint, idle rail length | - | reviews 1, 3 |
+| unused top-view area, footprint, idle rail length (braces excluded) | - | reviews 1, 3, layered-tower |
 | weak towers (5+ blocks, upper half braced along one axis) | - | reviews 2, 3; one rule, a penalty (decision) |
 
 The terms live in `SCORE_TERMS` (`generator.py`) with their default weights
