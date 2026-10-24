@@ -33,6 +33,14 @@
       "source": "goal"
     },
     {
+      "key": "merges",
+      "sign": 1,
+      "weight": 8.0,
+      "label": "Merges",
+      "help": "per place two routes join",
+      "source": "official builds"
+    },
+    {
       "key": "columns_on_rails",
       "sign": 1,
       "weight": 2.0,

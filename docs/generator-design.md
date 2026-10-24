@@ -159,9 +159,15 @@ weight and a source. No preference is hidden inside construction moves.
 | exit height | - | review 1 (marble from high up) |
 | unused top-view area, footprint, idle rail length (braces excluded) | - | reviews 1, 3, layered-tower |
 | weak towers (5+ blocks, upper half braced along one axis) | - | reviews 2, 3; one rule, a penalty (decision) |
+| merges (route nodes reached from two or more places) | + | official builds (§6) |
 
-The terms live in `SCORE_TERMS` (`generator.py`) with their default weights
-and sources. A user can change the weights (and some layer-3 rules) as a
+The terms live in `SCORE_TERMS` (`scoring.py`) with their default weights
+and sources. Scoring is expected to change often, so it is extended in one
+place: register a metric measured on the final layout with
+`@layout_metric("key")` (it gets the layout, catalog, input and routing
+graph), add a term, done. The generator, gallery, browser and tunables pick
+it up; a profile weight of 0 switches a term off. `scripts/eval_generator.py`
+measures any change on fixed seeds. A user can change the weights (and some layer-3 rules) as a
 **profile** in the viewer's Generate dialog; the layout records the profile
 it was made with. Taste goes into a profile, not into code.
 
