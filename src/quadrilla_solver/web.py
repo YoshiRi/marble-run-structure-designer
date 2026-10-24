@@ -14,8 +14,11 @@ from typing import Any, Callable, Mapping
 
 from .catalog import load_catalog
 from .generator import (
-    SCORE_TERMS, Budget, GeneratorConfig, generate, layout_id, layout_to_yaml_dict, resolve_set_paths,
+    SCORE_TERMS, Budget, GeneratorConfig, generate, layout_id, layout_to_dict, layout_to_yaml_dict,
+    resolve_set_paths,
 )
+from .model import layout_from_dict
+from .substitution import eligible_rails, shorten, substitute
 
 # Style rules (generator-design.md, layer 3) the Generate dialog may change,
 # with the GeneratorConfig field each sets. Limits keep the search sane.
@@ -124,3 +127,65 @@ def generate_layouts(options: Mapping[str, Any], root: str | Path,
 def generate_json(options_json: str, root: str, progress: Callable[[int, int], Any] | None = None) -> str:
     """JSON in, JSON out (keeps Pyodide conversions out of the way)."""
     return json.dumps(generate_layouts(json.loads(options_json), root, progress))
+
+
+# ---------------------------------------------------------------------------
+# Edit mode: rail rewrites (layer 2) run here so the browser does not keep a
+# second copy of the geometry. Block edits (type, rotation) are plain field
+# changes and happen in the viewer. The viewer validates every result.
+
+_STRUCTURE = ("rails", "parts", "supports", "route_links")
+
+
+def rail_edits(data: Mapping[str, Any], root: str | Path) -> dict[str, list[str]]:
+    """Which rail rewrites apply to each rail: {"rail id": ["curve", "shorten"]}."""
+    catalog = load_catalog(Path(root) / "catalog" / "parts.yaml")
+    layout = layout_from_dict(dict(data))
+    curves = set(eligible_rails(layout))
+    out: dict[str, list[str]] = {}
+    for rail in layout.rails:
+        ops = []
+        if rail.id in curves:
+            ops.append("curve")
+        if shorten(layout, catalog, rail.id):
+            ops.append("shorten")
+        out[rail.id] = ops
+    return out
+
+
+def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path) -> list[dict[str, Any]]:
+    """Apply one rail rewrite. op: {"op": "curve", "rail": id, "turn": "left"|"right"}
+    or {"op": "shorten", "rail": id}. Returns candidate structures (rails,
+    parts, supports, route_links), most natural first; the caller validates
+    them and keeps the first that passes. Raises ValueError if the rewrite
+    does not apply to that rail."""
+    catalog = load_catalog(Path(root) / "catalog" / "parts.yaml")
+    layout = layout_from_dict(dict(data))
+    rail_id = str(op.get("rail"))
+    if rail_id not in layout.rail_map():
+        raise ValueError(f"no rail {rail_id}")
+    kind = op.get("op")
+    if kind == "curve":
+        if rail_id not in eligible_rails(layout):
+            raise ValueError(f"{rail_id} cannot become a curve: a linked end or a hole in use has no curve match")
+        turn = "right" if op.get("turn") == "right" else "left"
+        candidates = [substitute(layout, catalog, rail_id, turn)]
+    elif kind == "shorten":
+        candidates = shorten(layout, catalog, rail_id)
+        if not candidates:
+            raise ValueError(f"{rail_id} cannot be shortened: its holes in use do not fit a short rail")
+    else:
+        raise ValueError(f"unknown edit {kind!r}")
+    return [{k: v for k, v in layout_to_dict(c).items() if k in _STRUCTURE} for c in candidates]
+
+
+def edit_json(request_json: str, root: str) -> str:
+    """{"layout": ..., "op": ...} -> {"candidates": [...]} | {"error": "..."};
+    {"layout": ..., "op": {"op": "options"}} -> {"options": {rail: [ops]}}."""
+    request = json.loads(request_json)
+    try:
+        if (request.get("op") or {}).get("op") == "options":
+            return json.dumps({"options": rail_edits(request["layout"], root)})
+        return json.dumps({"candidates": edit_layout(request["layout"], request["op"], root)})
+    except ValueError as error:
+        return json.dumps({"error": str(error)})

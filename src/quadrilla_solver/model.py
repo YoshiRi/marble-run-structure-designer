@@ -185,6 +185,11 @@ def load_layout(path: str | Path) -> Layout:
         data: dict[str, Any] = yaml.safe_load(f)
     if not isinstance(data, dict):
         raise ValueError(f"expected mapping in {path}")
+    return layout_from_dict(data, default_name=path.stem)
+
+
+def layout_from_dict(data: dict[str, Any], default_name: str = "layout") -> Layout:
+    """Layout from its YAML mapping (also used by the browser editor)."""
 
     rails = tuple(
         PlacedRail(
@@ -256,7 +261,7 @@ def load_layout(path: str | Path) -> Layout:
     )
 
     return Layout(
-        name=str(data.get("name", path.stem)),
+        name=str(data.get("name", default_name)),
         rails=rails,
         parts=parts,
         supports=supports,
