@@ -100,10 +100,15 @@
     const [category, spec] = found;
     const measured = value(spec.mass_g);
     if (measured != null) return measured;
-    if (category === "routing_blocks" && Math.trunc(Number(spec.height || 0)) === 4) {
+    if (category === "routing_blocks" && Math.trunc(Number(spec.height || 0)) === standardBlockUnits(catalog)) {
       return value(catalog.mass_defaults?.standard_routing_block_g);
     }
     return null;
+  }
+
+  function standardBlockUnits(catalog) {
+    const v = catalog.height_units?.standard_block ?? 5;
+    return Math.trunc(Number(typeof v === "object" ? v.value : v));
   }
 
   function hasPart(catalog, type) { return Boolean(railSpec(catalog, type) || findPart(catalog, type)); }

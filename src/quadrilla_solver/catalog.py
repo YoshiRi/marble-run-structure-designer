@@ -107,7 +107,7 @@ class PartCatalog:
         if measured is not None:
             return measured
 
-        if category == "routing_blocks" and int(spec.get("height", 0)) == 4:
+        if category == "routing_blocks" and int(spec.get("height", 0)) == self.standard_block_units():
             default_raw = (
                 self.raw.get("mass_defaults", {})
                 .get("standard_routing_block_g", {})
@@ -117,6 +117,11 @@ class PartCatalog:
             if isinstance(default_raw, Mapping) and default_raw.get("value") is not None:
                 return float(default_raw["value"])
         return None
+
+    def standard_block_units(self) -> int:
+        """Levels per standard block (5: 1 level = 1.2 cm, a block 6 cm)."""
+        value = (self.raw.get("height_units") or {}).get("standard_block", 5)
+        return int(value.get("value") if isinstance(value, Mapping) else value)
 
     def allowed_rotations(self, part_type: str) -> tuple[int, ...] | None:
         """Allowed rotations, or None when any angle is allowed."""

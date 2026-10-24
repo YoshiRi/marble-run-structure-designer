@@ -84,7 +84,7 @@ def generate_layouts(options: Mapping[str, Any], root: str | Path,
     budget = Budget.from_sets(resolve_set_paths(root, sets))
     footprint = options.get("footprint") or (90.0, 90.0)
     fields = dict(
-        max_height_units=int(options.get("max_height", 24)),
+        max_height_units=max(10, min(60, int(options.get("max_height", 30)))),
         footprint_cm=(float(footprint[0]), float(footprint[1])),
         max_exits=int(options.get("max_exits", 2)),
         max_rails=int(options.get("max_rails", 12)),

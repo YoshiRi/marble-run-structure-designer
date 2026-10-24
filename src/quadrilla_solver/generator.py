@@ -17,7 +17,7 @@ Columns are abstract while building: a base (ground or a rail hole), the
 rail hole they hold up, and the routing parts at their top. When a new lower
 rail passes exactly through an existing column at one of its holes, the
 column is *split* into a part under that rail and a part standing on it, so
-upper columns end up standing on lower rails. Filler parts (4u blocks, 1u
+upper columns end up standing on lower rails. Filler parts (5-level blocks, 1-level
 purple drop blocks, foundations on the ground) are composed at the end.
 
 Every step is checked against the set inventory, the footprint, solid
@@ -66,7 +66,7 @@ def _spiral_capacity(counts: Mapping[str, int]) -> int:
 # Holes a straight can be swapped to a curve on (substitution.py): building on
 # them keeps rails curve-ready.
 _CURVE_READY = {"straight_short": {0, 3}, "straight_long_center": {0, 2, 4}}
-_UNIT_CM = 1.5
+_UNIT_CM = 1.2  # one level (catalog geometry_cm.height_unit; tested)
 _MARBLE_DIAMETER_CM = 1.6
 _TOL_CM = 0.05
 _AXIS_TOL_CM = 0.01
@@ -111,7 +111,7 @@ def resolve_set_paths(repo_root: Path, set_ids: Sequence[str]) -> list[Path]:
 
 @dataclass(frozen=True)
 class GeneratorConfig:
-    max_height_units: int = 24
+    max_height_units: int = 30   # 36 cm (1 level = 1.2 cm); up to 60 (~10 blocks) allowed
     footprint_cm: tuple[float, float] = (90.0, 90.0)
     split_probability: float = 0.45
     pass_through_probability: float = 0.35
@@ -125,7 +125,7 @@ class GeneratorConfig:
     exit_style: str = "contained"
     max_exits: int = 2               # branch outputs (catching the marble limits this)
     block_exit_probability: float = 0.3  # chance to end a low branch at a block outlet
-    block_exit_max_level: int = 6    # highest outlet floor (units) ended on purpose
+    block_exit_max_level: int = 7    # highest outlet floor (levels) ended on purpose (~8 cm)
     # The marble can be put straight into the top block: no input rail (and
     # no columns built only to hold one up) when that block stands on a rail.
     trim_input_rail: bool = True
@@ -233,7 +233,8 @@ class CascadeGenerator:
         self.drop_blocks = self._drop_block_outlets()
         self.entry_blocks = self._side_to_bottom_inlets()
         self.work = 0  # rail placements left in the current build
-        self.filler_blocks = [t for t in _FILLER_PREFERENCE if self.heights.get(t) == 4]
+        self.block_units = catalog.standard_block_units()
+        self.filler_blocks = [t for t in _FILLER_PREFERENCE if self.heights.get(t) == self.block_units]
         self.support_pairs = {
             kind: {tuple(sorted((spec.holes_cm.index(p.hole_a_cm), spec.holes_cm.index(p.hole_b_cm))))
                    for p in valid_support_pairs(spec)}
@@ -244,7 +245,7 @@ class CascadeGenerator:
     def _drop_block_outlets(self) -> dict[str, tuple[str, ...]]:
         out = {}
         for name, spec in (self.catalog.raw.get("routing_blocks") or {}).items():
-            if spec.get("height") != 4:
+            if spec.get("height") != self.catalog.standard_block_units():
                 continue
             for route in spec.get("routes") or ():
                 if route.get("from") != "top":
@@ -259,7 +260,7 @@ class CascadeGenerator:
         the entry blocks a twist's chute hole takes (blue, green, natural)."""
         out = []
         for name, spec in (self.catalog.raw.get("routing_blocks") or {}).items():
-            if spec.get("height") != 4:
+            if spec.get("height") != self.catalog.standard_block_units():
                 continue
             for route in spec.get("routes") or ():
                 if route.get("to") == "bottom" and route.get("from") in _PORT_ROTATION_OFFSET:
@@ -333,8 +334,8 @@ class CascadeGenerator:
             return False
         blocks_free = sum(max(0, counts[t] - top_used[t]) for t in self.filler_blocks)
         purples_free = counts["purple_drop"] - top_used["purple_drop"]
-        blocks_used = min(sum(f // 4 for f in fill), blocks_free)
-        return sum(fill) - 4 * blocks_used <= purples_free
+        blocks_used = min(sum(f // self.block_units for f in fill), blocks_free)
+        return sum(fill) - self.block_units * blocks_used <= purples_free
 
     # ---- supports -----------------------------------------------------------
     def _supports_of(self, state: _State, rail_id: str) -> list[Column]:
@@ -940,14 +941,14 @@ class CascadeGenerator:
         for column in sorted(state.columns.values(), key=lambda c: (c.base_z, c.id)):
             fill = column.filler_units(self.heights)
             sequence = ["wooden_foundation"] if column.base_rail is None else []
-            for _ in range(fill // 4):
+            for _ in range(fill // self.block_units):
                 filler = next((t for t in self.filler_blocks if free[t] > 0), None)
                 if filler is None:
-                    sequence += ["purple_drop"] * 4
+                    sequence += ["purple_drop"] * self.block_units
                 else:
                     free[filler] -= 1
                     sequence.append(filler)
-            sequence += ["purple_drop"] * (fill % 4)
+            sequence += ["purple_drop"] * (fill % self.block_units)
             first_top = len(sequence)
             sequence += list(column.top_types)
             z = column.base_z
@@ -1081,7 +1082,7 @@ def weak_towers(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> in
 
 
 def tower_spots(layout: Layout, catalog: PartCatalog, min_blocks: int = 5) -> list[dict[str, Any]]:
-    """Weak towers: stacks at one spot with at least `min_blocks` blocks (4u
+    """Weak towers: stacks at one spot with at least `min_blocks` blocks (5-level
     parts) whose upper half is braced in one direction only (every rail
     touching the stack at or above half its height runs along one axis,
     within 45 deg). They topple easily (user reviews 2 and 3); a rail near

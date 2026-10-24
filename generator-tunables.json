@@ -135,7 +135,7 @@
       "min": 2,
       "max": 16,
       "step": 1,
-      "default": 6,
+      "default": 7,
       "help": "a branch may end at a block outlet only this low",
       "source": "review 1"
     },

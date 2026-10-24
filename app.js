@@ -3,7 +3,7 @@
 
   const DATA_ROOT = window.location.pathname.includes("/viewer/") ? "../" : "./";
   // Defaults mirror catalog/parts.yaml; loaded catalog geometry is authoritative.
-  let HEIGHT_SCALE_CM = 1.5;
+  let HEIGHT_SCALE_CM = 1.2;  // replaced by the catalog value on load
   let RAIL_WIDTH_CM = 4.5;
   let RAIL_GROOVE_WIDTH_CM = 1.0;
   let RAIL_GROOVE_DEPTH_CM = 0.3; // Provisional until physically measured.
@@ -166,6 +166,11 @@
     return null;
   }
 
+  function standardBlockUnits() {
+    const v = catalog?.height_units?.standard_block ?? 5;
+    return Math.trunc(Number(typeof v === "object" ? v.value : v));
+  }
+
   function blockMass(partType) {
     const groups = [catalog.routing_blocks, catalog.structural_parts, catalog.special_parts];
     for (const group of groups) {
@@ -173,7 +178,7 @@
       if (!spec) continue;
       const measured = massValue(spec);
       if (measured != null) return measured;
-      if (group === catalog.routing_blocks && Number(spec.height || 0) === 4) {
+      if (group === catalog.routing_blocks && Number(spec.height || 0) === standardBlockUnits()) {
         const fallback = catalog.mass_defaults?.standard_routing_block_g;
         if (typeof fallback === "number") return fallback;
         if (fallback && fallback.value != null) return Number(fallback.value);
@@ -768,7 +773,7 @@
       body_height_units: renderedHeightUnits,
       catalog_height_units: catalogHeightUnits,
       effective_stacking_height_cm: heightCm,
-      connector_protrusion_cm: catalogHeightUnits === 4 ? CONNECTOR_PROTRUSION_CM : null,
+      connector_protrusion_cm: catalogHeightUnits === standardBlockUnits() ? CONNECTOR_PROTRUSION_CM : null,
       connector_protrusion_rendered: false,
       ports,
       port_hole_diameter_cm: BLOCK_PORT_DIAMETER_CM,
@@ -1633,8 +1638,8 @@
       ["Ground level", "z=0 (0 cm)"],
       ["Support links", (layout.supports || []).length],
       ["Route links", (layout.route_links || []).length],
-      ["Height scale", HEIGHT_SCALE_CM + " cm/u (derived from 6 cm / 4u)"],
-      ["Standard block", (4 * HEIGHT_SCALE_CM) + " cm stacked (measured)"],
+      ["Height scale", HEIGHT_SCALE_CM + " cm per level (measured; 5 levels = one 6 cm block)"],
+      ["Standard block", standardBlockUnits() + " levels = " + +(standardBlockUnits() * HEIGHT_SCALE_CM).toFixed(2) + " cm stacked"],
       ["Connector peg", CONNECTOR_PROTRUSION_CM + " cm (inserted; not added)"],
       ["Rail width", RAIL_WIDTH_CM + " cm (measured)"],
       ["Block footprint", BLOCK_WIDTH_CM + " × " + BLOCK_DEPTH_CM + " cm (measured)"],
@@ -1649,7 +1654,7 @@
     document.getElementById("layoutMeta").textContent =
       layout.layout_id && layout.layout_id !== name ? layout.layout_id + " · " + name : name;
     document.getElementById("groundLevelLabel").textContent =
-      "Ground level: z=0 (0 cm) · 1u = " + HEIGHT_SCALE_CM + " cm";
+      "Ground level: z=0 (0 cm) · 1 level = " + HEIGHT_SCALE_CM + " cm";
   }
 
   function fitCamera() {
