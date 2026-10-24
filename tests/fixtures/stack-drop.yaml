@@ -1,27 +1,93 @@
-schema_version: "0.1"
+schema_version: '0.1'
 name: stack-drop
-# Upper rail hole 0 feeds an orange vertical block stacked on a blue block.
-# The marble falls orange top -> bottom -> blue top -> blue front.
-# The blue block stands on the lower rail's hole 0, above a ground column
-# topped by a yellow block, so blue's bottom drops into yellow's top.
 rails:
-  - { id: lower, rail_type: straight_long, x_cm: 0, y_cm: 0, z_units: 5, yaw_deg: 0,
-      flow_direction: a_to_b, hole_states: { 0: covered, 3: covered } }
-  - { id: upper, rail_type: straight_long, x_cm: 0, y_cm: 0, z_units: 14, yaw_deg: 0,
-      flow_direction: a_to_b, hole_states: { 0: block_connected, 2: covered } }
+- id: lower
+  rail_type: straight_long
+  x_cm: 0
+  y_cm: 0
+  z_units: 6.0
+  yaw_deg: 0
+  flow_direction: a_to_b
+  hole_states:
+    0: covered
+    3: covered
+- id: upper
+  rail_type: straight_long
+  x_cm: 0
+  y_cm: 0
+  z_units: 17.0
+  yaw_deg: 0
+  flow_direction: a_to_b
+  hole_states:
+    0: block_connected
+    2: covered
 parts:
-  - { id: f0, part_type: wooden_foundation, x_cm: 2, y_cm: 0, z_units: 0 }
-  - { id: yellow_base, part_type: yellow, x_cm: 2, y_cm: 0, z_units: 1 }
-  - { id: f3, part_type: wooden_foundation, x_cm: 48, y_cm: 0, z_units: 0 }
-  - { id: green_base, part_type: green, x_cm: 48, y_cm: 0, z_units: 1 }
-  - { id: blue_mid, part_type: blue, x_cm: 2, y_cm: 0, z_units: 6 }
-  - { id: orange_top, part_type: orange_vertical, x_cm: 2, y_cm: 0, z_units: 10 }
-  - { id: cyan_mid, part_type: cyan, x_cm: 43, y_cm: 0, z_units: 6 }
-  - { id: green_top, part_type: green, x_cm: 43, y_cm: 0, z_units: 10 }
+- id: f0
+  part_type: wooden_foundation
+  x_cm: 2
+  y_cm: 0
+  z_units: 0.0
+- id: yellow_base
+  part_type: yellow
+  x_cm: 2
+  y_cm: 0
+  z_units: 1.0
+- id: f3
+  part_type: wooden_foundation
+  x_cm: 48
+  y_cm: 0
+  z_units: 0.0
+- id: green_base
+  part_type: green
+  x_cm: 48
+  y_cm: 0
+  z_units: 1.0
+- id: blue_mid
+  part_type: blue
+  x_cm: 2
+  y_cm: 0
+  z_units: 7.0
+- id: orange_top
+  part_type: orange_vertical
+  x_cm: 2
+  y_cm: 0
+  z_units: 12.0
+- id: cyan_mid
+  part_type: cyan
+  x_cm: 43
+  y_cm: 0
+  z_units: 7.0
+- id: green_top
+  part_type: green
+  x_cm: 43
+  y_cm: 0
+  z_units: 12.0
 supports:
-  - { name: lower_left, upper_rail_id: lower, upper_hole_index: 0, stack_part_ids: [f0, yellow_base] }
-  - { name: lower_right, upper_rail_id: lower, upper_hole_index: 3, stack_part_ids: [f3, green_base] }
-  - { name: upper_left, upper_rail_id: upper, upper_hole_index: 0, stack_part_ids: [blue_mid, orange_top],
-      lower_rail_id: lower, lower_hole_index: 0 }
-  - { name: upper_right, upper_rail_id: upper, upper_hole_index: 2, stack_part_ids: [cyan_mid, green_top],
-      lower_rail_id: lower, lower_hole_index: 2 }
+- name: lower_left
+  upper_rail_id: lower
+  upper_hole_index: 0
+  stack_part_ids:
+  - f0
+  - yellow_base
+- name: lower_right
+  upper_rail_id: lower
+  upper_hole_index: 3
+  stack_part_ids:
+  - f3
+  - green_base
+- name: upper_left
+  upper_rail_id: upper
+  upper_hole_index: 0
+  stack_part_ids:
+  - blue_mid
+  - orange_top
+  lower_rail_id: lower
+  lower_hole_index: 0
+- name: upper_right
+  upper_rail_id: upper
+  upper_hole_index: 2
+  stack_part_ids:
+  - cyan_mid
+  - green_top
+  lower_rail_id: lower
+  lower_hole_index: 2

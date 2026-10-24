@@ -145,7 +145,7 @@ field with a default, and the source of the default is recorded.
 | at most n exits (`max_exits`) | 2 | review 1 (catching marbles) |
 | overhanging load keeps >= 20 g on the lighter support | 20 g | review 3 |
 | parts not owned (`exclude_parts`) | right-angle splitter (gallery) | review 3 |
-| max height, footprint, max rails | 24 u, 90x90 cm, 12 | setup |
+| max height, footprint, max rails | 30 levels (36 cm; up to 60 ≈ 10 blocks, user), 90x90 cm, 12 | setup |
 
 ### Layer 4: Preferences (one score)
 

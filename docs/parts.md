@@ -43,11 +43,12 @@ User-measured values currently available:
 
 These values are used as direct statics inputs where the exact part type is known.
 
-Until additional measurements are available, every **unmeasured standard-height (height 4) routing block** uses a provisional mass of **55 g**. Measured values override this fallback, so blue remains 53 g and orange remains 58 g. The fallback does not apply to thin blocks, rails, accessories, foundations, spirals, or special parts. The wooden foundation is measured at 12 g. Because it is ground-only in the current model, its mass affects total mass / ground reaction accounting but not upper-rail tipping calculations.
+Until additional measurements are available, every **unmeasured standard-height (5-level) routing block** uses a provisional mass of **55 g**. Measured values override this fallback, so blue remains 53 g and orange remains 58 g. The fallback does not apply to thin blocks, rails, accessories, foundations, spirals, or special parts. The wooden foundation is measured at 12 g. Because it is ground-only in the current model, its mass affects total mass / ground reaction accounting but not upper-rail tipping calculations.
 
 ## Standard block height
 
-Working height: **4 units = 6 cm effective stacked height** (user measurement).
+Working height: **5 levels = 6 cm effective stacked height** (user measurement;
+one level is 1.2 cm, 2026-10-24).
 
 The standard routing block has a **4.5 × 4.5 cm** footprint and a **1 cm
 connector protrusion** that inserts into the mating piece. The protrusion
@@ -55,9 +56,9 @@ does **not** add 1 cm to the assembled stack height; one stacked standard block
 contributes 6 cm, not 7 cm.
 
 The rail width is **4.5 cm**. Rail holes are approximately **1.8 cm** in
-diameter. The rail height is **1 unit** as confirmed by the user, which maps
-to **1.5 cm** under the derived scale; this is not a separate thickness
-measurement. The purple thin/drop block is also **1 unit = 1.5 cm** tall,
+diameter. The rail height is **1 level = 1.2 cm** as confirmed by the user;
+five rails stack to one block. The purple thin/drop block is also
+**1 level = 1.2 cm** tall,
 matching the rail thickness (user-confirmed); its catalog records this physical
 height explicitly. Straight rails have a **1 cm wide longitudinal groove in the
 center** (user measurement). Groove depth and cross-section remain unknown;

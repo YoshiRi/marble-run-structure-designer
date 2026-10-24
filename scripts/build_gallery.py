@@ -32,7 +32,9 @@ CONFIGS = [
     ("no-twists", {"twist_probability": 0.0}),
     ("more-curves", {"curve_ready_bias": 0.8}),
     ("three-exits", {"max_exits": 3, "split_probability": 0.7}),
-    ("taller", {"max_height_units": 30, "max_rails": 14}),
+    ("taller", {"max_height_units": 45, "max_rails": 14}),
+    # Official builds stack close to 10 blocks (user): up to 60 levels.
+    ("tallest", {"max_height_units": 60, "max_rails": 16}),
     ("compact", {"footprint_cm": (60.0, 60.0)}),
     # Seesaw diamonds (split and merge, design doc §6.1) on purpose.
     ("merges", {"seesaw_probability": 1.0, "weights": {"merges": 25.0}}),

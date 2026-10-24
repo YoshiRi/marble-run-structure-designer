@@ -23,7 +23,10 @@ from quadrilla_solver.validation import validate_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = load_catalog(ROOT / "catalog" / "parts.yaml")
-FOUR_WAY = ROOT / "examples" / "generated" / "generated-four-way.yaml"
+# A long center-hole rail (rail3) eligible for the S-curve, with a block
+# standing on it, and rails fed by explicit links (was the v2 "four-way"
+# sample, removed when the level scale changed).
+DENSE = ROOT / "tests" / "fixtures" / "dense-stack-long-rails.yaml"
 
 
 def _holes(rail):
@@ -69,21 +72,21 @@ def test_curves_need_load_above():
 
 
 def test_s_curve_substitution_keeps_the_layout_valid():
-    layout = load_layout(FOUR_WAY)
-    assert "rail7" in eligible_rails(layout)
+    layout = load_layout(DENSE)
+    assert "rail3" in eligible_rails(layout)
     leaves = tuple(PortRef(r.id, "end_b") for r in layout.rails
                    if "block_connected" not in r.hole_states.values())
     for turn in ("left", "right"):
-        swapped = substitute(layout, CATALOG, "rail7", turn)
-        rail = swapped.rail_map()["rail7"]
+        swapped = substitute(layout, CATALOG, "rail3", turn)
+        rail = swapped.rail_map()["rail3"]
         assert rail.rail_type == "s_curve" and rail.turn == turn
         result = validate_layout(swapped, CATALOG, source=PortRef("rail0", "end_a"), sinks=leaves)
         assert result.valid, result
         # The marble still rolls along the swapped rail.
-        assert any(n.startswith("rail7:") for n in result.connectivity.reachable_nodes)
+        assert any(n.startswith("rail3:") for n in result.connectivity.reachable_nodes)
         # Blocks standing on it turned with the tangent (+-30 degrees).
         before = {p.id: p.rotation_deg for p in layout.parts}
-        on_rail = [s.stack_part_ids[0] for s in swapped.supports if s.lower_rail_id == "rail7"]
+        on_rail = [s.stack_part_ids[0] for s in swapped.supports if s.lower_rail_id == "rail3"]
         assert on_rail
         for pid in on_rail:
             delta = (swapped.part_map()[pid].rotation_deg - before[pid]) % 360
@@ -91,7 +94,7 @@ def test_s_curve_substitution_keeps_the_layout_valid():
 
 
 def test_rails_fed_by_an_explicit_link_are_not_swapped():
-    layout = load_layout(FOUR_WAY)
+    layout = load_layout(DENSE)
     linked = {l.target.component_id for l in layout.route_links}
     assert linked and not linked & set(eligible_rails(layout))
 
@@ -111,9 +114,9 @@ def test_generator_uses_curves_when_the_inventory_has_them():
 def test_browser_routes_along_a_curve_like_python():
     from test_routing_browser_parity import NODE_SCRIPT
 
-    layout = substitute(load_layout(FOUR_WAY), CATALOG, "rail7", "left")
+    layout = substitute(load_layout(DENSE), CATALOG, "rail3", "left")
     data = layout_to_dict(layout)
-    sink = "rail9:end_b"
+    sink = "rail4:end_b"
     completed = subprocess.run(
         ["node", "-e", NODE_SCRIPT],
         input=json.dumps({"layout": data, "catalog": CATALOG.raw, "source": "rail0:end_a", "sink": sink}),
@@ -146,7 +149,7 @@ def test_twist_drops_through_its_center_into_the_column_below():
     # it (a short rail's holes, user-confirmed).
     spec = CATALOG.rails["spiral"]
     twist = layout.rail_map()["twist"]
-    assert [rail_hole_world(twist, CATALOG, i)[2] for i in range(3)] == [8, 8, 5]
+    assert [rail_hole_world(twist, CATALOG, i)[2] for i in range(3)] == [9, 9, 6]
     assert [spec.holes_cm[2] - x for x in spec.holes_cm[:2]] == [23.0, 18.0]
     # A block reaching up into the funnel (off its center) collides with it.
     from dataclasses import replace

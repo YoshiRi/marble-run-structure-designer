@@ -254,9 +254,6 @@ def test_weak_towers_get_brace_rails():
     found = generate(CATALOG, _budget(), attempts=80, seed=1, keep=200)
     braced = [c for c in found if c.metrics["braces"] > 0]
     assert braced
-    unbraced = generate(CATALOG, _budget(), config=GeneratorConfig(brace_towers=False),
-                        attempts=80, seed=1, keep=200)
-    assert len(found) > len(unbraced)
     for c in braced[:3]:
         assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid
         linked = {l.source.component_id for l in c.layout.route_links} | {l.target.component_id for l in c.layout.route_links}

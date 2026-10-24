@@ -13,7 +13,7 @@ python scripts/generate_layout.py --sets QD001,QD003,QD005 --attempts 600 \
     --seed 1 --keep 3 --out-dir examples/generated
 ```
 
-Options: `--max-height` (top rail level, units of 1.5 cm), `--footprint WxD`
+Options: `--max-height` (top rail level, levels of 1.2 cm; default 30 = 36 cm), `--footprint WxD`
 (cm), `--max-rails`, `--split-probability`, `--seed`, `--attempts`, `--keep`.
 
 ## What it builds
@@ -76,7 +76,7 @@ as a free-standing stack on its rail. Its top part is the source
 (`routing_query.source`, e.g. `c1_0_blue:top`); the viewer lists it as an
 input. `trim_input_rail: false` keeps the old input rail.
 
-A **weak tower** is a stack at one spot with 5 or more blocks (4u parts;
+A **weak tower** is a stack at one spot with 5 or more blocks (5-level parts;
 purple 1u pieces and foundations not counted) whose upper half is braced in
 one direction only: every rail touching it at or above half its height runs
 along one axis (a rail near the ground hardly braces the top). It topples
@@ -158,7 +158,7 @@ passes exactly through an existing column at one of its holes, the column is
 **split**: the lower half supports the new rail, the upper half stands on it.
 That is how upper columns come to stand on lower rails, on holes the marble does
 not roll over. Every rail keeps exactly two supports with an accepted hole pair.
-Fillers (foundation on the ground, 4u blocks, 1u purple drop blocks) are
+Fillers (foundation on the ground, 5-level blocks, 1-level purple drop blocks) are
 composed at the end; their feasibility is checked at every step.
 
 ## Constraints checked while building

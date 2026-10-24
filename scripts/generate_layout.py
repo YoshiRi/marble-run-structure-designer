@@ -32,7 +32,7 @@ def main() -> None:
     parser.add_argument("--sets", default="QD001,QD003,QD005",
                         help="comma-separated set ids whose combined contents bound the inventory "
                              "(add QDE6008AB05, the older Twist set, for curved rails)")
-    parser.add_argument("--max-height", type=int, default=24, help="top rail level in height units (1u = 1.5 cm)")
+    parser.add_argument("--max-height", type=int, default=30, help="top rail level in levels (1 level = 1.2 cm)")
     parser.add_argument("--footprint", type=_footprint, default=(90.0, 90.0), help="WIDTHxDEPTH in cm")
     parser.add_argument("--max-rails", type=int, default=12)
     parser.add_argument("--split-probability", type=float, default=0.45)

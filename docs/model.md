@@ -75,17 +75,17 @@ Current observations / assumptions:
 | purple drop block | 1 | observed |
 | wooden foundation block | 1 | observed |
 
-The discrete model retains integer height units. A measured standard block
-occupies **4 units = 6 cm** when assembled, giving a **derived scale of
-1 unit = 1.5 cm**. Its **1 cm connector protrusion** inserts into the mating
-piece and is not added to the effective stacked height.
+The discrete model uses integer height units (**levels**). **One level is
+1.2 cm** (user measurement, 2026-10-24): five rails or five purple blocks stack
+to the height of one standard block, which occupies **5 levels = 6 cm** when
+assembled. (Until 2026-10-24 the model used 1.5 cm and 4 levels per block, a
+measurement mistake; `scripts/migrate_levels.py` converted the layout files.)
+The block's **1 cm connector protrusion** inserts into the mating piece and is
+not added to the effective stacked height.
 
-The rail height of **1 unit** has been explicitly confirmed by the user.
-Using the derived unit scale, the viewer renders the rail as **1.5 cm** thick;
-this is a confirmed model height rather than an independent caliper measurement.
-Thin/foundation pieces are also modeled as 1 unit, but their physical heights
-have not been directly verified. The catalog records this distinction in
-`geometry_cm`.
+The rail height of **1 level (1.2 cm)** is confirmed by the user. The twist
+still spans 3 levels from its chute to its center hole.
+Purple drop blocks and the wooden foundation are 1 level each (user-confirmed).
 
 ## Ports and routes
 

@@ -1,43 +1,165 @@
 schema_version: '0.1'
 name: seesaw-split
-description: >-
-  A seesaw on the center hole of a center-hole long rail. A short rail above
-  drops the marble through its open hole 8 levels onto the seesaw, which sends
-  it to either arm; the host rail carries it outward: dive at hole 1 on the A
-  side, off end B on the B side (user, 2026-10-24).
+description: 'A seesaw on the center hole of a center-hole long rail. A short rail
+  above drops the marble through its open hole 8 levels onto the seesaw, which sends
+  it to either arm; the host rail carries it outward: dive at hole 1 on the A side,
+  off end B on the B side (user, 2026-10-24).'
 rails:
-  - {id: host, rail_type: straight_long_center, x_cm: -25, y_cm: 0, yaw_deg: 0, z_units: 4,
-     flow_direction: from_hole, flow_hole: 2, hole_states: {3: covered, 4: covered}}
-  - {id: feeder, rail_type: straight_short, x_cm: 0, y_cm: -20, yaw_deg: 90, z_units: 13,
-     flow_direction: a_to_b, hole_states: {0: covered, 1: covered}}
+- id: host
+  rail_type: straight_long_center
+  x_cm: -25
+  y_cm: 0
+  yaw_deg: 0
+  z_units: 4.0
+  flow_direction: from_hole
+  flow_hole: 2
+  hole_states:
+    3: covered
+    4: covered
+- id: feeder
+  rail_type: straight_short
+  x_cm: 0
+  y_cm: -20
+  yaw_deg: 90
+  z_units: 16.0
+  flow_direction: a_to_b
+  hole_states:
+    0: covered
+    1: covered
 parts:
-  - {id: h0_f, part_type: wooden_foundation, x_cm: -23, y_cm: 0, z_units: 0}
-  - {id: h0_p1, part_type: purple_drop, x_cm: -23, y_cm: 0, z_units: 1}
-  - {id: h0_p2, part_type: purple_drop, x_cm: -23, y_cm: 0, z_units: 2}
-  - {id: h0_p3, part_type: purple_drop, x_cm: -23, y_cm: 0, z_units: 3}
-  - {id: h4_f, part_type: wooden_foundation, x_cm: 23, y_cm: 0, z_units: 0}
-  - {id: h4_p1, part_type: purple_drop, x_cm: 23, y_cm: 0, z_units: 1}
-  - {id: h4_p2, part_type: purple_drop, x_cm: 23, y_cm: 0, z_units: 2}
-  - {id: h4_p3, part_type: purple_drop, x_cm: 23, y_cm: 0, z_units: 3}
-  - {id: seesaw, part_type: seesaw, x_cm: 0, y_cm: 0, z_units: 5, rotation_deg: 0}
-  - {id: f0_f, part_type: wooden_foundation, x_cm: 0, y_cm: -18, z_units: 0}
-  - {id: f0_b1, part_type: yellow, x_cm: 0, y_cm: -18, z_units: 1}
-  - {id: f0_b2, part_type: yellow, x_cm: 0, y_cm: -18, z_units: 5}
-  - {id: f0_b3, part_type: yellow, x_cm: 0, y_cm: -18, z_units: 9}
-  - {id: f3_f, part_type: wooden_foundation, x_cm: 0, y_cm: 5, z_units: 0}
-  - {id: f3_b1, part_type: yellow, x_cm: 0, y_cm: 5, z_units: 1}
-  - {id: f3_b2, part_type: yellow, x_cm: 0, y_cm: 5, z_units: 5}
-  - {id: f3_b3, part_type: yellow, x_cm: 0, y_cm: 5, z_units: 9}
+- id: h0_f
+  part_type: wooden_foundation
+  x_cm: -23
+  y_cm: 0
+  z_units: 0.0
+- id: h0_p1
+  part_type: purple_drop
+  x_cm: -23
+  y_cm: 0
+  z_units: 1.0
+- id: h0_p2
+  part_type: purple_drop
+  x_cm: -23
+  y_cm: 0
+  z_units: 2.0
+- id: h0_p3
+  part_type: purple_drop
+  x_cm: -23
+  y_cm: 0
+  z_units: 3.0
+- id: h4_f
+  part_type: wooden_foundation
+  x_cm: 23
+  y_cm: 0
+  z_units: 0.0
+- id: h4_p1
+  part_type: purple_drop
+  x_cm: 23
+  y_cm: 0
+  z_units: 1.0
+- id: h4_p2
+  part_type: purple_drop
+  x_cm: 23
+  y_cm: 0
+  z_units: 2.0
+- id: h4_p3
+  part_type: purple_drop
+  x_cm: 23
+  y_cm: 0
+  z_units: 3.0
+- id: seesaw
+  part_type: seesaw
+  x_cm: 0
+  y_cm: 0
+  z_units: 5.0
+  rotation_deg: 0
+- id: f0_f
+  part_type: wooden_foundation
+  x_cm: 0
+  y_cm: -18
+  z_units: 0.0
+- id: f0_b1
+  part_type: yellow
+  x_cm: 0
+  y_cm: -18
+  z_units: 1.0
+- id: f0_b2
+  part_type: yellow
+  x_cm: 0
+  y_cm: -18
+  z_units: 6.0
+- id: f0_b3
+  part_type: yellow
+  x_cm: 0
+  y_cm: -18
+  z_units: 11.0
+- id: f3_f
+  part_type: wooden_foundation
+  x_cm: 0
+  y_cm: 5
+  z_units: 0.0
+- id: f3_b1
+  part_type: yellow
+  x_cm: 0
+  y_cm: 5
+  z_units: 1.0
+- id: f3_b2
+  part_type: yellow
+  x_cm: 0
+  y_cm: 5
+  z_units: 6.0
+- id: f3_b3
+  part_type: yellow
+  x_cm: 0
+  y_cm: 5
+  z_units: 11.0
 supports:
-  - {name: host-0, upper_rail_id: host, upper_hole_index: 0, stack_part_ids: [h0_f, h0_p1, h0_p2, h0_p3]}
-  - {name: host-4, upper_rail_id: host, upper_hole_index: 4, stack_part_ids: [h4_f, h4_p1, h4_p2, h4_p3]}
-  - {name: seesaw, upper_rail_id: null, upper_hole_index: null, stack_part_ids: [seesaw],
-     lower_rail_id: host, lower_hole_index: 2}
-  - {name: feeder-0, upper_rail_id: feeder, upper_hole_index: 0, stack_part_ids: [f0_f, f0_b1, f0_b2, f0_b3]}
-  - {name: feeder-3, upper_rail_id: feeder, upper_hole_index: 3, stack_part_ids: [f3_f, f3_b1, f3_b2, f3_b3]}
+- name: host-0
+  upper_rail_id: host
+  upper_hole_index: 0
+  stack_part_ids:
+  - h0_f
+  - h0_p1
+  - h0_p2
+  - h0_p3
+- name: host-4
+  upper_rail_id: host
+  upper_hole_index: 4
+  stack_part_ids:
+  - h4_f
+  - h4_p1
+  - h4_p2
+  - h4_p3
+- name: seesaw
+  upper_rail_id: null
+  upper_hole_index: null
+  stack_part_ids:
+  - seesaw
+  lower_rail_id: host
+  lower_hole_index: 2
+- name: feeder-0
+  upper_rail_id: feeder
+  upper_hole_index: 0
+  stack_part_ids:
+  - f0_f
+  - f0_b1
+  - f0_b2
+  - f0_b3
+- name: feeder-3
+  upper_rail_id: feeder
+  upper_hole_index: 3
+  stack_part_ids:
+  - f3_f
+  - f3_b1
+  - f3_b2
+  - f3_b3
 route_links: []
 routing_query:
-  source: {component_id: feeder, port: end_a}
+  source:
+    component_id: feeder
+    port: end_a
   sinks:
-    - {component_id: host, port: "hole:1"}
-    - {component_id: host, port: end_b}
+  - component_id: host
+    port: hole:1
+  - component_id: host
+    port: end_b

@@ -21,7 +21,7 @@ def test_touching_blocks_are_accepted_but_overlapping_blocks_collide():
     touching = Layout("touching", parts=(
         PlacedPart("a", "blue", 0, 0, 0),
         PlacedPart("b", "blue", 4.5, 0, 0),   # face to face
-        PlacedPart("c", "blue", 0, 0, 4),     # stacked on a
+        PlacedPart("c", "blue", 0, 0, 5),     # stacked on a (a block is 5 levels)
     ))
     assert solid_collisions(touching, CATALOG) == ()
 

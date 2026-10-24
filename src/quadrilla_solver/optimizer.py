@@ -5,6 +5,10 @@ from functools import lru_cache
 
 from .catalog import SetInventory
 
+# Levels per standard block (catalog height_units.standard_block; 1 level =
+# 1.2 cm, a block 6 cm). Thin (purple) blocks are 1 level.
+STANDARD_BLOCK_UNITS = 5
+
 
 @dataclass(frozen=True)
 class GapRecipe:
@@ -31,14 +35,14 @@ class HeightSolution:
 def _gap_recipes(max_standard: int, max_thin: int) -> tuple[GapRecipe, ...]:
     """
     Enumerate material usages that can create two equal-height support columns
-    for one rail level. Standard block height=4, thin block height=1.
+    for one rail level. Standard block height=STANDARD_BLOCK_UNITS, thin=1.
     """
     best: dict[tuple[int, int], GapRecipe] = {}
     for total_s in range(max_standard + 1):
         for total_t in range(max_thin + 1):
             if total_s + total_t < 2:
                 continue
-            total_height = 4 * total_s + total_t
+            total_height = STANDARD_BLOCK_UNITS * total_s + total_t
             if total_height % 2:
                 continue
             target = total_height // 2
@@ -52,9 +56,9 @@ def _gap_recipes(max_standard: int, max_thin: int) -> tuple[GapRecipe, ...]:
                     right_t = total_t - left_t
                     if left_s + left_t == 0 or right_s + right_t == 0:
                         continue
-                    if 4 * left_s + left_t != target:
+                    if STANDARD_BLOCK_UNITS * left_s + left_t != target:
                         continue
-                    if 4 * right_s + right_t != target:
+                    if STANDARD_BLOCK_UNITS * right_s + right_t != target:
                         continue
                     found = GapRecipe(
                         standard_blocks=total_s,
