@@ -17,7 +17,7 @@ import yaml
 
 from quadrilla_solver.catalog import load_catalog
 from quadrilla_solver.generator import (
-    Budget, GeneratorConfig, generate, layout_id, layout_to_yaml_dict, resolve_set_paths,
+    Budget, GeneratorConfig, generate, layout_id, layout_to_yaml_dict, resolve_set_paths, score,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +34,8 @@ CONFIGS = [
     ("three-exits", {"max_exits": 3, "split_probability": 0.7}),
     ("taller", {"max_height_units": 30, "max_rails": 14}),
     ("compact", {"footprint_cm": (60.0, 60.0)}),
+    # Seesaw diamonds (split and merge, design doc §6.1) on purpose.
+    ("merges", {"seesaw_probability": 1.0, "weights": {"merges": 25.0}}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.
@@ -48,6 +50,7 @@ BUCKETS = [
     ("long roll", lambda m: m["min_exit_path_cm"] >= 200),
     ("compact", lambda m: m["footprint_area_cm2"] <= 2500),
     ("braced", lambda m: m.get("braces", 0) >= 1),
+    ("merged", lambda m: m.get("merges", 0) >= 1),
 ]
 
 
@@ -71,8 +74,21 @@ def main() -> None:
                 if lid not in pool or pool[lid][0].score < candidate.score:
                     pool[lid] = (candidate, label, seed)
             print(f"{label} seed {seed}: pool {len(pool)}")
+    # The same build turned, mirrored or with other filler blocks gets another
+    # layout ID: keep one per shape (rails and rotation-invariant metrics).
+    seen: dict[tuple, str] = {}
+    for lid, (candidate, _, _) in sorted(pool.items(), key=lambda kv: -score(kv[1][0].metrics)):
+        m = candidate.metrics
+        signature = (tuple(sorted(Counter(r.rail_type for r in candidate.layout.rails).items())),
+                     m["levels"], m["exits"], round(m["rolling_length_cm"]), round(m["footprint_area_cm2"]))
+        if signature in seen:
+            del pool[lid]
+        else:
+            seen[signature] = lid
+    print(f"pool after removing turned/mirrored copies: {len(pool)}")
 
-    ranked = sorted(pool.items(), key=lambda kv: kv[1][0].score, reverse=True)
+    # Rank by the default score: configurations may use their own weights.
+    ranked = sorted(pool.items(), key=lambda kv: score(kv[1][0].metrics), reverse=True)
     chosen: dict[str, tuple] = {}
     # At most a few per configuration so the set stays varied.
     cap = max(2, -(-args.count // len(CONFIGS)) + 1)

@@ -31,7 +31,12 @@ def test_score_is_the_sum_of_its_breakdown_and_ignores_unknown_weights():
     assert scoring.score(metrics, {"no_such_term": 99}) == scoring.score(metrics)
 
 
-def test_gallery_builds_have_no_merges_yet():
-    for path in sorted((ROOT / "examples" / "gallery").glob("mr-*.yaml"))[:4]:
+def test_merges_metric_matches_the_gallery_records():
+    paths = sorted((ROOT / "examples" / "gallery").glob("mr-*.yaml"))
+    merged = 0
+    for path in paths:
         data = yaml.safe_load(path.read_text())
-        assert scoring.layout_metrics(load_layout(path), CATALOG, layout_source(data))["merges"] == 0
+        merges = scoring.layout_metrics(load_layout(path), CATALOG, layout_source(data))["merges"]
+        assert merges == data["metrics"].get("merges", 0)
+        merged += merges > 0
+    assert merged >= 1  # the gallery covers the "merged" bucket

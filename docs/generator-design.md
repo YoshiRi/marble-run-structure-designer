@@ -314,6 +314,27 @@ other, and join both on the mirror plane at a block with two inlets
 of the official triangle build (two mirrored sides ending on one bottom
 rail).
 
+**First merge move: the seesaw diamond** (implemented). A branch that would
+dive through a rail hole may instead drop onto a seesaw (`seesaw_probability`,
+a search bias). The diamond is built as one unit:
+
+```text
+   rail R ── open hole ──┐  drop 6..12 levels (8 first)
+                         ▼
+   H  ──[blk]────◇seesaw◇────[blk]──   center-hole long rail, flows outward
+          │ yellow, front inward │      blocks hold H at holes 0 and 4
+   C  ──[ ▶ ]──────►●◄──────[ ◀ ]──   collector: both ends into the center hole
+                    │                   (the merge)
+          drop column (or a dive)
+```
+
+The two arms are mirror images, so they meet by construction. Measured
+(`scripts/eval_generator.py`, default weights): 6 % of kept builds have a
+merge (0 before). With the merge weight at 25: 24 %, and the footprint shrinks
+(2528 vs 2866 cm² without seesaws). Valid rate and time are unchanged. A
+diamond uses about 14 levels of height for one split and merge, so with
+today's weights it competes with chains of more drop stages.
+
 ### 6.2 Patterns
 
 A **pattern** is a template in local coordinates:
@@ -368,6 +389,8 @@ Each step adds a fixture and a test at its layer (§3).
 
 ## 8. Open questions
 
+- TODO (user, 2026-10-24): register several **good-design combinations** as
+  patterns (§6.2). Waiting for the user's examples.
 - The triangle's exact geometry: which holes sit at the corners, the side
   length, the level of each side, and whether there is a center column (the
   earlier note: rail ends on the triangle's sides, the middle hole on the
