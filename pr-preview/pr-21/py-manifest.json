@@ -1,0 +1,30 @@
+{
+  "files": [
+    "src/quadrilla_solver/__init__.py",
+    "src/quadrilla_solver/assembly.py",
+    "src/quadrilla_solver/assembly_plan.py",
+    "src/quadrilla_solver/catalog.py",
+    "src/quadrilla_solver/collision.py",
+    "src/quadrilla_solver/connectivity.py",
+    "src/quadrilla_solver/generator.py",
+    "src/quadrilla_solver/geometry.py",
+    "src/quadrilla_solver/inventory.py",
+    "src/quadrilla_solver/layout_stability.py",
+    "src/quadrilla_solver/model.py",
+    "src/quadrilla_solver/optimizer.py",
+    "src/quadrilla_solver/queries.py",
+    "src/quadrilla_solver/routing_geometry.py",
+    "src/quadrilla_solver/stability.py",
+    "src/quadrilla_solver/statics.py",
+    "src/quadrilla_solver/substitution.py",
+    "src/quadrilla_solver/validation.py",
+    "src/quadrilla_solver/web.py",
+    "catalog/parts.yaml",
+    "catalog/sets/index.yaml",
+    "catalog/sets/basic-qd001.yaml",
+    "catalog/sets/funny-function-qd003.yaml",
+    "catalog/sets/historical/twist-qde6008ab05.yaml",
+    "catalog/sets/speedway-qd101.yaml",
+    "catalog/sets/twist-and-rail-qd005.yaml"
+  ]
+}
