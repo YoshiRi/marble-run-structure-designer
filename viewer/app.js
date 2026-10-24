@@ -2156,6 +2156,175 @@
     }
   }
 
+  // ---- Generator profile: score weights and rules (from Python via
+  // generator-tunables.json) plus the dialog's settings; saved per browser.
+  const PROFILE_STORE = "marble-run-profiles-v1";
+  const GEN_FIELDS = ["genHeight", "genArea", "genExits", "genTwists", "genCurves", "genAttempts"];
+  let tunables = null;
+
+  async function loadTunables() {
+    if (tunables) return tunables;
+    try {
+      tunables = await (await fetch("generator-tunables.json")).json();
+    } catch (error) {
+      tunables = { weights: [], style: [] };
+    }
+    const weights = document.getElementById("genWeights");
+    weights.replaceChildren(...tunables.weights.map(t => {
+      const label = document.createElement("label");
+      label.title = t.help + " (" + t.source + ")";
+      const name = document.createElement("span");
+      name.innerHTML = '<b class="' + (t.sign > 0 ? "plus" : "minus") + '">' + (t.sign > 0 ? "+" : "−") + "</b> " + t.label;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.step = String(t.weight >= 1 ? 1 : t.weight >= 0.1 ? 0.05 : t.weight >= 0.01 ? 0.005 : 0.001);
+      input.value = String(t.weight);
+      input.dataset.key = t.key;
+      input.dataset.default = String(t.weight);
+      const help = document.createElement("small");
+      help.textContent = t.help;
+      label.append(name, input, help);
+      return label;
+    }));
+    const style = document.getElementById("genStyle");
+    style.replaceChildren(...tunables.style.map(t => {
+      const label = document.createElement("label");
+      label.title = t.help + " (" + t.source + ")";
+      const name = document.createElement("span");
+      name.textContent = t.label;
+      let input;
+      if (t.type === "bool") {
+        input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = Boolean(t.default);
+      } else if (t.type === "choice") {
+        input = document.createElement("select");
+        for (const c of t.choices) input.append(new Option(c, c));
+        input.value = t.default;
+      } else {
+        input = document.createElement("input");
+        input.type = "number";
+        input.min = String(t.min);
+        input.max = String(t.max);
+        input.step = String(t.step);
+        input.value = String(t.default);
+      }
+      input.dataset.key = t.key;
+      input.dataset.type = t.type;
+      input.dataset.default = String(t.default);
+      const help = document.createElement("small");
+      help.textContent = t.help;
+      label.append(name, input, help);
+      return label;
+    }));
+    refreshProfiles();
+    return tunables;
+  }
+
+  function readTunables() {
+    const weights = {}, style = {};
+    for (const input of document.querySelectorAll("#genWeights input")) {
+      const v = Number(input.value);
+      if (Number.isFinite(v) && v >= 0 && v !== Number(input.dataset.default)) weights[input.dataset.key] = v;
+    }
+    for (const input of document.querySelectorAll("#genStyle [data-key]")) {
+      const v = input.dataset.type === "bool" ? input.checked
+        : input.dataset.type === "choice" ? input.value : Number(input.value);
+      if (String(v) !== input.dataset.default) style[input.dataset.key] = v;
+    }
+    return { weights, style };
+  }
+
+  function currentProfile(name) {
+    return {
+      name, ...readTunables(),
+      settings: Object.fromEntries(GEN_FIELDS.map(id => [id, document.getElementById(id).value])),
+      sets: [...document.querySelectorAll("#genSets input:checked")].map(i => i.value),
+      noRightAngle: document.getElementById("genNoRightAngle").checked,
+    };
+  }
+
+  function applyProfile(profile) {
+    for (const input of document.querySelectorAll("#genWeights input")) {
+      input.value = String(profile?.weights?.[input.dataset.key] ?? input.dataset.default);
+    }
+    for (const input of document.querySelectorAll("#genStyle [data-key]")) {
+      const v = profile?.style?.[input.dataset.key];
+      const value = v === undefined ? input.dataset.default : String(v);
+      if (input.dataset.type === "bool") input.checked = value === "true";
+      else input.value = value;
+    }
+    if (profile?.settings) {
+      for (const id of GEN_FIELDS) if (profile.settings[id] != null) document.getElementById(id).value = profile.settings[id];
+    }
+    if (profile?.sets) {
+      for (const input of document.querySelectorAll("#genSets input")) input.checked = profile.sets.includes(input.value);
+    }
+    if (profile && "noRightAngle" in profile) document.getElementById("genNoRightAngle").checked = Boolean(profile.noRightAngle);
+  }
+
+  function savedProfiles() {
+    try { return JSON.parse(localStorage.getItem(PROFILE_STORE) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function storeProfiles(all) {
+    try { localStorage.setItem(PROFILE_STORE, JSON.stringify(all)); } catch (e) { /* unavailable */ }
+  }
+  function refreshProfiles(selected) {
+    const select = document.getElementById("genProfile");
+    const keep = selected ?? select.value;
+    select.replaceChildren(new Option("Default", ""), ...Object.keys(savedProfiles()).sort().map(n => new Option(n, n)));
+    select.value = savedProfiles()[keep] ? keep : "";
+  }
+
+  document.getElementById("genProfile").addEventListener("change", event => {
+    applyProfile(event.target.value ? savedProfiles()[event.target.value] : null);
+  });
+  document.getElementById("genProfileSave").addEventListener("click", () => {
+    const name = (window.prompt("Profile name", document.getElementById("genProfile").value || "my profile") || "").trim();
+    if (!name) return;
+    const all = savedProfiles();
+    all[name] = currentProfile(name);
+    storeProfiles(all);
+    refreshProfiles(name);
+  });
+  document.getElementById("genProfileDelete").addEventListener("click", () => {
+    const name = document.getElementById("genProfile").value;
+    if (!name) return;
+    const all = savedProfiles();
+    delete all[name];
+    storeProfiles(all);
+    refreshProfiles("");
+    applyProfile(null);
+  });
+  document.getElementById("genProfileReset").addEventListener("click", () => {
+    document.getElementById("genProfile").value = "";
+    applyProfile(null);
+  });
+  document.getElementById("genProfileExport").addEventListener("click", () => {
+    const profile = currentProfile(document.getElementById("genProfile").value || "profile");
+    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = (profile.name || "profile").replace(/[^\w-]+/g, "_") + ".json";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+  document.getElementById("genProfileImport").addEventListener("change", event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    file.text().then(text => {
+      const profile = JSON.parse(text);
+      const name = String(profile.name || file.name.replace(/\.json$/, ""));
+      const all = savedProfiles();
+      all[name] = { ...profile, name };
+      storeProfiles(all);
+      refreshProfiles(name);
+      applyProfile(all[name]);
+    }).catch(error => { document.getElementById("genStatus").textContent = "Import failed: " + error.message; });
+    event.target.value = "";
+  });
+
   function generateOptions() {
     const value = id => document.getElementById(id).value;
     const area = Number(value("genArea"));
@@ -2170,6 +2339,7 @@
       attempts: Number(value("genAttempts")),
       seed: Math.max(1, Math.trunc(Number(value("genSeed")) || 1)),
       keep: 6,
+      ...readTunables(),
     };
   }
 
@@ -2262,6 +2432,7 @@
 
   document.getElementById("generateOpen").addEventListener("click", async () => {
     await populateGenerateSets();
+    await loadTunables();
     document.getElementById("generateDialog").showModal();
   });
   document.getElementById("genClose").addEventListener("click", () => document.getElementById("generateDialog").close());

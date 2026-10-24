@@ -245,3 +245,15 @@ The first run downloads Pyodide (about 10 MB); later runs reuse it (about 4 s
 for 100 tries in a test browser). Results can be opened in the viewer (and its
 Build mode) or downloaded as YAML. After changing the package's file list, run
 `python scripts/make_py_manifest.py` (a test checks it).
+
+### Preferences (profiles)
+
+The Generate dialog's **Preferences** section lists every score term (reward
++ / penalty −, with its default weight, meaning and source) and the style
+rules that can be changed (max rails, overhang margin, highest block exit,
+bracing, exit style). Both lists come from the Python source
+(`SCORE_TERMS` in `generator.py`, `STYLE_TUNABLES` in `web.py`) through
+`viewer/generator-tunables.json`, so the dialog never drifts from the solver.
+Settings can be saved as named profiles in the browser, reset to the defaults,
+and exported/imported as JSON. A generated layout records the weights and rules
+it was made with under `generator`.
