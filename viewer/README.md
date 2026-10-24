@@ -229,3 +229,19 @@ takes about 1.5 ms, fast enough to re-check on every edit.
 
 The sidebar's Validation box shows the result for the loaded layout (in Build
 mode: what is placed so far, without the route).
+
+## Generate in the browser
+
+`Generate` in the toolbar opens a dialog (sets you have, right-angle splitter
+or not, max height, area, exits, twists, curves, effort, seed) and runs the
+**same Python generator** as `scripts/generate_layout.py`, in the browser:
+`viewer/generator-worker.js` loads Pyodide 0.28.3 from jsDelivr in a Web
+Worker, copies the files listed in `viewer/py-manifest.json` (the
+`quadrilla_solver` package, the catalog and the set files) into its file
+system, stands in js-yaml for PyYAML, and calls `quadrilla_solver.web`.
+Nothing is re-implemented in JavaScript, so generation rules stay in one place.
+
+The first run downloads Pyodide (about 10 MB); later runs reuse it (about 4 s
+for 100 tries in a test browser). Results can be opened in the viewer (and its
+Build mode) or downloaded as YAML. After changing the package's file list, run
+`python scripts/make_py_manifest.py` (a test checks it).

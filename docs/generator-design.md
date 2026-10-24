@@ -44,7 +44,7 @@ re-implement them.
 | --- | --- | --- |
 | 0 Catalog / model | What parts exist and how are they described? | `catalog/parts.yaml`, `model.py` |
 | 1 Physics | Is this layout physically possible, and where does the marble go? | validators: `assembly`, `collision`, `layout_stability`, `connectivity`, `routing_geometry` (+ `viewer/routing.js` mirror) |
-| 2 Construction | How do we propose a build, and how do we improve one? | `generator.py` (moves), rewrite passes (`substitution.py`, `balance`, `brace`) |
+| 2 Construction | How do we propose a build, and how do we improve one? | `generator.py` (moves), rewrite passes (`substitution.py`, `balance`, `brace`); runs in the browser unchanged via Pyodide (`web.py`) |
 | 3 Style rules | Which valid builds does this user accept at all? | `GeneratorConfig` hard limits |
 | 4 Preferences | Among accepted builds, which is better? | `score()` |
 | 5 Selection | Which few builds go to the gallery? | `scripts/build_gallery.py` |
