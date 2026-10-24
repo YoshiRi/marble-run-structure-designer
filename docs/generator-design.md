@@ -237,7 +237,91 @@ layer-3 checks (exit count and kind, parts within the sets). A saved edit
 records `edited_from` and a fresh bill of materials; stale metrics are
 dropped.
 
-## 6. Decisions
+## 6. Next: merges and patterns (from the official builds)
+
+A comparison of two official Quadrilla builds (box-art photos) with our
+gallery, 2026-10-24. The biggest gap is the shape of the flow, not parts or
+rules. Our builds are one tree that splits downward from one input. The
+official builds merge routes and hang them on a recognizable frame.
+
+| # | Official builds | Ours | Decision |
+| --- | --- | --- | --- |
+| 1 | several inputs (purple tops) | one input | later |
+| 2 | routes **merge**, e.g. both sides end on one bottom rail | never merge | **yes**: cohesion and complexity for few parts |
+| 3 | **triangle** of rails at 60° (plan view) | only by chance (never) | **pattern**, invoked on purpose |
+| 4 | **frame**: corner columns, rails as beams on every side at several levels | columns only where a route needs one | **pattern** |
+| 5 | **switchback**: parallel rails stacked between two columns, back and forth | rare | **pattern**; helps cohesion |
+| 6 | twist feeding a twist | single twists | later |
+| 7 | symmetry | random | later (score or pattern property) |
+| 8 | a collector rail at the bottom | scattered exits | follows from 2 |
+| 9 | red slope covers in front of block outlets | not modeled (`covered_slope` semantics open) | parts work (layer 0–1), needs measuring |
+| 10 | red seesaw | not in the catalog | parts work, needs measuring |
+
+### 6.1 Merge (join move)
+
+A new layer-2 move, **join**: instead of new structure, a branch continues on
+a rail another branch already uses.
+
+- (a) A block's side outlet lands on an existing rail below, upstream of that
+  rail's stop.
+- (b) A rail's stop hole drops onto an existing rail below, upstream of its
+  stop.
+- (c) The collector: the last rails of two branches both land on one bottom
+  rail. This is (a) or (b) aimed at the lowest rail.
+
+Rules:
+
+- **Physics decides the joint.** Construction proposes it; the routing layer
+  answers whether the edge exists. This is the "joint check" from §4, built
+  here for the first time.
+- **No loops.** The joined rail must not be upstream of the joining branch.
+- **Clearance.** The landing spot must be on the rail's rolled stretch or
+  extend it; marble clearance is checked as for any move.
+- **Score.** A new term, `merges` (+): the number of route nodes with two or
+  more incoming edges. Source: official builds. Merges also lower the exit
+  count, which `max_exits` already rewards indirectly.
+
+### 6.2 Patterns
+
+A **pattern** is a template in local coordinates:
+
+- columns (position, base, the levels they hold);
+- rails (type, the holes they sit on, level, flow);
+- **ports**, where the marble enters it and where it leaves.
+
+Patterns are data (one YAML file each under `catalog/patterns/`) so the user
+can teach new ones. Placing one takes an origin, a rotation and a top level.
+The parts go through the same per-move checks (inventory, footprint,
+collisions, clearance). The route is then built through its ports, and the
+whole build is validated as usual.
+
+Two ways to use a pattern:
+
+- **Skeleton first.** Pick the pattern when a build starts, then run the
+  cascade from its ports and let other routes join it (§6.1). This suits
+  frame and triangle, which shape the whole build. It is the "propose a
+  footprint first" search from §4, limited to known skeletons.
+- **Macro move.** Place the pattern where an outlet already is, mid-cascade.
+  This suits the switchback, which is a route segment.
+
+| Pattern | Shape | Parameters | Geometry known? |
+| --- | --- | --- | --- |
+| switchback | two columns one rail apart; rails stacked at steps of k levels with alternating flow; at each end a drop block in the column turns the marble back onto the next rail down | turns, rail kind, k | yes (straight rails, drop blocks) |
+| frame | four corner columns on a rectangle sized by rail hole spacing; one rail per side, each side lower than the last, so the marble circles the frame downward | rail kinds per side, step | yes (rectangle); spacing to choose |
+| triangle | three corner columns; rails on the three sides at 60°, at different levels | ? | **no: needs the user's geometry** |
+
+### 6.3 Order of work
+
+1. The join move and the `merges` term, in the current generator. A
+   gallery bucket "merged".
+2. The pattern format, placement and checks, with the switchback as the
+   first pattern (a macro move). A bucket "switchback".
+3. The frame, as a skeleton.
+4. The triangle, once its geometry is fixed.
+
+Each step adds a fixture and a test at its layer (§3).
+
+## 7. Decisions
 
 | Question | Decision |
 | --- | --- |
@@ -245,10 +329,15 @@ dropped.
 | Known layouts (triangle, ...) | add as **patterns** (macro moves) taught by the user |
 | Edit mode | port the validators to **JavaScript** with Python parity tests, like routing |
 | Learning from review marks | **not yet** |
+| Several inputs | **later** (official builds have them; low value now) |
+| Merging routes | **yes**, a join move (§6.1) |
+| First patterns | **switchback, frame, triangle** (§6.2) |
 
-## 7. Open questions
+## 8. Open questions
 
-- Which patterns first, and their exact geometry (the triangle: rail ends on
-  the triangle's sides, the middle hole on the perpendicular).
+- The triangle's exact geometry: which holes sit at the corners, the side
+  length, the level of each side, and whether there is a center column (the
+  earlier note: rail ends on the triangle's sides, the middle hole on the
+  perpendicular).
 - Bracing: keep as a pass, or turn into a pattern?
 - Search: stay top-down, or propose a footprint pattern first?
