@@ -93,17 +93,29 @@ def strip_supports(layout: Layout, catalog: PartCatalog, source: PortRef,
 class SupportSolver:
     def __init__(self, layout: Layout, catalog: PartCatalog, counts: Mapping[str, int],
                  source: PortRef, sinks: Sequence[PortRef], share_bonus: float = 2.0,
+                 tower_bonus: float = 4.0,
                  max_nodes: int = 20000, keep: int = 12):
         self.layout, self.catalog, self.source, self.sinks = layout, catalog, source, tuple(sinks)
         self.unit = float(catalog.raw["geometry_cm"]["height_unit"]["value"])
         self.block = catalog.standard_block_units()
         self.half = 2.25
         self.share_bonus, self.max_nodes, self.keep = share_bonus, max_nodes, keep
+        self.tower_bonus = tower_bonus
+        # Holes with a stack standing on them: a support right under one
+        # completes a tower (the score's shared_towers).
+        self.stood_on = {(s.lower_rail_id, s.lower_hole_index) for s in layout.supports
+                         if s.lower_rail_id is not None}
         used = Counter(r.rail_type for r in layout.rails) + Counter(p.part_type for p in layout.parts)
         self.free = Counter({k: max(0, v - used.get(k, 0)) for k, v in counts.items()})
         self.reached = reachable_nodes(layout, catalog, source)
         self.obstacles = self._obstacles()
+        # Spots worth sharing: existing parts, and holes of every rail (a
+        # column under one rail's hole that another rail also has above or
+        # below can become a tower through both).
         self.spots = [(p.x_cm, p.y_cm) for p in layout.parts]
+        self.hole_spots: dict[str, list[tuple[float, float]]] = {
+            r.id: [rail_hole_world(r, catalog, i)[:2] for i in range(len(catalog.rails[r.rail_type].holes_cm))]
+            for r in layout.rails}
 
     # ---- what a new column may not touch -----------------------------------
     def _obstacles(self) -> list[Solid]:
@@ -192,8 +204,11 @@ class SupportSolver:
 
     def _cost(self, c: Column) -> float:
         f, b, p = self._parts_of(c)
-        shared = any(hypot(c.x - sx, c.y - sy) < _ALIGN_CM for sx, sy in self.spots)
-        return f + b + p - (self.share_bonus if shared or c.base_rail is not None else 0.0)
+        shared = any(hypot(c.x - sx, c.y - sy) < _ALIGN_CM for sx, sy in self.spots) or any(
+            hypot(c.x - sx, c.y - sy) < _ALIGN_CM
+            for rid, spots in self.hole_spots.items() if rid != c.rail_id for sx, sy in spots)
+        tower = self.tower_bonus if (c.rail_id, c.hole) in self.stood_on else 0.0
+        return f + b + p - (self.share_bonus if shared or c.base_rail is not None else 0.0) - tower
 
     def _choices(self, rail) -> list[tuple[float, tuple[Column, ...]]]:
         spec = self.catalog.rails[rail.rail_type]
