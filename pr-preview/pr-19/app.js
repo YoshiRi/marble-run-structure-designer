@@ -2581,13 +2581,51 @@
     status.textContent = (lastValidation?.valid ? "✓ valid" : "✗ " + (lastValidation?.reasons?.[0] || "not valid")) +
       (edit.note ? " · " + edit.note : "");
     popup.replaceChildren(close, ...editActions(found), status);
+    placeEditPopup();
+  }
+
+  // Screen rectangle (in the viewport panel) covered by the selected part.
+  function selectedScreenBox() {
+    const rect = canvas.getBoundingClientRect();
+    const host = canvas.parentElement.getBoundingClientRect();
+    const k = rect.width / engine.getRenderWidth();
+    const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+    const transform = scene.getTransformMatrix();
+    let box = null;
+    for (const mesh of scene.meshes) {
+      if (mesh.isDisposed() || mesh.metadata?.owner !== edit.selected) continue;
+      mesh.computeWorldMatrix(true);
+      for (const v of mesh.getBoundingInfo().boundingBox.vectorsWorld) {
+        const p = BABYLON.Vector3.Project(v, BABYLON.Matrix.Identity(), transform, viewport);
+        const x = rect.left - host.left + p.x * k, y = rect.top - host.top + p.y * k;
+        box = box ? { l: Math.min(box.l, x), r: Math.max(box.r, x), t: Math.min(box.t, y), b: Math.max(box.b, y) }
+          : { l: x, r: x, t: y, b: y };
+      }
+    }
+    return box;
+  }
+
+  // Put the popup beside the selected part, never on it: right, left,
+  // below or above, whichever fits; tap point as a fallback.
+  function placeEditPopup() {
+    const popup = document.getElementById("editPopup");
+    if (popup.hidden) return;
     const host = popup.parentElement.getBoundingClientRect();
-    const w = popup.offsetWidth, h = popup.offsetHeight;
-    let x = edit.popupAt.x + 14, y = edit.popupAt.y + 14;
-    if (x + w > host.width - 8) x = Math.max(8, edit.popupAt.x - w - 14);
-    if (y + h > host.height - 8) y = Math.max(8, host.height - h - 8);
-    popup.style.left = x + "px";
-    popup.style.top = y + "px";
+    const w = popup.offsetWidth, h = popup.offsetHeight, gap = 16, pad = 8;
+    const box = selectedScreenBox() ||
+      { l: edit.popupAt.x, r: edit.popupAt.x, t: edit.popupAt.y, b: edit.popupAt.y };
+    const clampY = y => Math.max(pad, Math.min(host.height - h - pad, y));
+    const clampX = x => Math.max(pad, Math.min(host.width - w - pad, x));
+    const midY = (box.t + box.b) / 2 - h / 2, midX = (box.l + box.r) / 2 - w / 2;
+    const options = [
+      { ok: box.r + gap + w <= host.width - pad, x: box.r + gap, y: clampY(midY) },
+      { ok: box.l - gap - w >= pad, x: box.l - gap - w, y: clampY(midY) },
+      { ok: box.b + gap + h <= host.height - pad, x: clampX(midX), y: box.b + gap },
+      { ok: box.t - gap - h >= pad, x: clampX(midX), y: box.t - gap - h },
+    ];
+    const pick = options.find(o => o.ok) || { x: clampX(box.r + gap), y: clampY(box.b + gap) };
+    popup.style.left = pick.x + "px";
+    popup.style.top = pick.y + "px";
   }
 
   function setEditMode(on) {
@@ -3061,7 +3099,8 @@
     canvas.style.cursor = pick?.hit ? "pointer" : "";
   });
 
-  window.addEventListener("resize", () => engine.resize());
+  window.addEventListener("resize", () => { engine.resize(); if (edit.on) placeEditPopup(); });
+  camera.onViewMatrixChangedObservable.add(() => { if (edit.on && edit.popupAt) placeEditPopup(); });
   engine.runRenderLoop(() => scene.render());
   initialize();
 })();

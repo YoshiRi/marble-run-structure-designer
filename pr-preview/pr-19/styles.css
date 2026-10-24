@@ -285,3 +285,4 @@ button, select, input { font: inherit; }
 .edit-popup .popup-status.ok { color: #4ade80; }
 .edit-popup .popup-status.bad { color: #f87171; }
 .edit-popup p.small-note { display: none; }
+.edit-popup .popup-status { overflow-wrap: anywhere; }
