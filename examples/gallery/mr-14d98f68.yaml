@@ -1,13 +1,13 @@
 schema_version: '0.1'
 layout_id: mr-14d98f68
 name: mr-14d98f68
-description: Gallery candidate (frames, seed 2).
+description: Gallery candidate (taller, seed 2).
 generator:
   sets:
   - OWNED
   exclude:
   - red_right_angle
-  config: frames
+  config: taller
   seed: 2
   score: 139.3
 metrics:

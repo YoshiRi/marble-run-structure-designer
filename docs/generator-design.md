@@ -456,7 +456,7 @@ and twists, so they lose a few points under today's weights. The gallery has
 a `switchbacks` configuration and bucket. The defaults are unchanged until
 the user reviews them.
 
-**Frame** (`frame_probability`, `frame_sides` 6, `frame_min_side_cm` 18;
+**Frame** (`frame_probability`, `frame_min_height_units` 45, `frame_sides` 6, `frame_min_side_cm` 18;
 built 2026-10-25). A run of drops that each turn the marble 90° the same
 way. The first two sides are free (at least 18 cm); the third fixes the
 rectangle, so later rails must stop exactly on its corners. It is a macro
@@ -475,7 +475,8 @@ measure it. Measured (owned inventory, 3 seeds):
 
 At p 1 and 45 levels, 30 % of the kept builds have three or more turns in a
 row. A frame takes over the drops, so merges and switchbacks almost vanish.
-A twist breaks the run. Off by default until the user reviews it.
+A twist breaks the run. Default (user, 2026-10-25): on (p 1) only in tall
+builds, `max_height_units` ≥ `frame_min_height_units` (45).
 
 ### 6.4 Order of work
 
