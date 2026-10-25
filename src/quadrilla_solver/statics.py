@@ -44,15 +44,14 @@ class SupportConnection:
 @dataclass(frozen=True)
 class RailBody:
     """
-    A straight rail represented as a rigid 1D beam under vertical gravity load.
-
-    The MVP statics model intentionally supports exactly two downward supports.
+    A straight rail represented as a rigid 1D beam under vertical gravity load,
+    on two or more downward supports (columns).
     """
 
     id: str
     length_cm: float
     mass_g: float
-    supports: tuple[SupportConnection, SupportConnection]
+    supports: tuple[SupportConnection, ...]
     com_cm: float | None = None
     point_masses: tuple[PointMass, ...] = ()
 
@@ -81,8 +80,11 @@ class RailStatics:
     stability_margin_cm: float
     normalized_margin: float
     stable: bool
-    reactions: tuple[SupportReaction, SupportReaction]
+    reactions: tuple[SupportReaction, ...]
     applied_loads: tuple[AppliedLoad, ...]
+    # Reactions of the outermost two supports carrying everything (the tipping
+    # case; on two supports the same as `reactions`). The 20 g rule uses them.
+    outer_reactions_n: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -118,9 +120,11 @@ def _validate_rail(rail: RailBody) -> None:
         raise ValueError(f"{rail.id}: com_cm outside rail")
 
     xs = [s.x_cm for s in rail.supports]
+    if len(xs) < 2:
+        raise ValueError(f"{rail.id}: at least two supports needed")
     if not all(0.0 <= x <= rail.length_cm for x in xs):
         raise ValueError(f"{rail.id}: support outside rail")
-    if abs(xs[0] - xs[1]) <= 1e-12:
+    if max(xs) - min(xs) <= 1e-12:
         raise ValueError(f"{rail.id}: supports must be at distinct positions")
 
     for p in rail.point_masses:
@@ -138,29 +142,44 @@ def _validate_rail(rail: RailBody) -> None:
             )
 
 
+def _pair_reactions(loads, left_x: float, right_x: float, total: float) -> tuple[float, float]:
+    """Reactions of two supports at left_x < right_x carrying all loads."""
+    if total <= 0:
+        return 0.0, 0.0
+    right = sum(load.force_n * (load.x_cm - left_x) for load in loads) / (right_x - left_x)
+    return total - right, right
+
+
 def analyze_structure(
     bodies: Mapping[str, RailBody],
     *,
     reaction_tolerance_n: float = 1e-9,
+    max_scenarios: int = 64,
 ) -> StructureStatics:
     """
     Propagate gravity loads from upper rails to lower rails.
 
     Assumptions:
     - vertical quasi-static loads only
-    - each rail is a rigid 1D beam
-    - exactly two supports per rail
-    - supports carry compression only
+    - each rail is a rigid 1D beam on two or more supports (compression only)
     - no friction, lateral force, rail bending, or joint pull-out
     - a support column's own mass may be represented by transfer_mass_g
 
-    A rail is stable when both solved support reactions are non-negative.
-    Equivalently, its effective center of mass lies within the two support
-    positions. Reactions are then passed downward as point loads.
+    A rail is stable when its effective center of mass lies within its
+    outermost supports (moments about each support: the side it would tip to
+    has a support), whatever the number of supports.
+
+    On two supports the reactions follow from equilibrium. On more, the
+    split is not determined (statically indeterminate: it depends on tiny
+    height differences). Every extreme split is checked: the load carried by
+    one pair of supports that brackets the center of mass, the others
+    passing on only their own column's weight. The structure is valid only if
+    the whole structure is stable in every such scenario (conservative).
+    The rails reported are those of the first failing scenario, else of the
+    first scenario (each rail on its first bracketing pair).
 
     The support graph must be acyclic.
     """
-
     if not bodies:
         return StructureStatics(
             valid=True,
@@ -169,12 +188,36 @@ def analyze_structure(
             total_ground_force_n=0.0,
             reasons=(),
         )
-
     for key, rail in bodies.items():
         if key != rail.id:
             raise ValueError(f"mapping key {key!r} != RailBody.id {rail.id!r}")
         _validate_rail(rail)
 
+    results: list[StructureStatics] = []
+
+    def explore(assign: dict[str, int]) -> None:
+        if len(results) >= max_scenarios:
+            return
+        result, branch, options = _solve_scenario(bodies, assign, reaction_tolerance_n)
+        if branch is None:
+            results.append(result)
+            return
+        for i in range(options):
+            explore({**assign, branch: i})
+
+    explore({})
+    failing = next((r for r in results if not r.valid), None)
+    return failing or results[0]
+
+
+def _solve_scenario(
+    bodies: Mapping[str, RailBody],
+    assign: Mapping[str, int],
+    reaction_tolerance_n: float,
+) -> tuple[StructureStatics, str | None, int]:
+    """One load-propagation pass. A rail with 3+ supports uses the bracketing
+    pair `assign[rail]`; the first such rail without a choice is returned with
+    its number of options (and the pass uses option 0 for it)."""
     # Dependency direction is upper child -> lower target. A lower rail cannot
     # be solved until all rails loading it have been solved.
     parents_by_child: dict[str, set[str]] = {k: set() for k in bodies}
@@ -209,6 +252,8 @@ def analyze_structure(
     solved: dict[str, RailStatics] = {}
     ground: list[GroundReaction] = []
     reasons: list[str] = []
+    branch: str | None = None
+    options = 0
 
     while ready:
         rail_id = ready.pop(0)
@@ -241,23 +286,10 @@ def analyze_structure(
                 sum(load.force_n * load.x_cm for load in loads) / total_force
             )
 
-        s0, s1 = rail.supports
-        if s0.x_cm <= s1.x_cm:
-            left, right = s0, s1
-        else:
-            left, right = s1, s0
-
+        ordered = sorted(rail.supports, key=lambda s: s.x_cm)
+        left, right = ordered[0], ordered[-1]
         span = right.x_cm - left.x_cm
-
-        if total_force <= 0:
-            left_reaction = right_reaction = 0.0
-        else:
-            # Moment equilibrium about left support.
-            right_reaction = (
-                sum(load.force_n * (load.x_cm - left.x_cm) for load in loads)
-                / span
-            )
-            left_reaction = total_force - right_reaction
+        outer = _pair_reactions(loads, left.x_cm, right.x_cm, total_force)
 
         margin = min(
             effective_com - left.x_cm,
@@ -265,8 +297,8 @@ def analyze_structure(
         )
         normalized = margin / (span / 2.0)
         stable = (
-            left_reaction >= -reaction_tolerance_n
-            and right_reaction >= -reaction_tolerance_n
+            outer[0] >= -reaction_tolerance_n
+            and outer[1] >= -reaction_tolerance_n
         )
 
         if not stable:
@@ -275,7 +307,27 @@ def analyze_structure(
                 f"supports={left.x_cm:.6g},{right.x_cm:.6g}"
             )
 
-        reactions_raw = ((left, left_reaction), (right, right_reaction))
+        # Which pair carries the load: on two supports, both; on more, the
+        # pairs that bracket the center of mass (or the outer pair if none).
+        if len(ordered) == 2:
+            pair = (0, 1)
+        else:
+            pairs = [
+                (i, j)
+                for i in range(len(ordered))
+                for j in range(i + 1, len(ordered))
+                if ordered[i].x_cm - 1e-9 <= effective_com <= ordered[j].x_cm + 1e-9
+                and ordered[j].x_cm - ordered[i].x_cm > 1e-12
+            ] or [(0, len(ordered) - 1)]
+            if rail_id in assign:
+                pair = pairs[min(assign[rail_id], len(pairs) - 1)]
+            else:
+                if branch is None and len(pairs) > 1:
+                    branch, options = rail_id, len(pairs)
+                pair = pairs[0]
+        carried = dict(zip(pair, _pair_reactions(loads, ordered[pair[0]].x_cm, ordered[pair[1]].x_cm,
+                                                  total_force)))
+        reactions_raw = tuple((support, carried.get(i, 0.0)) for i, support in enumerate(ordered))
         reactions: list[SupportReaction] = []
 
         for support, reaction in reactions_raw:
@@ -320,8 +372,9 @@ def analyze_structure(
             stability_margin_cm=margin,
             normalized_margin=normalized,
             stable=stable,
-            reactions=(reactions[0], reactions[1]),
+            reactions=tuple(reactions),
             applied_loads=tuple(loads),
+            outer_reactions_n=outer,
         )
 
         for parent in parents_by_child[rail_id]:
@@ -340,4 +393,4 @@ def analyze_structure(
         ground_reactions=tuple(ground),
         total_ground_force_n=sum(x.force_n for x in ground),
         reasons=tuple(reasons),
-    )
+    ), branch, options

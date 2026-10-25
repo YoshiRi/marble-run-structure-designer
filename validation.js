@@ -694,7 +694,16 @@
 
   const weightN = mass => mass / 1000 * GRAVITY;
 
-  function analyzeStructure(bodies) {
+  function pairReactions(loads, leftX, rightX, total) {
+    if (total <= 0) return [0, 0];
+    const right = loads.reduce((a, l) => a + l.force_n * (l.x_cm - leftX), 0) / (rightX - leftX);
+    return [total - right, right];
+  }
+
+  // Mirror of statics.analyze_structure: a rail tips unless its center of mass
+  // lies within its outermost supports; with 3+ supports every bracketing pair
+  // is tried as the one carrying the load, and all scenarios must pass.
+  function analyzeStructure(bodies, maxScenarios = 64) {
     const ids = Object.keys(bodies);
     if (!ids.length) return { valid: true, rails: {}, ground_reactions: [], total_ground_force_n: 0, reasons: [] };
     for (const id of ids) {
@@ -702,12 +711,25 @@
       const com = rail.com_cm == null ? rail.length_cm / 2 : rail.com_cm;
       if (!(com >= 0 && com <= rail.length_cm)) throw new Error(id + ": com_cm outside rail");
       const xs = rail.supports.map(s => s.x_cm);
+      if (xs.length < 2) throw new Error(id + ": at least two supports needed");
       if (!xs.every(x => x >= 0 && x <= rail.length_cm)) throw new Error(id + ": support outside rail");
-      if (Math.abs(xs[0] - xs[1]) <= 1e-12) throw new Error(id + ": supports must be at distinct positions");
+      if (Math.max(...xs) - Math.min(...xs) <= 1e-12) throw new Error(id + ": supports must be at distinct positions");
       for (const p of rail.point_masses) {
         if (!(p.x_cm >= 0 && p.x_cm <= rail.length_cm)) throw new Error(id + ": point mass " + p.name + " outside rail");
       }
     }
+    const results = [];
+    const explore = assign => {
+      if (results.length >= maxScenarios) return;
+      const [result, branch, options] = solveScenario(bodies, ids, assign);
+      if (branch == null) { results.push(result); return; }
+      for (let i = 0; i < options; i++) explore({ ...assign, [branch]: i });
+    };
+    explore({});
+    return results.find(r => !r.valid) || results[0];
+  }
+
+  function solveScenario(bodies, ids, assign) {
     const parentsByChild = Object.fromEntries(ids.map(k => [k, new Set()]));
     const childrenByParent = Object.fromEntries(ids.map(k => [k, new Set()]));
     for (const rail of Object.values(bodies)) {
@@ -727,6 +749,7 @@
     const solved = {};
     const ground = [];
     const reasons = [];
+    let branch = null, options = 0;
     while (ready.length) {
       const id = ready.shift();
       const rail = bodies[id];
@@ -741,21 +764,35 @@
       loads.push(...incoming[id]);
       const totalForce = loads.reduce((a, l) => a + l.force_n, 0);
       const effective = totalForce <= 0 ? com : loads.reduce((a, l) => a + l.force_n * l.x_cm, 0) / totalForce;
-      const [s0, s1] = rail.supports;
-      const [left, right] = s0.x_cm <= s1.x_cm ? [s0, s1] : [s1, s0];
+      const ordered = rail.supports.slice().sort((a, b) => a.x_cm - b.x_cm);
+      const left = ordered[0], right = ordered[ordered.length - 1];
       const span = right.x_cm - left.x_cm;
-      let leftR = 0, rightR = 0;
-      if (totalForce > 0) {
-        rightR = loads.reduce((a, l) => a + l.force_n * (l.x_cm - left.x_cm), 0) / span;
-        leftR = totalForce - rightR;
-      }
+      const outer = pairReactions(loads, left.x_cm, right.x_cm, totalForce);
       const margin = Math.min(effective - left.x_cm, right.x_cm - effective);
-      const stable = leftR >= -1e-9 && rightR >= -1e-9;
+      const stable = outer[0] >= -1e-9 && outer[1] >= -1e-9;
       if (!stable) {
         reasons.push("tipping:" + id + ":com=" + g6(effective) + ":supports=" + g6(left.x_cm) + "," + g6(right.x_cm));
       }
+      let pair;
+      if (ordered.length === 2) pair = [0, 1];
+      else {
+        let pairs = [];
+        for (let i = 0; i < ordered.length; i++) for (let j = i + 1; j < ordered.length; j++) {
+          if (ordered[i].x_cm - 1e-9 <= effective && effective <= ordered[j].x_cm + 1e-9
+              && ordered[j].x_cm - ordered[i].x_cm > 1e-12) pairs.push([i, j]);
+        }
+        if (!pairs.length) pairs = [[0, ordered.length - 1]];
+        if (id in assign) pair = pairs[Math.min(assign[id], pairs.length - 1)];
+        else {
+          if (branch == null && pairs.length > 1) { branch = id; options = pairs.length; }
+          pair = pairs[0];
+        }
+      }
+      const pr = pairReactions(loads, ordered[pair[0]].x_cm, ordered[pair[1]].x_cm, totalForce);
+      const carried = new Map([[pair[0], pr[0]], [pair[1], pr[1]]]);
       const reactions = [];
-      for (const [support, reaction] of [[left, leftR], [right, rightR]]) {
+      ordered.forEach((support, i) => {
+        const reaction = carried.has(i) ? carried.get(i) : 0;
         const transferred = Math.max(0, reaction) + weightN(support.transfer_mass_g);
         reactions.push({ support, force_n: reaction, transmitted_force_n: transferred });
         if (support.target_id == null) {
@@ -764,11 +801,12 @@
           incoming[support.target_id].push({ source: id + ":" + (support.name || "support"),
             x_cm: support.target_x_cm, force_n: transferred });
         }
-      }
+      });
       solved[id] = {
         rail_id: id, total_force_n: totalForce, equivalent_mass_g: totalForce / GRAVITY * 1000,
         effective_com_cm: effective, support_span_cm: span, stability_margin_cm: margin,
         normalized_margin: margin / (span / 2), stable, reactions, applied_loads: loads,
+        outer_reactions_n: outer,
       };
       for (const parent of parentsByChild[id]) {
         remaining[parent] -= 1;
@@ -778,11 +816,11 @@
     if (Object.keys(solved).length !== ids.length) {
       reasons.push("support_cycle:" + ids.filter(k => !(k in solved)).sort().join(","));
     }
-    return {
+    return [{
       valid: Object.keys(solved).length === ids.length && Object.values(solved).every(x => x.stable),
       rails: solved, ground_reactions: ground,
       total_ground_force_n: ground.reduce((a, x) => a + x.force_n, 0), reasons,
-    };
+    }, branch, options];
   }
 
   function layoutStatics(layout, catalog) {
@@ -812,8 +850,8 @@
       if (!spec) { reasons.push("unknown_rail:" + rail.id + ":" + rail.rail_type); continue; }
       if (spec.mass_g == null) { reasons.push("unknown_mass:" + rail.id + ":" + rail.rail_type); continue; }
       const supports = byUpper.get(rail.id) || [];
-      if (supports.length !== 2) {
-        reasons.push("statics_requires_exactly_two_supports:" + rail.id + ":" + supports.length);
+      if (supports.length < 2) {
+        reasons.push("statics_needs_two_supports:" + rail.id + ":" + supports.length);
         continue;
       }
       const converted = [];
@@ -847,7 +885,9 @@
         converted.push({ x_cm: spec.holes_cm[uh], target_id: s.lower_rail_id ?? null, target_x_cm: targetX,
           transfer_mass_g: transfer, name: s.name || rail.id + "_support_" + idx });
       });
-      if (converted.length === 2) {
+      if (converted.length === supports.length) {
+        // Two or more columns: analyzeStructure checks the outermost pair and
+        // every extreme split of the load (mirror of layout_stability).
         bodies[rail.id] = { id: rail.id, length_cm: spec.length_cm, mass_g: spec.mass_g,
           supports: converted, com_cm: spec.com_cm, point_masses: points.get(rail.id) || [] };
       }
