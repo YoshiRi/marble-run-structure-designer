@@ -41,6 +41,14 @@
       "source": "official builds"
     },
     {
+      "key": "shared_towers",
+      "sign": 1,
+      "weight": 3.0,
+      "label": "Shared towers",
+      "help": "per spot where columns hold two or more rails one above the other",
+      "source": "user idea (cohesion)"
+    },
+    {
       "key": "columns_on_rails",
       "sign": 1,
       "weight": 2.0,

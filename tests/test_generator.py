@@ -296,3 +296,13 @@ def test_seesaw_diamond_builds_validate_and_merge():
         assert {"from_hole", "to_hole"} <= rails
         result = validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks)
         assert result.valid
+
+
+def test_alignment_schedule_is_off_early_and_grows():
+    import random
+    from quadrilla_solver.generator import Budget, CascadeGenerator, GeneratorConfig, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005"]))
+    gen = CascadeGenerator(CATALOG, budget, GeneratorConfig(align_weight=4, align_start_depth=2,
+                                                            align_full_depth=6), random.Random(0))
+    assert gen._align_pull(1) == 0 and gen._align_pull(2) == 0
+    assert 0 < gen._align_pull(4) < gen._align_pull(6) == 4 == gen._align_pull(9)

@@ -364,7 +364,57 @@ Two ways to use a pattern:
 | frame | four corner columns on a rectangle sized by rail hole spacing; one rail per side, each side lower than the last, so the marble circles the frame downward | rail kinds per side, step | yes (rectangle); spacing to choose |
 | triangle | three corner columns; rails on the three sides at 60°, at different levels | ? | **no: needs the user's geometry** |
 
-### 6.3 Order of work
+### 6.3 Route first, supports after (two phases)
+
+Proposal (user, 2026-10-24): lay the route first while ignoring
+buildability, then add supports. **The vertical joints of the route cannot
+be deferred.** In Quadrilla the drop from one rail to the next *is* a block
+column, quantized in 5-level blocks and 1-level purples. So the route phase
+keeps the joint geometry exact. What can be deferred is everything the marble
+never touches: the second support of each rail, plain columns, braces and
+counterweights. In the gallery that is 77 % of the parts (9 of about 15
+columns per build).
+
+**Support phase** (`supports.py`, first step built). It strips the columns
+the marble never touches, then solves the supports for all rails at once
+(depth-first, branch-and-bound):
+
+- each rail gets exactly two supports on a valid hole pair;
+- a column stands on the ground or on a lower rail's aligned hole (a tower);
+- columns stay out of the marble's path and falls;
+- the solver keeps parts minimal and prefers shared spots;
+- the best few solutions are validated and ranked with weak towers.
+
+Measured (`scripts/eval_supports.py`, `scripts/eval_generator.py` with
+`solve_supports`):
+
+| | parts | footprint cm² | unused area | weak towers | valid | ms/try |
+| --- | --- | --- | --- | --- | --- | --- |
+| 30 levels, greedy | 32.6 | 2840 | 156 | 0 | 78 % | 14 |
+| 30 levels, solved | 28.6 | 2506 | 68 | 0.02 | 68 % | 36 |
+| 45 levels, greedy | 59.7 | 3803 | 225 | 1.1 | 70 % | 42 |
+| 45 levels, solved | 49.8 | 3052 | 138 | 1.2 | 74 % | 108 |
+
+The gain comes from shorter columns standing on lower rails, and from
+dropping the greedy braces. Keeping the braces and re-solving changes
+nothing. Shared spots (towers and frames) hardly appear, because the route
+rarely puts holes of different rails above each other. So **frames have to
+be planned in the route phase** (patterns: switchback, frame), and the
+support phase then turns the aligned holes into towers. `solve_supports` is
+off by default for now (2.6x slower; lower valid rate at 30 levels).
+
+**Search schedule** (user idea, 2026-10-25): branch early, align later.
+`align_weight` makes later placements try rails whose holes lie over or
+under existing holes first (2D distances, ready for a triangular lattice);
+`early_split_boost` raises the splitter chance near the top. The score gains
+`shared_towers` (+3 per spot where columns hold two or more rails one above
+the other). Measured: the bias barely changes alignment (4.6 aligned hole
+pairs per build at weight 8 vs 3.9 at 0) and the towers stay around 2. The
+moves leave too few choices: the rail type, a hole and the direction. With
+fixed rail lengths, a rail's other holes rarely land over earlier holes. Off
+by default. Alignment has to come from moves that create it: patterns.
+
+### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
    gallery bucket "merged".
