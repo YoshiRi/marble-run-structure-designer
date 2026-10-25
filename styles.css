@@ -306,3 +306,37 @@ button, select, input { font: inherit; }
 .review-popup textarea { background: rgba(30, 41, 59, .95); color: #e2e8f0; border-color: rgba(148, 163, 184, .35); margin: 4px 0 6px; resize: vertical; }
 .review-popup h3 { font-size: 13px; }
 .edit-popup button[aria-pressed="true"] { background: rgba(59, 130, 246, .35); border-color: #60a5fa; color: #fff; }
+
+/* Play mode: full screen, only Roll and a hold-to-exit button. */
+body.play .toolbar,
+body.play .sidebar,
+body.play .overlay-controls,
+body.play .ground-level-label,
+body.play .parts-board,
+body.play .edit-popup { display: none !important; }
+body.play { overflow: hidden; }
+body.play #app { position: fixed; inset: 0; height: 100vh; height: 100dvh; min-height: 0; }
+body.play .main-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+body.play .viewport-panel { height: auto; }
+.play-bar[hidden] { display: none; }
+.play-bar { position: absolute; inset: 0; pointer-events: none; }
+.play-roll {
+  position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
+  pointer-events: auto; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  font-size: 18px; font-weight: 700; padding: 12px 26px; border-radius: 999px; border: 0;
+  background: rgba(245, 158, 11, .92); color: #1f2937; box-shadow: 0 4px 0 #b45309, 0 6px 16px rgba(0, 0, 0, .35);
+}
+.play-roll:active { transform: translateY(3px); box-shadow: 0 1px 0 #b45309, 0 4px 10px rgba(0, 0, 0, .35); }
+.play-exit {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; pointer-events: auto;
+  touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden;
+  padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .35);
+  background: rgba(17, 24, 39, .6); color: #e5e7eb; font-size: 14px;
+}
+.play-exit::before {   /* fills while held */
+  content: ""; position: absolute; inset: 0; transform: scaleX(0); transform-origin: left;
+  background: rgba(245, 158, 11, .55); z-index: -1;
+}
+.play-exit.holding::before { transform: scaleX(1); transition: transform 1s linear; }
+.play-exit { isolation: isolate; }
+.play-exit-hint { display: block; font-size: 10px; opacity: .7; }
