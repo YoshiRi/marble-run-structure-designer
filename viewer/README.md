@@ -291,3 +291,29 @@ per layout in this browser. **Copy for Claude** puts them on the clipboard as
 YAML (component IDs, hole and port, position in cm, the text); paste that into
 the chat. Layouts that exist only in the browser (generated, loaded from a
 file, or edited) are included in full. **Download** saves the same YAML.
+
+## Play mode and sound
+
+**Play mode** (toolbar) is for children.
+- It goes full screen and hides everything except a **Roll!** button (bottom right) and an **Exit** button.
+- Exit must be held for one second, so tapping around does not leave. The browser's own full-screen exit (Esc) also leaves.
+- The camera still turns and zooms as usual. Tapping a part selects nothing.
+- Route lines, center of mass and support polygon are hidden while playing, and restored on exit.
+- `?play=1` in the URL opens straight in play mode.
+
+**Phones.** Android Chrome goes full screen from the page. iPhone Safari cannot (it allows full screen for videos only). Instead, **add the page to the home screen** (Share → Add to Home Screen). It then opens as an app without the browser bars, directly in play mode (`manifest.webmanifest`, start URL `./?play=1`).
+
+**Sound** (`sound.js`, toggle 🔊 in the toolbar, remembered per browser):
+- a wooden knock when a marble lands after a fall (louder for longer falls);
+- a rolling sound while marbles roll;
+- a clack when a seesaw flips;
+- a chime at an exit.
+
+Browsers allow sound only after a tap, so the first Roll starts it.
+
+**Replacing the sounds.** Each sound is synthesized unless a file is given for it:
+1. Put audio files (mp3, m4a, ogg or wav) in `viewer/sounds/`.
+2. List them in `viewer/sounds/sounds.json` under `land`, `roll`, `seesaw` or `exit`. Several files for one event are picked at random, and landings also vary slightly in pitch.
+3. `roll` is looped; give it a seamless loop.
+
+Timing and volume (landing louder for longer falls) stay as they are. Use only sounds you may redistribute: the files are published with the site. CC0 sounds, or your own recordings of the real parts, are safest.

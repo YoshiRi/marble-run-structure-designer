@@ -92,6 +92,7 @@
   const flyingMarbles = [];
   let MARBLE_DIAMETER_CM = 1.6; // Official 16 mm; catalog value is authoritative.
   const MARBLE_SPEED_CM_S = 30;
+  const sound = window.MarbleSound || { land() {}, seesaw() {}, exit() {}, rolling() {}, unlock() {}, setEnabled() {}, enabled: false };
 
   const palette = {
     yellow: "#eab308",
@@ -1434,29 +1435,54 @@
       if (marble.travelled >= total) {
         marble.mesh.position = marble.points[marble.points.length - 1].clone();
         marble.done = true;
+        let fall = marble.fall || 0;   // the last fall ends on the ground
+        for (let k = (marble.segment || 1); k < marble.points.length; k++) {
+          if (isFalling(marble, k)) fall += marble.points[k - 1].y - marble.points[k].y;
+        }
+        if (fall > 1.5) sound.land(fall);
         continue;
       }
       let i = 1;
       while (marble.lengths[i] < marble.travelled) i++;
+      if (marble.segment !== i) {   // sound: a fall ending is a landing
+        const falling = isFalling(marble, i);
+        for (let k = (marble.segment || 1); k < i; k++) {
+          if (isFalling(marble, k)) marble.fall = (marble.fall || 0) + marble.points[k - 1].y - marble.points[k].y;
+        }
+        if (!falling && (marble.fall || 0) > 1.5) { sound.land(marble.fall); marble.fall = 0; }
+        if (!falling && (marble.fall || 0) <= 1.5) marble.fall = 0;
+        marble.segment = i;
+      }
       const span = marble.lengths[i] - marble.lengths[i - 1] || 1;
       const t = (marble.travelled - marble.lengths[i - 1]) / span;
       marble.mesh.position = BABYLON.Vector3.Lerp(marble.points[i - 1], marble.points[i], t);
     }
+    sound.rolling(flyingMarbles.filter(m => !m.done && !isFalling(m, m.segment || 1)).length);
     for (let i = flyingMarbles.length - 1; i >= 0; i--) {
       const marble = flyingMarbles[i];
       if (!marble.done) continue;
       flyingMarbles.splice(i, 1);
       setTimeout(() => marble.mesh.dispose(), 400);
       if (marble.run.exit) {
+        if (flyingMarbles.length < 3) sound.exit();
         recordArrival(marble.source, marble.run.exit);
         flashExitRow(marble.run.exit);
       }
     }
   }
 
+  // A path segment that drops more than it runs (a free fall or a block drop).
+  function isFalling(marble, i) {
+    const a = marble.points[i - 1], b = marble.points[i];
+    if (!a || !b) return false;
+    const dy = a.y - b.y;
+    return dy > 0.6 && dy > Math.hypot(b.x - a.x, b.z - a.z);
+  }
+
   function cancelMarbles() {
     for (const marble of flyingMarbles) marble.mesh.dispose();
     flyingMarbles.length = 0;
+    sound.rolling(0);
   }
 
   function rollStatus(text) {
@@ -1464,8 +1490,9 @@
   }
 
   function rollOne() {
+    sound.unlock();
     const source = document.getElementById("routeSource").value;
-    if (!routingGraph || !source) return;
+    if (!routingGraph || !source || flyingMarbles.length >= 40) return;
     const run = MarbleRouting.sampleRun(layout, catalog, routingGraph, source);
     if (!run.complete) {
       rollStatus("The marble cannot finish from " + source + ": " + run.reason);
@@ -2170,7 +2197,10 @@
   // Low arm toward the side the marble takes ("a_side" = toward end A).
   function tipSeesaw(id, port) {
     const state = seesaws.get(id);
-    if (state) state.target = port === "a_side" ? SEESAW_TILT : -SEESAW_TILT;
+    if (!state) return;
+    const target = port === "a_side" ? SEESAW_TILT : -SEESAW_TILT;
+    if (state.target !== target) sound.seesaw();
+    state.target = target;
   }
   scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(engine.getDeltaTime() / 1000, 0.1);
@@ -2293,6 +2323,8 @@
         build.step = Math.max(0, Number(params.get("step")) || 0);
       }
       await loadExample(select.value);
+      // ?play=1 opens in play mode (the home-screen app starts this way).
+      if (params.get("play") === "1") setTimeout(() => setPlayMode(true), 0);
     } catch (error) {
       document.getElementById("layoutMeta").textContent = String(error);
       console.error(error);
@@ -3501,6 +3533,78 @@
   });
   document.getElementById("rollOne").addEventListener("click", rollOne);
   document.getElementById("rollOneTop").addEventListener("click", rollOne);
+
+  // ---- Play mode: full screen, only "Roll" and a hold-to-exit button (for
+  // children: nothing else to press). The camera still moves as usual.
+  const play = { on: false, saved: null, holdTimer: null };
+  const PLAY_HIDDEN = ["toggleRoute", "toggleCom", "togglePolygon"];
+
+  function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function setPlayMode(on) {
+    if (on === play.on) return;
+    play.on = on;
+    if (on) {
+      if (edit.on) setEditMode(false);
+      if (review.on) setReviewMode(false);
+      if (build.on) setBuildMode(false);
+      play.saved = PLAY_HIDDEN.map(id => document.getElementById(id).checked);
+      for (const id of PLAY_HIDDEN) document.getElementById(id).checked = false;
+      applyVisibility();
+      sound.unlock();
+      const root = document.documentElement;
+      const request = root.requestFullscreen || root.webkitRequestFullscreen;
+      const gesture = !navigator.userActivation || navigator.userActivation.isActive;
+      const standalone = window.matchMedia?.("(display-mode: fullscreen), (display-mode: standalone)").matches;
+      if (request && gesture && !standalone && !fullscreenElement()) {
+        try { Promise.resolve(request.call(root)).catch(() => {}); } catch (error) { /* not allowed */ }
+      }
+    } else {
+      PLAY_HIDDEN.forEach((id, i) => { document.getElementById(id).checked = play.saved ? play.saved[i] : true; });
+      applyVisibility();
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit && fullscreenElement()) {
+        try { Promise.resolve(exit.call(document)).catch(() => {}); } catch (error) { /* ignore */ }
+      }
+    }
+    document.body.classList.toggle("play", on);
+    document.getElementById("playBar").hidden = !on;
+    setTimeout(() => engine.resize(), 50);
+  }
+
+  document.getElementById("playToggle").addEventListener("click", () => setPlayMode(true));
+  for (const name of ["fullscreenchange", "webkitfullscreenchange"]) {
+    document.addEventListener(name, () => {
+      if (!fullscreenElement() && play.on) setPlayMode(false);
+      setTimeout(() => engine.resize(), 50);
+    });
+  }
+  document.getElementById("playRoll").addEventListener("click", rollOne);
+  // Exit needs a one-second hold, so a child tapping around does not leave.
+  const playExit = document.getElementById("playExit");
+  const stopHold = () => {
+    clearTimeout(play.holdTimer);
+    play.holdTimer = null;
+    playExit.classList.remove("holding");
+  };
+  playExit.addEventListener("pointerdown", event => {
+    event.preventDefault();
+    playExit.classList.add("holding");
+    play.holdTimer = setTimeout(() => { stopHold(); setPlayMode(false); }, 1000);
+  });
+  for (const name of ["pointerup", "pointerleave", "pointercancel"]) playExit.addEventListener(name, stopHold);
+  playExit.addEventListener("contextmenu", event => event.preventDefault());
+
+  const soundToggle = document.getElementById("soundToggle");
+  const showSound = () => {
+    soundToggle.textContent = sound.enabled ? "🔊" : "🔇";
+    soundToggle.setAttribute("aria-pressed", String(sound.enabled));
+    soundToggle.title = sound.enabled ? "Sound on (click to mute)" : "Sound off (click to turn on)";
+  };
+  soundToggle.addEventListener("click", () => { sound.setEnabled(!sound.enabled); showSound(); });
+  showSound();
   document.getElementById("rollMany").addEventListener("click", () => rollMany(100));
   document.getElementById("rollReset").addEventListener("click", () => {
     resetTally(document.getElementById("routeSource").value);
@@ -3523,6 +3627,7 @@
 
   scene.onPointerObservable.add(pointerInfo => {
     if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERPICK) return;
+    if (play.on) return;   // play mode: taps only move the camera
     const picked = pointerInfo.pickInfo?.pickedMesh;
     // Clicking a drop marker, or the rim/cap of a valid input hole, selects
     // that hole as the marble input.
