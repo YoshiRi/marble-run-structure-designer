@@ -101,6 +101,36 @@ def _shared_towers(ctx: MetricContext) -> float:
     return float(sum(1 for _, _, rails in spots if len(rails) >= 2))
 
 
+@layout_metric("switchbacks")
+def _switchbacks(ctx: MetricContext) -> float:
+    """Route rails lying right under another route rail of the same type,
+    reversed (end A under end B): one step of a switchback (back and forth
+    between two towers)."""
+    from .model import rail_pose
+    reached = {n.split(":", 1)[0] for n in ctx.reachable()}
+    rails = [r for r in ctx.layout.rails if r.id in reached
+             and ctx.catalog.rails[r.rail_type].shape not in ("arc", "twist")]
+
+    def ends(r):
+        spec = ctx.catalog.rails[r.rail_type]
+        return rail_pose(r, spec, 0.0)[:2], rail_pose(r, spec, spec.length_cm)[:2]
+
+    def near(a, b):
+        return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 0.35 ** 2
+
+    count = 0
+    for upper in rails:
+        ua, ub = ends(upper)
+        for lower in rails:
+            if lower is upper or lower.rail_type != upper.rail_type or lower.z_units >= upper.z_units:
+                continue
+            la, lb = ends(lower)
+            if near(ua, lb) and near(ub, la):
+                count += 1
+                break
+    return float(count)
+
+
 # One linear score. Each term: sign (+ reward, - penalty), default weight,
 # label and help for the viewer, and where it came from.
 SCORE_TERMS: tuple[dict[str, Any], ...] = (
@@ -114,6 +144,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
      "help": "per random splitter", "source": "goal"},
     {"key": "merges", "sign": 1, "weight": 8.0, "label": "Merges",
      "help": "per place two routes join", "source": "official builds"},
+    {"key": "switchbacks", "sign": 1, "weight": 4.0, "label": "Switchbacks",
+     "help": "per rail lying right under a route rail of the same type, reversed",
+     "source": "official builds (switchback pattern)"},
     {"key": "shared_towers", "sign": 1, "weight": 3.0, "label": "Shared towers",
      "help": "per spot where columns hold two or more rails one above the other",
      "source": "user idea (cohesion)"},

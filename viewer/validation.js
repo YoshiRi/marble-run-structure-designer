@@ -807,13 +807,14 @@
         mass_g: masses.reduce((a, b) => a + b, 0) });
     });
     const bodies = {};
+    const extra = new Map();
     for (const rail of layout.rails || []) {
       const spec = railSpec(catalog, rail.rail_type);
       if (!spec) { reasons.push("unknown_rail:" + rail.id + ":" + rail.rail_type); continue; }
       if (spec.mass_g == null) { reasons.push("unknown_mass:" + rail.id + ":" + rail.rail_type); continue; }
       const supports = byUpper.get(rail.id) || [];
-      if (supports.length !== 2) {
-        reasons.push("statics_requires_exactly_two_supports:" + rail.id + ":" + supports.length);
+      if (supports.length < 2) {
+        reasons.push("statics_needs_two_supports:" + rail.id + ":" + supports.length);
         continue;
       }
       const converted = [];
@@ -847,10 +848,25 @@
         converted.push({ x_cm: spec.holes_cm[uh], target_id: s.lower_rail_id ?? null, target_x_cm: targetX,
           transfer_mass_g: transfer, name: s.name || rail.id + "_support_" + idx });
       });
-      if (converted.length === 2) {
-        bodies[rail.id] = { id: rail.id, length_cm: spec.length_cm, mass_g: spec.mass_g,
-          supports: converted, com_cm: spec.com_cm, point_masses: points.get(rail.id) || [] };
+      let used = converted;
+      if (converted.length > 2 && converted.length === supports.length) {
+        // Mirror of layout_stability: outermost two take the rail; a middle
+        // column's weight goes down to the rail it stands on.
+        const ordered = converted.slice().sort((a, b) => a.x_cm - b.x_cm);
+        for (const middle of ordered.slice(1, -1)) {
+          if (middle.target_id == null) continue;
+          if (!extra.has(middle.target_id)) extra.set(middle.target_id, []);
+          extra.get(middle.target_id).push({ name: middle.name, x_cm: middle.target_x_cm, mass_g: middle.transfer_mass_g });
+        }
+        used = [ordered[0], ordered[ordered.length - 1]];
       }
+      if (used.length === 2) {
+        bodies[rail.id] = { id: rail.id, length_cm: spec.length_cm, mass_g: spec.mass_g,
+          supports: used, com_cm: spec.com_cm, point_masses: points.get(rail.id) || [] };
+      }
+    }
+    for (const [target, masses] of extra) {
+      if (bodies[target]) bodies[target] = { ...bodies[target], point_masses: [...bodies[target].point_masses, ...masses] };
     }
     if (reasons.length || Object.keys(bodies).length !== (layout.rails || []).length) {
       return { evaluable: false, statics: null, reasons: unique(reasons) };

@@ -323,10 +323,10 @@ class SupportSolver:
 
 def resolve_supports(layout: Layout, catalog: PartCatalog, counts: Mapping[str, int], source: PortRef,
                      sinks: Sequence[PortRef], weak_tower_weight: float = 15.0, keep_braces: bool = True,
-                     **options) -> Layout | None:
+                     min_support_g: float | None = None, **options) -> Layout | None:
     """Strip the supports of a valid build and solve them again; None if no
     valid solution was found."""
-    from .generator import weak_towers
+    from .generator import support_reactions_g, weak_towers
 
     stripped = strip_supports(layout, catalog, source, keep_braces=keep_braces)
     options.setdefault("keep", 40)
@@ -337,6 +337,11 @@ def resolve_supports(layout: Layout, catalog: PartCatalog, counts: Mapping[str, 
         result = validate_layout(trial, catalog, source=source, sinks=sinks)
         if not (result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}):
             continue
+        if min_support_g is not None:
+            # The style rule on overhanging loads (review 3), as the generator applies it.
+            reactions = support_reactions_g(trial, catalog, overhang_only=True)
+            if reactions is None or any(g < min_support_g for g in reactions.values()):
+                continue
         # Weak towers weigh like the score does (15 points vs ~1 per part).
         rank = cost + weak_tower_weight * weak_towers(trial, catalog)
         if best is None or rank < best[0]:

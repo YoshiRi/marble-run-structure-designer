@@ -306,3 +306,17 @@ def test_alignment_schedule_is_off_early_and_grows():
                                                             align_full_depth=6), random.Random(0))
     assert gen._align_pull(1) == 0 and gen._align_pull(2) == 0
     assert 0 < gen._align_pull(4) < gen._align_pull(6) == 4 == gen._align_pull(9)
+
+
+def test_switchbacks_stack_reversed_rails_and_validate():
+    """Design doc §6.2: a rail of the same type right under the one above,
+    reversed, its holes under the upper ones."""
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["QD001", "QD003", "QD005", "QDE6008AB05"]))
+    config = GeneratorConfig(exclude_parts=("red_right_angle",), switchback_probability=1.0,
+                             align_start_depth=0, align_full_depth=1, seesaw_probability=0.0)
+    found = [c for c in generate(CATALOG, budget, config=config, attempts=80, seed=1, keep=10)
+             if c.metrics["switchbacks"] >= 1]
+    assert found
+    for c in found[:3]:
+        assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid

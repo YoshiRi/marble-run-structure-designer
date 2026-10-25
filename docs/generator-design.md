@@ -414,6 +414,37 @@ moves leave too few choices: the rail type, a hole and the direction. With
 fixed rail lengths, a rail's other holes rarely land over earlier holes. Off
 by default. Alignment has to come from moves that create it: patterns.
 
+**Switchback** (implemented as a landing preference, `switchback_probability`).
+When a drop lands on a new rail, try first a rail of the same type lying right
+under the rail above, reversed: its block hole is the mirror of the upper
+stop hole (holes[k] = length - holes[stop]), so every hole lines up with the
+one above. The drop column at each end is the support of the rail above, so
+the ends become towers through the whole run. The switchback uses the
+alignment schedule (`align_start_depth`).
+
+Two physics changes came with it:
+
+- Statics accepts a rail on three or more columns. Tipping is checked on the
+  outer two, which is conservative, and a middle column's weight goes down to
+  its rail. The seesaw diamond's collector now keeps both end columns when the
+  branch continues under its center.
+- The support solver applies the overhang style rule (≥ 20 g on the lighter
+  support) when choosing among its solutions.
+
+Measured (30 levels; switchbacks allowed from the top, supports solved):
+
+| | switchbacks | footprint cm² | shared towers | merges | valid | score |
+| --- | --- | --- | --- | --- | --- | --- |
+| default | 0.06 | 2677 | 2.7 | 0.14 | 84 % | 108.3 |
+| supports solved | 0.10 | 2622 | 2.2 | 0.14 | 79 % | 108.1 |
+| switchbacks + solved | 1.88 | 2265 | 2.9 | 0.94 | 59 % | 105.3 |
+
+Switchbacks make the build about 15 % smaller in top view, with more towers
+and, through more dives, more seesaw diamonds. They trade some rolled length
+and twists, so they lose a few points under today's weights. The gallery has
+a `switchbacks` configuration and bucket. The defaults are unchanged until
+the user reviews them.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

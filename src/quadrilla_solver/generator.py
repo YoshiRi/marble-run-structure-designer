@@ -159,6 +159,11 @@ class GeneratorConfig:
     align_start_depth: int = 2
     align_full_depth: int = 5
     early_split_boost: float = 0.0   # extra splitter chance up to align_start_depth
+    # Switchback (design doc §6.2, user's first pattern): land on a rail of the
+    # same type lying right under the one above, reversed, so the marble runs
+    # back and forth between two towers. Chance per drop, on the same
+    # schedule as alignment (0 near the top, full from align_full_depth).
+    switchback_probability: float = 0.0
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
     weights: Mapping[str, float] | None = None
 
@@ -503,6 +508,7 @@ class CascadeGenerator:
             modes = ["landing", "ground"] if self.rng.random() < self.config.landing_probability \
                 else ["ground", "landing"]
         room = self.config.max_exits - self._branches(state)
+        prefer = self._switchback(rail, hole, depth)
         for mode in modes:
             for block in self._block_order(depth):
                 outlets = self.drop_blocks[block]
@@ -510,12 +516,19 @@ class CascadeGenerator:
                     continue  # would exceed the branch outputs allowed
                 top_types = self._drop_types(block)
                 block_z = self._level(rail, hole) - sum(self.heights[t] for t in top_types)
-                for turn in self.rng.sample(range(4), 4):
+                turns = self.rng.sample(range(4), 4)
+                if prefer is not None and mode == "landing":
+                    turns = [2] + [t for t in turns if t != 2]  # reverse first
+                for turn in turns:
                     first = (incoming + turn) % 4
                     rotation = (90 * first + _PORT_ROTATION_OFFSET[outlets[0]]) % 360
                     dirs = {port: self._port_direction(port, rotation) for port in outlets}
-                    result = (self._landing_drop if mode == "landing" else self._ground_drop)(
-                        state, rail, hole, hx, hy, block, top_types, block_z, rotation, dirs, depth)
+                    if mode == "landing":
+                        result = self._landing_drop(state, rail, hole, hx, hy, block, top_types, block_z,
+                                                    rotation, dirs, depth, prefer=prefer)
+                    else:
+                        result = self._ground_drop(state, rail, hole, hx, hy, block, top_types, block_z,
+                                                   rotation, dirs, depth)
                     if result is not None:
                         return result
         return None
@@ -564,7 +577,24 @@ class CascadeGenerator:
                 score += 0.3
         return score
 
-    def _landing_drop(self, state, rail, hole, hx, hy, block, top_types, block_z, rotation, dirs, depth):
+    def _switchback(self, rail: PlacedRail, hole: int, depth: int) -> tuple[str, int] | None:
+        """(kind, hole) of the lower rail of a switchback under `rail`'s stop
+        hole: same straight type, reversed, the mirrored hole (holes[k] =
+        length - holes[hole]), so its holes lie right under the upper ones."""
+        c = self.config
+        if c.switchback_probability <= 0 or rail.rail_type not in _RAIL_KINDS:
+            return None
+        span = max(1, c.align_full_depth - c.align_start_depth)
+        factor = 0.0 if depth <= c.align_start_depth else min(1.0, (depth - c.align_start_depth) / span)
+        if self.rng.random() >= c.switchback_probability * factor:
+            return None
+        spec = self.catalog.rails[rail.rail_type]
+        mirror = spec.length_cm - spec.holes_cm[hole]
+        k = next((i for i, h in enumerate(spec.holes_cm) if abs(h - mirror) < 1e-6), None)
+        return None if k is None else (rail.rail_type, k)
+
+    def _landing_drop(self, state, rail, hole, hx, hy, block, top_types, block_z, rotation, dirs, depth,
+                      prefer: tuple[str, int] | None = None):
         """The drop block stands on a new rail and lands the marble on it."""
         ports = list(dirs)
         land_port = self.rng.choice(ports)
@@ -586,8 +616,11 @@ class CascadeGenerator:
             if spec.shape == "twist":
                 order = [h for h in order if h < len(spec.holes_cm) - 1]
             candidates += [(kind, k) for k in order]
+        reverse = round(rail.yaw_deg / 90.0) % 4
+        if prefer is not None and d == (reverse + 2) % 4 and prefer in candidates:
+            candidates = [prefer] + [c for c in candidates if c != prefer]
         pull = self._align_pull(depth)
-        if pull > 0:
+        if pull > 0 and not (prefer is not None and candidates[:1] == [prefer]):
             spots = self._spots(state)
             keyed = []
             for i, (kind, k) in enumerate(candidates):
@@ -767,11 +800,10 @@ class CascadeGenerator:
             rotation = (90 * facing + _PORT_ROTATION_OFFSET["front"]) % 360
             columns.append(Column(trial.new_id("c"), x, y, c.id, hole, c_z + 1, h.id, hole,
                                   level[hole], (block,), rotation))
-        # C from the ground: at both ends, or at one end when the drop column
-        # under its center hole will be the second support (statics takes
-        # exactly two supports per rail).
-        ground_holes = (0,) if continue_down else (0, 4)
-        ground = [self._plain_column(trial, c, hole) for hole in ground_holes]
+        # C from the ground at both ends (the blocks standing there carry H);
+        # a drop column under its center hole, if the branch goes on, is a
+        # third support (statics checks tipping on the outer two).
+        ground = [self._plain_column(trial, c, hole) for hole in (0, 4)]
         columns += ground
         seesaw_col = Column(trial.new_id("c"), hx, hy, h.id, 2, h_z + 1, None, None,
                             h_z + 1 + self.heights["seesaw"], ("seesaw",), int(90 * d) % 360)
@@ -793,14 +825,7 @@ class CascadeGenerator:
             sub = self._drop(trial, c, 2, d, depth + 2)
             if sub is not None:
                 return sub
-        # Dive at the collector's center instead, held at both ends.
-        if continue_down:
-            extra = self._plain_column(trial, c, 4)
-            if self._hits(trial, [extra.solid(self.half)]):
-                return None
-            trial.columns[extra.id] = extra
-            if not self._feasible(trial):
-                return None
+        # Dive at the collector's center instead.
         trial.rails[c.id] = replace(c, hole_states={**c_states, 2: "open"})
         fall = Solid(f"{c.id}#dive#marble", self._point(c, center), (r, r), 0.0, 0.0, c_z * _UNIT_CM)
         if self._hits(trial, [fall]):
@@ -1312,7 +1337,8 @@ def generate(
         if config.solve_supports:
             from .supports import resolve_supports
             counts = {k: v for k, v in generator.budget.counts.items()}
-            better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False)
+            better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
+                                      min_support_g=config.min_support_reaction_g)
             if better is not None:
                 layout, resolved = better, True
         layout = shorten_rails(layout, catalog, generator.budget, source, sinks)

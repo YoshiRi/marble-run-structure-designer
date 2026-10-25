@@ -68,7 +68,33 @@ def _mutations(name, data):
         out.append((name + "+railshift", m))
     if any(p["part_type"] == "seesaw" for p in data.get("parts", [])):
         out.extend(_seesaw_mutations(name, data))
+    third = _third_support(data)
+    if third is not None:
+        out.append((name + "+thirdsupport", third))
     return out
+
+
+def _third_support(data):
+    """A third ground column under a rail's free hole (statics: outer two)."""
+    import math
+    for rail in data.get("rails", []):
+        if rail["rail_type"] != "straight_long_center":
+            continue
+        used = {s["upper_hole_index"] for s in data["supports"] if s.get("upper_rail_id") == rail["id"]}
+        if len(used) != 2 or 2 in used:
+            continue
+        m = copy.deepcopy(data)
+        yaw = math.radians(float(rail.get("yaw_deg", 0)))
+        x = float(rail["x_cm"]) + 25.0 * math.cos(yaw)
+        y = float(rail["y_cm"]) + 25.0 * math.sin(yaw)
+        ids = ["third_f"] + [f"third_p{i}" for i in range(int(rail["z_units"]) - 1)]
+        m["parts"] += [{"id": ids[0], "part_type": "wooden_foundation", "x_cm": x, "y_cm": y, "z_units": 0}]
+        m["parts"] += [{"id": pid, "part_type": "purple_drop", "x_cm": x, "y_cm": y, "z_units": i + 1}
+                       for i, pid in enumerate(ids[1:])]
+        m["supports"].append({"name": "third", "upper_rail_id": rail["id"], "upper_hole_index": 2,
+                              "stack_part_ids": ids})
+        return m
+    return None
 
 
 def _seesaw_mutations(name, data):
