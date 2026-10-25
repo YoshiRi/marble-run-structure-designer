@@ -43,6 +43,8 @@
         </div>
         <button id="rollOneTop" type="button" class="primary" title="Drop a marble into the selected input hole">Roll a marble</button>
         <button id="resetCamera" type="button">Reset camera</button>
+        <button id="soundToggle" type="button" aria-pressed="true" aria-label="Sound">🔊</button>
+        <button id="playToggle" type="button" title="Full screen with only a Roll button (for children)">Play mode</button>
       </div>
     </header>
 
@@ -61,6 +63,10 @@
         <div id="partsBoard" class="parts-board" hidden></div>
         <div id="editPopup" class="edit-body edit-popup" role="dialog" aria-label="Edit part" hidden></div>
         <div id="reviewPopup" class="edit-body edit-popup review-popup" role="dialog" aria-label="Review note" hidden></div>
+        <div id="playBar" class="play-bar" hidden>
+          <button id="playRoll" type="button" class="play-roll">Roll!</button>
+          <button id="playExit" type="button" class="play-exit" title="Hold to exit">Exit<span class="play-exit-hint">hold</span></button>
+        </div>
       </section>
 
       <aside class="sidebar">
@@ -229,6 +235,7 @@
   <script src="./routing.js"></script>
   <script src="./assembly.js"></script>
   <script src="./validation.js"></script>
+  <script src="./sound.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

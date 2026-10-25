@@ -291,3 +291,21 @@ per layout in this browser. **Copy for Claude** puts them on the clipboard as
 YAML (component IDs, hole and port, position in cm, the text); paste that into
 the chat. Layouts that exist only in the browser (generated, loaded from a
 file, or edited) are included in full. **Download** saves the same YAML.
+
+## Play mode and sound
+
+**Play mode** (toolbar) is for children.
+- It goes full screen and hides everything except a large **Roll!** button and an **Exit** button.
+- Exit must be held for one second, so tapping around does not leave. The browser's own full-screen exit (Esc) also leaves.
+- The camera still turns and zooms as usual. Tapping a part selects nothing.
+- Route lines, center of mass and support polygon are hidden while playing, and restored on exit.
+- Phones without the Fullscreen API (iPhone Safari) get the same screen without full screen.
+
+**Sound** (`sound.js`, toggle 🔊 in the toolbar, remembered per browser) is synthesized with Web Audio, with no sound files:
+- a wooden knock when a marble lands after a fall (louder for longer falls);
+- a soft rolling rumble while marbles roll;
+- a low clack when a seesaw flips;
+- a chime at an exit.
+
+Browsers allow sound only after a tap, so the first Roll starts it.
+
