@@ -555,9 +555,19 @@ Each step adds a fixture and a test at its layer (§3).
 
 - TODO (user, 2026-10-24): register several **good-design combinations** as
   patterns (§6.2). Waiting for the user's examples.
-- The triangle's exact geometry: which holes sit at the corners, the side
-  length, the level of each side, and whether there is a center column (the
-  earlier note: rail ends on the triangle's sides, the middle hole on the
-  perpendicular).
+- TODO (user, 2026-10-25), at a good stopping point: make **efficient
+  structures like the isosceles triangle** (official builds) usable in two
+  ways, to raise the human score:
+  - **call them as one large pattern** (a skeleton the generator places
+    first, then grows routes and towers from its ports: here the median's
+    apex end in, the two side drops out, the red splitter's column up);
+  - **score them**: a term that recognizes the structure in any layout
+    (e.g. a triangle of rails sharing corner columns, a tower standing on a
+    plate), so builds that reach it on their own also gain.
+  Both need a pattern format with ports and a recognizer per pattern; the
+  triangle fixture is the first entry. Next for the triangle itself: double
+  sides (official) and an apex tray (needs the tray measured).
+- The triangle's exact geometry: settled for the isosceles type (§6.2,
+  fixture `triangle-isosceles.yaml`); the equilateral type is later.
 - Bracing: keep as a pass, or turn into a pattern?
 - Search: stay top-down, or propose a footprint pattern first?
