@@ -8,8 +8,13 @@ adding a rule.
 contents of one or more commercial sets and writes the best ones as Layout YAML
 that the viewer can open.
 
+The default inventory is `OWNED`, the user's counted collection
+(`catalog/inventory.yaml`, 2026-10-25). It counts the center-hole long rails
+(seesaw mount) apart from the plain ones; set presets do not, so there both
+draw from one long-rail pool. Set presets can still be named with `--sets`.
+
 ```bash
-python scripts/generate_layout.py --sets QD001,QD003,QD005 --attempts 600 \
+python scripts/generate_layout.py --sets OWNED --attempts 600 \
     --seed 1 --keep 3 --out-dir examples/generated
 ```
 

@@ -21,7 +21,7 @@ from quadrilla_solver.generator import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SETS = ["QD001", "QD003", "QD005", "QDE6008AB05"]
+SETS = ["OWNED"]  # the counted collection (catalog/inventory.yaml)
 # Parts the user does not have at the moment (review 3: no right-angle splitter).
 EXCLUDE = ("red_right_angle",)
 

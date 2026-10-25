@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def manifest() -> dict:
     files = sorted(str(p.relative_to(ROOT)) for p in (ROOT / "src" / "quadrilla_solver").glob("*.py"))
-    files += ["catalog/parts.yaml", "catalog/sets/index.yaml"]
+    files += ["catalog/parts.yaml", "catalog/inventory.yaml", "catalog/sets/index.yaml"]
     files += sorted(str(p.relative_to(ROOT)) for p in (ROOT / "catalog" / "sets").rglob("*.yaml")
                     if p.name != "index.yaml")
     return {"files": files}

@@ -25,7 +25,7 @@ from quadrilla_solver.collision import component_solids  # noqa: E402
 from quadrilla_solver.model import load_layout  # noqa: E402
 from quadrilla_solver.supports import resolve_supports, route_parts  # noqa: E402
 
-SETS = ["QD001", "QD003", "QD005", "QDE6008AB05"]
+SETS = ["OWNED"]  # the counted collection (catalog/inventory.yaml)
 
 
 def measure(layout, catalog, source):

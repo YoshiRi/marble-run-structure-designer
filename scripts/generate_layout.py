@@ -1,7 +1,7 @@
-"""Generate marble-run layouts from commercial set inventories.
+"""Generate marble-run layouts from the owned inventory or set presets.
 
 Example:
-    python scripts/generate_layout.py --sets QD001,QD003,QD005 --attempts 800 \
+    python scripts/generate_layout.py --sets OWNED --attempts 800 \
         --seed 7 --keep 3 --out-dir examples/generated
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _footprint(text: str) -> tuple[float, float]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--sets", default="QD001,QD003,QD005",
+    parser.add_argument("--sets", default="OWNED",
                         help="comma-separated set ids whose combined contents bound the inventory "
                              "(add QDE6008AB05, the older Twist set, for curved rails)")
     parser.add_argument("--max-height", type=int, default=30, help="top rail level in levels (1 level = 1.2 cm)")

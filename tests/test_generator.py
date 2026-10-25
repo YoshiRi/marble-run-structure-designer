@@ -320,3 +320,26 @@ def test_switchbacks_stack_reversed_rails_and_validate():
     assert found
     for c in found[:3]:
         assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid
+
+
+def test_center_hole_rails_are_counted_apart_when_the_inventory_does():
+    from quadrilla_solver.generator import _straights_fit
+    owned = {"straight_long_center": 3, "straight_long": 8, "straight_short": 2}
+    assert _straights_fit(2, 8, 3, owned)
+    assert not _straights_fit(0, 0, 4, owned)       # a 4th center-hole rail
+    assert _straights_fit(0, 10, 1, owned)          # spare center rails serve as plain ones
+    assert not _straights_fit(3, 0, 0, owned)
+    preset = {"straight_long": 4}                   # presets do not tell them apart
+    assert _straights_fit(0, 1, 3, preset) and not _straights_fit(0, 2, 3, preset)
+
+
+def test_gallery_fits_the_owned_inventory():
+    import json
+    from quadrilla_solver.generator import _within_budget, layout_usage
+    from quadrilla_solver.model import load_layout
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    index = json.loads((ROOT / "examples" / "gallery" / "index.json").read_text())
+    assert index["sets"] == ["OWNED"]
+    for entry in index["layouts"]:
+        usage = layout_usage(load_layout(ROOT / entry["file"]))
+        assert _within_budget(usage, budget.counts), entry["id"]
