@@ -1,7 +1,8 @@
-// Synthesized marble sounds (Web Audio, no sound files): a wooden "tock"
-// when a marble lands after a fall, a soft rolling rumble while marbles roll,
-// a low clack for the seesaw and a chime at an exit. The audio context starts
-// on the first user gesture (browsers block sound before one).
+// Marble sounds (Web Audio): a wooden "tock" when a marble lands after a
+// fall, a rolling rumble while marbles roll, a clack for the seesaw and a
+// chime at an exit. Each is synthesized unless sounds/sounds.json lists
+// audio files for it (see that file). The audio context starts on the first
+// user gesture (browsers block sound before one).
 (function () {
   "use strict";
 
@@ -9,6 +10,9 @@
   let ctx = null;
   let master = null;
   let rollGain = null;
+  let rumble = null;          // the rolling loop's source node
+  const samples = {};         // event -> [AudioBuffer], from sounds/sounds.json
+  let samplesLoading = null;
   let enabled = true;
   try { enabled = localStorage.getItem(STORE) !== "off"; } catch (error) { /* private mode */ }
 
@@ -21,7 +25,11 @@
       master = ctx.createGain();
       master.gain.value = 0.7;
       master.connect(ctx.destination);
+      rollGain = ctx.createGain();
+      rollGain.gain.value = 0;
+      rollGain.connect(master);
       startRumble();
+      loadSamples();
     }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
@@ -34,11 +42,59 @@
     return buffer;
   }
 
-  // Continuous filtered noise; its gain follows the number of rolling marbles.
-  function startRumble() {
+  async function loadSamples() {
+    if (samplesLoading) return samplesLoading;
+    samplesLoading = (async () => {
+      let list = {};
+      try {
+        const response = await fetch("./sounds/sounds.json", { cache: "no-cache" });
+        if (response.ok) list = await response.json();
+      } catch (error) { return; }
+      for (const [event, files] of Object.entries(list)) {
+        if (event.startsWith("_")) continue;
+        const names = Array.isArray(files) ? files : (files ? [files] : []);
+        const buffers = [];
+        for (const name of names) {
+          try {
+            const data = await (await fetch("./sounds/" + name)).arrayBuffer();
+            buffers.push(await new Promise((ok, fail) => ctx.decodeAudioData(data, ok, fail)));
+          } catch (error) {
+            console.warn("sound file not loaded:", name, error);
+          }
+        }
+        if (buffers.length) samples[event] = buffers;
+      }
+      if (samples.roll) startRumble();   // swap the synthesized loop for the file
+    })();
+    return samplesLoading;
+  }
+
+  function playSample(event, gain, rate = 1) {
+    const list = samples[event];
+    if (!list || !ensure()) return false;
     const source = ctx.createBufferSource();
-    source.buffer = noiseBuffer(2);
+    source.buffer = list[Math.floor(Math.random() * list.length)];
+    source.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    source.connect(g).connect(master);
+    source.start();
+    return true;
+  }
+
+  // Continuous rolling sound; its gain follows the number of rolling marbles.
+  function startRumble() {
+    if (rumble) { try { rumble.stop(); } catch (error) { /* not started */ } }
+    const source = ctx.createBufferSource();
+    rumble = source;
     source.loop = true;
+    if (samples.roll) {
+      source.buffer = samples.roll[0];
+      source.connect(rollGain);
+      source.start();
+      return;
+    }
+    source.buffer = noiseBuffer(2);
     const band = ctx.createBiquadFilter();
     band.type = "bandpass";
     band.frequency.value = 900;
@@ -46,9 +102,7 @@
     const low = ctx.createBiquadFilter();
     low.type = "lowpass";
     low.frequency.value = 2200;
-    rollGain = ctx.createGain();
-    rollGain.gain.value = 0;
-    source.connect(band).connect(low).connect(rollGain).connect(master);
+    source.connect(band).connect(low).connect(rollGain);
     source.start();
   }
 
@@ -89,14 +143,17 @@
       if (enabled) ensure();
     },
     unlock() { ensure(); },
+    // Events that use sound files (after the first tap has loaded them).
+    get fromFiles() { return Object.keys(samples); },
     // A marble lands after falling `dropCm`.
     land(dropCm) {
       const strength = Math.min(1, 0.35 + dropCm / 25);
+      if (playSample("land", strength, 0.92 + Math.random() * 0.16)) return;
       knock(700 + Math.random() * 250, strength, 0.12);
     },
-    seesaw() { knock(260, 0.9, 0.22); },
+    seesaw() { if (!playSample("seesaw", 0.9)) knock(260, 0.9, 0.22); },
     exit() {
-      if (!ensure()) return;
+      if (playSample("exit", 0.6) || !ensure()) return;
       const t = ctx.currentTime;
       [1318.5, 1760].forEach((freq, i) => {
         const osc = ctx.createOscillator();
