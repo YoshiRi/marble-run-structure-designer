@@ -49,6 +49,14 @@
       "source": "official builds (switchback pattern)"
     },
     {
+      "key": "triangles",
+      "sign": 1,
+      "weight": 20.0,
+      "label": "Triangle bases",
+      "help": "per triangle base (a plate tying two side rails, carrying the median)",
+      "source": "official builds; user (efficient structure, 2026-10-26)"
+    },
+    {
       "key": "frame_turns",
       "sign": 1,
       "weight": 2.0,
@@ -180,6 +188,28 @@
       "step": 0.1,
       "default": 0.5,
       "help": "chance to end a dive on a seesaw whose arms merge on a collector rail (search bias)",
+      "source": "official builds"
+    },
+    {
+      "key": "triangle_probability",
+      "label": "Triangle bases",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.1,
+      "default": 0.0,
+      "help": "chance per drop to end on the isosceles triangle base (needs about 25 levels below the drop)",
+      "source": "official builds (user)"
+    },
+    {
+      "key": "frame_probability",
+      "label": "Frames",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.1,
+      "default": 1.0,
+      "help": "chance to start a frame (the marble circling a rectangle); only from 45 levels",
       "source": "official builds"
     },
     {

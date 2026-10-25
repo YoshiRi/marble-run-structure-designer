@@ -55,3 +55,29 @@ def test_the_marble_splits_at_the_base_and_runs_down_both_sides():
     result = validate_layout(layout_from_dict(DATA), CATALOG, source=layout_source(DATA), sinks=layout_sinks(DATA))
     assert result.valid
     assert set(result.connectivity.reached_sinks) == {"side_left:hole:2", "side_right:hole:2"}
+
+
+def test_the_fixture_is_recognized_as_a_triangle_base():
+    from quadrilla_solver.generator import layout_source
+    from quadrilla_solver.scoring import layout_metrics
+    assert layout_metrics(layout_from_dict(DATA), CATALOG, layout_source(DATA))["triangles"] == 1
+
+
+def test_the_generator_places_triangles_on_request():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(triangle_probability=1.0, max_height_units=45, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    found = [c for c in generate(CATALOG, budget, config=config, attempts=60, seed=1, keep=20)
+             if c.metrics["triangles"]]
+    assert found
+    best = found[0]
+    # both sides are exits, and the pattern keeps its own supports
+    assert best.metrics["exits"] >= 2
+    assert any(s.play_cm for s in best.layout.supports)
+
+
+def test_the_pattern_matches_the_fixture_geometry():
+    from quadrilla_solver.patterns import isosceles_triangle
+    tri = isosceles_triangle(CATALOG)
+    assert abs(tri["apex_cm"] - 36.589) < 1e-3 and tri["play_cm"] == 0.3

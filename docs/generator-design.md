@@ -398,6 +398,26 @@ corner block that sends it down the side rail toward the apex. The plate
 lies on the side's end hole, so the marble drops through hole 2 just before
 it. This build is one of the official examples (user).
 
+**As a generator pattern** (`patterns.isosceles_triangle`,
+`GeneratorConfig.triangle_probability`, built 2026-10-26). At a drop high
+enough (25 levels or more), the drop block lands on the median's apex end,
+with pass-through parts above it, and the whole triangle is placed below,
+turned to one of four directions. It ends the branch with two exits (both
+sides). The triangle keeps its own supports: the support solver skips such
+builds, and curve swaps leave its rails alone. Its structural rails do not
+count as idle rail. The score term `triangles` (+20) recognizes the
+structure in any layout (a plate on two rails carrying a column on its
+middle hole).
+
+Measured (owned inventory, 3 seeds, kept builds with a triangle):
+
+| | 30 levels | 45 levels |
+| --- | --- | --- |
+| p 0.3 | 2 / 30 | 7 / 30 (best 147) |
+| p 1 | 12 / 30 | 17 / 30 (best 141; mean score 129.8 vs 126.9 at p 0.3) |
+
+Off by default; gallery configuration `triangles` and bucket "triangle".
+
 Extensions (user, 2026-10-25), next:
 - **double sides** (official): one more level of rails and blocks under
   each side;
@@ -565,7 +585,7 @@ Each step adds a fixture and a test at its layer (§3).
     (e.g. a triangle of rails sharing corner columns, a tower standing on a
     plate), so builds that reach it on their own also gain.
   Both need a pattern format with ports and a recognizer per pattern; the
-  triangle fixture is the first entry. Next for the triangle itself: double
+  triangle is the first entry (placed and recognized, §6.2, 2026-10-26). Next for the triangle itself: double
   sides (official) and an apex tray (needs the tray measured).
 - The triangle's exact geometry: settled for the isosceles type (§6.2,
   fixture `triangle-isosceles.yaml`); the equilateral type is later.

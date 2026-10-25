@@ -36,6 +36,7 @@ metrics:
   merges: 0.0
   shared_towers: 5.0
   switchbacks: 0.0
+  triangles: 0.0
   frame_turns: 1.0
 inventory_used:
   blue: 3

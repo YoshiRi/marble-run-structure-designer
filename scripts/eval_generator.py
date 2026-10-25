@@ -24,7 +24,7 @@ from quadrilla_solver.catalog import load_catalog  # noqa: E402
 
 SETS = ["OWNED"]  # the counted collection (catalog/inventory.yaml)
 METRICS = ["levels", "rails", "parts", "exits", "rolling_length_cm", "footprint_area_cm2",
-           "dead_area_cm2", "idle_rail_cm", "weak_towers", "braces", "twists", "curved_rails", "shared_towers", "switchbacks", "frame_turns"]
+           "dead_area_cm2", "idle_rail_cm", "weak_towers", "braces", "twists", "curved_rails", "shared_towers", "switchbacks", "frame_turns", "triangles"]
 
 
 def seeds(text: str) -> list[int]:
