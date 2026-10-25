@@ -216,3 +216,43 @@ def test_foundation_mass_is_recorded_as_12g():
         data = yaml.safe_load(f)
 
     assert data["structural_parts"]["wooden_foundation"]["mass_g"]["value"] == pytest.approx(12)
+
+
+def test_any_number_of_supports_tips_only_outside_the_outer_pair():
+    # Four columns; the com may sit anywhere between the outermost two.
+    rail = RailBody(
+        id="r", length_cm=50, mass_g=100,
+        supports=tuple(_ground(x, f"s{x}") for x in (2, 7, 43, 48)),
+        com_cm=46,
+    )
+    result = analyze_structure({"r": rail})
+    assert result.valid
+    stat = result.rails["r"]
+    assert len(stat.reactions) == 4
+    assert sum(r.force_n for r in stat.reactions) == pytest.approx(0.1 * GRAVITY_M_S2)
+    assert stat.stability_margin_cm == pytest.approx(2.0)
+
+    outside = RailBody(id="r", length_cm=50, mass_g=100,
+                       supports=tuple(_ground(x, f"s{x}") for x in (7, 25, 43)), com_cm=46)
+    assert not analyze_structure({"r": outside}).valid
+
+
+def test_a_middle_column_on_an_overhang_fails_when_it_may_carry_the_load():
+    # A long rail on three columns, the middle one standing on the overhang of
+    # a short rail below. If the end columns are a hair short the middle
+    # column carries the whole upper rail and the lower rail tips.
+    upper = RailBody(
+        id="upper", length_cm=50, mass_g=135,
+        supports=(
+            _ground(2, "a"),
+            SupportConnection(x_cm=25, target_id="lower", target_x_cm=1.5, name="mid"),
+            _ground(48, "b"),
+        ),
+    )
+    lower = RailBody(id="lower", length_cm=27, mass_g=60,
+                     supports=(_ground(7, "l"), _ground(25, "r")))
+    result = analyze_structure({"upper": upper, "lower": lower})
+    assert not result.valid
+    assert result.reasons[0].startswith("tipping:lower:")
+    # The upper rail itself is fine whichever columns carry it.
+    assert result.rails["upper"].stable

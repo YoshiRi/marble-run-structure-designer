@@ -41,6 +41,14 @@
       "source": "official builds"
     },
     {
+      "key": "switchbacks",
+      "sign": 1,
+      "weight": 4.0,
+      "label": "Switchbacks",
+      "help": "per rail lying right under a route rail of the same type, reversed",
+      "source": "official builds (switchback pattern)"
+    },
+    {
       "key": "shared_towers",
       "sign": 1,
       "weight": 3.0,
@@ -165,6 +173,36 @@
       "default": 0.5,
       "help": "chance to end a dive on a seesaw whose arms merge on a collector rail (search bias)",
       "source": "official builds"
+    },
+    {
+      "key": "switchback_probability",
+      "label": "Switchbacks",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "step": 0.1,
+      "default": 0.0,
+      "help": "chance to land on a reversed rail right under the one above (back and forth between two towers)",
+      "source": "official builds"
+    },
+    {
+      "key": "align_start_depth",
+      "label": "Align from depth",
+      "type": "int",
+      "min": 0,
+      "max": 8,
+      "step": 1,
+      "default": 2,
+      "help": "switchbacks and alignment start below this many drops (branch first above it)",
+      "source": "user idea"
+    },
+    {
+      "key": "solve_supports",
+      "label": "Solve supports",
+      "type": "bool",
+      "default": false,
+      "help": "re-solve the columns the marble never touches for all rails at once (fewer parts, slower)",
+      "source": "two-phase design"
     },
     {
       "key": "exit_style",

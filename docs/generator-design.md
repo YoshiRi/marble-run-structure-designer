@@ -64,8 +64,12 @@ The validators decide, for any layout:
   plain rail and its center hole is the outlet. Rails have no direction of
   their own; each is labelled one way, or around a pivot hole: a collector
   (both ends into the hole) or outward (the rail under a seesaw).
-- **statics**: per rail, moments about its two supports with everything resting
-  on it; a global center of mass inside the ground support hull.
+- **statics**: per rail, its center of mass (with everything resting on it)
+  must lie within its outermost supports, whatever their number; a global
+  center of mass inside the ground support hull. On three or more columns the
+  split of the load is undetermined, so every extreme split is checked (one
+  bracketing pair carries the rail, the other columns only their own weight)
+  and all must pass.
 - **clearance**: nothing stands where the marble rolls.
 
 A physics fact the user corrects (e.g. "the twist's chute holes drop the
@@ -413,6 +417,41 @@ pairs per build at weight 8 vs 3.9 at 0) and the towers stay around 2. The
 moves leave too few choices: the rail type, a hole and the direction. With
 fixed rail lengths, a rail's other holes rarely land over earlier holes. Off
 by default. Alignment has to come from moves that create it: patterns.
+
+**Switchback** (implemented as a landing preference, `switchback_probability`).
+When a drop lands on a new rail, try first a rail of the same type lying right
+under the rail above, reversed: its block hole is the mirror of the upper
+stop hole (holes[k] = length - holes[stop]), so every hole lines up with the
+one above. The drop column at each end is the support of the rail above, so
+the ends become towers through the whole run. The switchback uses the
+alignment schedule (`align_start_depth`).
+
+Two physics changes came with it:
+
+- Statics accepts a rail on any number of columns (two or more). Tipping is
+  checked on the outermost pair; the load sent down is checked for every
+  extreme split (each pair of columns bracketing the center of mass carrying
+  it). The 20 g rule uses the outer pair. Of 199 layouts (gallery, fixtures,
+  generated), 58 have a rail on 3+ columns and 2 became invalid, both the same
+  case: a long rail balanced on its center column, which stands on the
+  overhang of a lower rail (mr-f66be837, dropped from the gallery). The seesaw diamond's collector now keeps both end columns when the
+  branch continues under its center.
+- The support solver applies the overhang style rule (≥ 20 g on the lighter
+  support) when choosing among its solutions.
+
+Measured (30 levels; switchbacks allowed from the top, supports solved):
+
+| | switchbacks | footprint cm² | shared towers | merges | valid | score |
+| --- | --- | --- | --- | --- | --- | --- |
+| default | 0.06 | 2677 | 2.7 | 0.14 | 84 % | 108.3 |
+| supports solved | 0.10 | 2622 | 2.2 | 0.14 | 79 % | 108.1 |
+| switchbacks + solved | 1.88 | 2265 | 2.9 | 0.94 | 59 % | 105.3 |
+
+Switchbacks make the build about 15 % smaller in top view, with more towers
+and, through more dives, more seesaw diamonds. They trade some rolled length
+and twists, so they lose a few points under today's weights. The gallery has
+a `switchbacks` configuration and bucket. The defaults are unchanged until
+the user reviews them.
 
 ### 6.4 Order of work
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import replace, dataclass
 from math import hypot
 from typing import Iterable
 
@@ -261,9 +261,9 @@ def analyze_layout_statics(
             continue
 
         supports = by_upper.get(rail.id, [])
-        if len(supports) != 2:
+        if len(supports) < 2:
             reasons.append(
-                f"statics_requires_exactly_two_supports:{rail.id}:{len(supports)}"
+                f"statics_needs_two_supports:{rail.id}:{len(supports)}"
             )
             continue
 
@@ -327,12 +327,14 @@ def analyze_layout_statics(
                 )
             )
 
-        if len(converted) == 2:
+        if len(converted) == len(supports):
+            # Any number of columns (2 or more): statics checks tipping on the
+            # outermost pair and every extreme split of the load among them.
             bodies[rail.id] = RailBody(
                 id=rail.id,
                 length_cm=spec.length_cm,
                 mass_g=spec.mass_g,
-                supports=(converted[0], converted[1]),
+                supports=tuple(converted),
                 com_cm=spec.com_cm,
                 point_masses=tuple(point_masses.get(rail.id, ())),
             )

@@ -36,6 +36,9 @@ CONFIGS = [
     # Official builds stack close to 10 blocks (user): up to 60 levels.
     ("tallest", {"max_height_units": 60, "max_rails": 16}),
     ("compact", {"footprint_cm": (60.0, 60.0)}),
+    # Switchbacks from the top, supports solved for all rails (§6.2, §6.3).
+    ("switchbacks", {"switchback_probability": 1.0, "align_start_depth": 0, "align_full_depth": 1,
+                     "solve_supports": True}),
     # Seesaw diamonds (split and merge, design doc §6.1) on purpose.
     ("merges", {"seesaw_probability": 1.0, "weights": {"merges": 25.0}}),
 ]
@@ -53,6 +56,7 @@ BUCKETS = [
     ("compact", lambda m: m["footprint_area_cm2"] <= 2500),
     ("braced", lambda m: m.get("braces", 0) >= 1),
     ("merged", lambda m: m.get("merges", 0) >= 1),
+    ("switchback", lambda m: m.get("switchbacks", 0) >= 1),
 ]
 
 

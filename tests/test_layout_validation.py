@@ -343,3 +343,22 @@ def test_level_scale_is_one_point_two_cm_and_a_block_is_five_levels():
     assert CATALOG.height_units("blue") == 5 and CATALOG.height_units("purple_drop") == 1
     assert generator._UNIT_CM == pytest.approx(CATALOG.raw["geometry_cm"]["height_unit"]["value"])
     assert CATALOG.rails["spiral"].hole_levels == (3, 3, 0)
+
+
+def test_a_rail_on_three_columns_is_checked_on_its_outer_two():
+    """A collector held at both ends and at its center drop column (seesaw
+    diamond): tipping uses the outer columns; the middle one's weight goes on
+    down. The browser does the same (parity test variants)."""
+    from quadrilla_solver.layout_stability import analyze_layout_statics
+    from quadrilla_solver.model import SupportLink
+
+    rail = PlacedRail("r", "straight_long_center", 0, 0, 6)
+    parts, supports = [], []
+    for hole, x in ((0, 2.0), (2, 25.0), (4, 48.0)):
+        ids = [f"f{hole}", f"b{hole}"]
+        parts += [PlacedPart(ids[0], "wooden_foundation", x, 0, 0), PlacedPart(ids[1], "blue", x, 0, 1)]
+        supports.append(SupportLink("r", hole, tuple(ids), name=f"c{hole}"))
+    layout = Layout("three", rails=(rail,), parts=tuple(parts), supports=tuple(supports))
+    result = analyze_layout_statics(layout, CATALOG)
+    assert result.evaluable and result.statics.valid, result
+    assert validate_assembly(layout, CATALOG).valid
