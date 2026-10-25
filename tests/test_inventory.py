@@ -147,6 +147,8 @@ def test_owned_inventory_is_counted():
     assert inv.counts["yellow"] == 14
     assert inv.counts["purple_drop"] == 39
     assert inv.counts["seesaw"] == 4
-    # the seesaw's center-hole rail draws from the long rail pool
-    assert "straight_long_center" not in inv.counts
+    assert inv.counts["straight_long_center"] == 3
+    assert inv.counts["straight_long"] == 8
+    assert inv.counts["straight_short"] == 2
+    assert inv.counts["accelerator_plate"] == 19 and inv.counts["cover"] == 9
     assert "unmodeled" not in inv.counts and "plate_one_hole" not in inv.counts
