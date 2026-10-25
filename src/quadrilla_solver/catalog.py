@@ -56,6 +56,17 @@ class PartCatalog:
     rails: Mapping[str, RailSpec]
 
     def _find_part(self, part_type: str) -> tuple[str, Mapping[str, Any]] | None:
+        # The catalog never changes once loaded: look each part up once (the
+        # generator asks hundreds of thousands of times per run).
+        cache = self.__dict__.get("_part_cache")
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_part_cache", cache)
+        if part_type not in cache:
+            cache[part_type] = self._find_part_uncached(part_type)
+        return cache[part_type]
+
+    def _find_part_uncached(self, part_type: str) -> tuple[str, Mapping[str, Any]] | None:
         for category in ("routing_blocks", "structural_parts", "special_parts"):
             group = self.raw.get(category, {})
             if isinstance(group, Mapping) and part_type in group:
@@ -72,6 +83,13 @@ class PartCatalog:
                     if isinstance(spec, Mapping):
                         return f"accessories.{subcategory}", spec
         return None
+
+    def max_joint_play_cm(self) -> float:
+        """How far apart two pegged holes may be (geometry_cm.max_joint_play_cm)."""
+        value = (self.raw.get("geometry_cm") or {}).get("max_joint_play_cm", 0.0)
+        if isinstance(value, Mapping):
+            value = value.get("value", 0.0)
+        return float(value or 0.0)
 
     def has_part(self, part_type: str) -> bool:
         return part_type in self.rails or self._find_part(part_type) is not None
@@ -98,6 +116,15 @@ class PartCatalog:
     def mass_g(self, part_type: str) -> float | None:
         if part_type in self.rails:
             return self.rails[part_type].mass_g
+        cache = self.__dict__.get("_mass_cache")
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_mass_cache", cache)
+        if part_type not in cache:
+            cache[part_type] = self._mass_g_uncached(part_type)
+        return cache[part_type]
+
+    def _mass_g_uncached(self, part_type: str) -> float | None:
 
         found = self._find_part(part_type)
         if found is None:
@@ -220,6 +247,20 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
             radius_cm=radius,
             segments=segments,
             needs_load_above=spec.get("stability") == "needs_load_above",
+        )
+    # Hole plates laid across rails (the triangle's apex) behave like a
+    # short rail without a groove: shape "plate", never part of a route.
+    for name, spec in (data.get("structural_parts") or {}).items():
+        beam = spec.get("beam") if isinstance(spec, dict) else None
+        if not isinstance(beam, dict):
+            continue
+        result[name] = RailSpec(
+            name=name,
+            length_cm=float(beam["length_cm"]),
+            holes_cm=tuple(float(x) for x in beam["hole_positions_cm"]),
+            height_units=int(spec.get("height", 1)),
+            mass_g=_mass_value(spec),
+            shape="plate",
         )
     for name, spec in rails.items():
         if not isinstance(spec, dict):

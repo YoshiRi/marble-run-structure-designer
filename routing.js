@@ -31,6 +31,13 @@
   function railGeometry(catalog, type) {
     const straight = catalog.rails?.[type];
     if (straight) return { ...straight, shape: "straight" };
+    const plate = catalog.structural_parts?.[type];
+    if (plate?.beam) {
+      // A hole plate laid across rails (triangle apex): a short rail without
+      // a groove, never part of a route (mirror of catalog.load_rail_specs).
+      return { ...plate, shape: "plate", length_cm: Number(plate.beam.length_cm),
+        hole_positions_cm: plate.beam.hole_positions_cm || [], height: plate.height ?? 1 };
+    }
     const special = catalog.special_rails?.[type];
     if (special?.shape === "twist") {
       // Two-level rail from the chute tip (end A) to the funnel center.
@@ -340,6 +347,7 @@
       for (const port of ["end_a", ...Array.from({ length: holeCount }, (_, i) => "hole:" + i), "end_b"]) {
         ensure(rail.id + ":" + port);
       }
+      if (spec.shape === "plate") continue;  // nothing rolls on a hole plate
       for (const sequence of flowSequences(rail, holeCount)) {
         for (let i = 0; i + 1 < sequence.length; i++) {
           const current = sequence[i];

@@ -117,7 +117,11 @@ def validate_assembly(
             lx, ly, _ = rail_hole_world(
                 lower, catalog, support.lower_hole_index
             )
-            if hypot(ux - lx, uy - ly) > xy_tolerance_cm:
+            play = float(support.play_cm or 0.0)
+            max_play = catalog.max_joint_play_cm()
+            if play > max_play + 1e-9:
+                reasons.append(f"support_play_too_large:{label}:{play:.6g}:max={max_play:.6g}")
+            if hypot(ux - lx, uy - ly) > xy_tolerance_cm + min(play, max_play):
                 reasons.append(
                     f"support_xy_mismatch:{label}:"
                     f"upper=({ux:.6g},{uy:.6g}):"

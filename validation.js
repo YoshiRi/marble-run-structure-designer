@@ -437,7 +437,12 @@
           return;
         }
         const [lx, ly] = railHoleWorld(catalog, lower, lh);
-        if (Math.hypot(ux - lx, uy - ly) > xyTol) {
+        const play = Number(support.play_cm || 0);
+        const maxPlay = geometry(catalog, "max_joint_play_cm", 0);
+        if (play > maxPlay + 1e-9) {
+          reasons.push("support_play_too_large:" + label + ":" + g6(play) + ":max=" + g6(maxPlay));
+        }
+        if (Math.hypot(ux - lx, uy - ly) > xyTol + Math.min(play, maxPlay)) {
           reasons.push("support_xy_mismatch:" + label + ":upper=(" + g6(ux) + "," + g6(uy) + "):lower=(" +
             g6(lx) + "," + g6(ly) + ")");
         }
