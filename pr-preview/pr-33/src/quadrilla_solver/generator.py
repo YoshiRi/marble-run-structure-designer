@@ -179,7 +179,9 @@ class GeneratorConfig:
     # 90 degrees, rails closing a rectangle, so the marble circles downward
     # and after a lap every corner is one tower. Chance per drop to start
     # one (same schedule as alignment); it runs for up to frame_sides rails.
-    frame_probability: float = 0.0
+    # Only in tall builds (user, 2026-10-25): a lap needs about 24 levels.
+    frame_probability: float = 1.0
+    frame_min_height_units: int = 45
     frame_sides: int = 6
     frame_min_side_cm: float = 18.0
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
@@ -629,7 +631,8 @@ class CascadeGenerator:
         if rail.id in state.frames:
             sign, corners, idx = state.frames[rail.id]
         else:
-            if c.frame_probability <= 0 or len(state.rails) + 4 > c.max_rails:
+            if (c.frame_probability <= 0 or c.max_height_units < c.frame_min_height_units
+                    or len(state.rails) + 4 > c.max_rails):
                 return None
             span = max(1, c.align_full_depth - c.align_start_depth)
             factor = 0.0 if depth < c.align_start_depth else min(1.0, (depth - c.align_start_depth + 1) / span)

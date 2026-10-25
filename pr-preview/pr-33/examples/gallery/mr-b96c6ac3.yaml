@@ -1,13 +1,13 @@
 schema_version: '0.1'
 layout_id: mr-b96c6ac3
 name: mr-b96c6ac3
-description: Gallery candidate (frames, seed 3).
+description: Gallery candidate (taller, seed 3).
 generator:
   sets:
   - OWNED
   exclude:
   - red_right_angle
-  config: frames
+  config: taller
   seed: 3
   score: 168.8
 metrics:
