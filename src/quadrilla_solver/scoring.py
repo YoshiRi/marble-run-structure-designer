@@ -131,6 +131,66 @@ def _switchbacks(ctx: MetricContext) -> float:
     return float(count)
 
 
+@layout_metric("frame_turns")
+def _frame_turns(ctx: MetricContext) -> float:
+    """Longest run of drops along the route that each turn the marble 90
+    degrees the same way (left, left, left...): the marble circling a frame
+    (design doc §6.2). Three turns close a rectangle."""
+    from math import cos, radians, sin
+    seen = ctx.reachable()
+    rails = {r.id: r for r in ctx.layout.rails}
+
+    def rail_of(node: str) -> str | None:
+        rid = node.split(":", 1)[0]
+        return rid if rid in rails and ":hole:" in node else None
+
+    nxt: dict[str, set[str]] = {}   # rail -> rails the marble drops onto next
+    for node in seen:
+        rid = rail_of(node)
+        if rid is None:
+            continue
+        stack, done = list(ctx.graph.edges.get(node, ())), set()
+        while stack:
+            n = stack.pop()
+            if n in done:
+                continue
+            done.add(n)
+            other = rail_of(n)
+            if other == rid:
+                continue
+            if other is not None:
+                nxt.setdefault(rid, set()).add(other)
+            else:
+                stack.extend(ctx.graph.edges.get(n, ()))
+
+    def heading(rid: str) -> tuple[float, float] | None:
+        r = rails[rid]
+        if ctx.catalog.rails[r.rail_type].shape in ("arc", "twist"):
+            return None
+        flip = {"a_to_b": 0.0, "b_to_a": 180.0}.get(r.flow_direction)
+        if flip is None:
+            return None
+        a = radians(r.yaw_deg + flip)
+        return cos(a), sin(a)
+
+    def turn(a: str, b: str) -> int:
+        ha, hb = heading(a), heading(b)
+        if ha is None or hb is None or abs(ha[0] * hb[0] + ha[1] * hb[1]) > 0.1:
+            return 0
+        return 1 if ha[0] * hb[1] - ha[1] * hb[0] > 0 else -1
+
+    best: dict[tuple[str, int], int] = {}
+
+    def run(rid: str, sign: int) -> int:   # turns of `sign` in a row from rid
+        key = (rid, sign)
+        if key not in best:
+            best[key] = 0
+            best[key] = max((1 + run(o, sign) for o in nxt.get(rid, ()) if turn(rid, o) == sign), default=0)
+        return best[key]
+
+    return float(max((run(r, s) for r in rails for s in (1, -1)), default=0))
+
+
 # One linear score. Each term: sign (+ reward, - penalty), default weight,
 # label and help for the viewer, and where it came from.
 SCORE_TERMS: tuple[dict[str, Any], ...] = (
@@ -147,6 +207,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
     {"key": "switchbacks", "sign": 1, "weight": 4.0, "label": "Switchbacks",
      "help": "per rail lying right under a route rail of the same type, reversed",
      "source": "official builds (switchback pattern)"},
+    {"key": "frame_turns", "sign": 1, "weight": 2.0, "label": "Frame turns",
+     "help": "per drop in the longest run turning the same way (the marble circling a frame)",
+     "source": "official builds (design doc §6.2)"},
     {"key": "shared_towers", "sign": 1, "weight": 3.0, "label": "Shared towers",
      "help": "per spot where columns hold two or more rails one above the other",
      "source": "user idea (cohesion)"},

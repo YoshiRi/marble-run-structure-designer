@@ -49,6 +49,14 @@
       "source": "official builds (switchback pattern)"
     },
     {
+      "key": "frame_turns",
+      "sign": 1,
+      "weight": 2.0,
+      "label": "Frame turns",
+      "help": "per drop in the longest run turning the same way (the marble circling a frame)",
+      "source": "official builds (design doc \u00a76.2)"
+    },
+    {
       "key": "shared_towers",
       "sign": 1,
       "weight": 3.0,
