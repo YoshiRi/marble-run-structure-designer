@@ -38,6 +38,7 @@ metrics:
   merges: 1.0
   shared_towers: 4.0
   switchbacks: 0.0
+  frame_turns: 0.0
 inventory_used:
   cover: 8
   cyan: 1
