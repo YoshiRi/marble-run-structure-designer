@@ -91,7 +91,7 @@ def generate_layouts(options: Mapping[str, Any], root: str | Path,
     """
     root = Path(root)
     catalog = load_catalog(root / "catalog" / "parts.yaml")
-    sets = list(options.get("sets") or ["QD001", "QD003", "QD005"])
+    sets = list(options.get("sets") or ["OWNED"])
     exclude = tuple(options.get("exclude") or ())
     budget = Budget.from_sets(resolve_set_paths(root, sets))
     footprint = options.get("footprint") or (90.0, 90.0)

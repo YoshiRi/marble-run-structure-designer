@@ -3163,7 +3163,7 @@
       box.textContent = "Could not load the set list.";
       return;
     }
-    const preset = new Set(["QD001", "QD003", "QD005", "QDE6008AB05"]);
+    const preset = new Set(["OWNED"]);  // the user's counted collection
     for (const group of Object.values(index.presets || {})) {
       for (const entry of group) {
         const label = document.createElement("label");
