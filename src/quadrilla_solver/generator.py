@@ -331,8 +331,18 @@ class CascadeGenerator:
             hx, hy = hy, hx
         return abs(solid.center_xy[0]) + hx <= hw + 1e-9 and abs(solid.center_xy[1]) + hy <= hd + 1e-9
 
+    def _rail_solids(self, rail: PlacedRail) -> list[Solid]:
+        """rail_solids, cached per rail object (placed rails are never
+        changed, only replaced)."""
+        cache = self.__dict__.setdefault("_rail_solid_cache", {})
+        hit = cache.get(id(rail))
+        if hit is None or hit[0] is not rail:
+            hit = (rail, rail_solids(rail, self.catalog))
+            cache[id(rail)] = hit
+        return hit[1]
+
     def _solids(self, state: _State) -> list[Solid]:
-        solids = [piece for r in state.rails.values() for piece in rail_solids(r, self.catalog)]
+        solids = [piece for r in state.rails.values() for piece in self._rail_solids(r)]
         solids += [c.solid(self.half) for c in state.columns.values()]
         return solids
 

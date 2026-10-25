@@ -186,6 +186,11 @@ def penetration_cm(a: Solid, b: Solid) -> float:
         return z_overlap
     dx = b.center_xy[0] - a.center_xy[0]
     dy = b.center_xy[1] - a.center_xy[1]
+    # Far apart in top view (bounding circles do not meet): no contact. The
+    # exact gap is not needed; callers only test for overlap.
+    reach = hypot(*a.half_extents_xy) + hypot(*b.half_extents_xy)
+    if dx * dx + dy * dy > reach * reach:
+        return -1.0
     smallest = z_overlap
     for axis in (*_axes(a), *_axes(b)):
         distance = abs(dx * axis[0] + dy * axis[1])
