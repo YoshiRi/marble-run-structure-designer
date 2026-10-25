@@ -370,14 +370,16 @@
       const cutters = [];
       try {
         let solid = BABYLON.CSG.FromMesh(box);
-        const grooveDepth = Math.min(RAIL_GROOVE_DEPTH_CM, railHeight * 0.8);
-        const groove = BABYLON.MeshBuilder.CreateBox("rail-groove-cutter", {
-          width: length + 0.25, height: grooveDepth + 0.12, depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
-        }, scene);
-        cutters.push(groove);
-        groove.position.y = railHeight / 2 - (grooveDepth / 2 - 0.06);
-        groove.computeWorldMatrix(true);
-        solid = solid.subtract(BABYLON.CSG.FromMesh(groove));
+        if (spec.shape !== "plate") {   // hole plates have no groove
+          const grooveDepth = Math.min(RAIL_GROOVE_DEPTH_CM, railHeight * 0.8);
+          const groove = BABYLON.MeshBuilder.CreateBox("rail-groove-cutter", {
+            width: length + 0.25, height: grooveDepth + 0.12, depth: Math.min(RAIL_GROOVE_WIDTH_CM, RAIL_WIDTH_CM * 0.9),
+          }, scene);
+          cutters.push(groove);
+          groove.position.y = railHeight / 2 - (grooveDepth / 2 - 0.06);
+          groove.computeWorldMatrix(true);
+          solid = solid.subtract(BABYLON.CSG.FromMesh(groove));
+        }
         for (const localX of spec.hole_positions_cm || []) {
           const cutter = BABYLON.MeshBuilder.CreateCylinder("hole-cutter", {
             diameter: HOLE_DIAMETER_CM, height: railHeight + 1.0, tessellation: 32,
@@ -431,7 +433,7 @@
     const railHeight = heightUnits * HEIGHT_SCALE_CM;
     const { mesh: railMesh, cutouts, grooveCutout } = spec.shape === "arc"
       ? buildCurvedRailMesh(rail, spec) : buildRailMesh(rail, spec);
-    if (!grooveCutout) {
+    if (!grooveCutout && spec.shape !== "plate") {
       const centerline = BABYLON.MeshBuilder.CreateBox("rail-groove-marker-" + rail.id, {
         width: length,
         height: 0.025,

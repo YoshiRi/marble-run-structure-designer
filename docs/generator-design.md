@@ -366,7 +366,57 @@ Two ways to use a pattern:
 | --- | --- | --- | --- |
 | switchback | two columns one rail apart; rails stacked at steps of k levels with alternating flow; at each end a drop block in the column turns the marble back onto the next rail down | turns, rail kind, k | yes (straight rails, drop blocks) |
 | frame | four corner columns on a rectangle sized by rail hole spacing; one rail per side, each side lower than the last, so the marble circles the frame downward | rail kinds per side, step | yes (rectangle); spacing to choose |
-| triangle | three corner columns; rails on the three sides at 60°, at different levels | ? | **no: needs the user's geometry** |
+| triangle, isosceles | base: a center-hole long rail, corners on its end holes (46 cm apart). Two long side rails: 2nd hole on a base corner, end hole at the apex (41 cm). At the apex a 3-hole plate takes both side ends on its outer holes; on its middle hole a median long rail (holes 2 and 4 from the end, 36 cm) runs to the base's center hole | — | yes (user, 2026-10-25); see below |
+| triangle, equilateral | three equal sides at 60°; the three sides end up at three different levels, so the corners need many purples | side length | possible in theory, never built (user); later |
+
+**Isosceles triangle, geometry check.** Plate hole pitch p, assumed
+4.5 cm (the user says the 2- and 3-hole plates share it). The apex is
+h = √(41² − (23 − p)²) from the base: 36.59 cm for p = 4.5 (36.33 for 4.0,
+36.84 for 5.0). The median spans 36 cm, so it is 0.6 cm short, which the
+1.8 cm holes can absorb at two joints ("it fits by a miracle", user). The
+apex angle is 54°, the base angles 63°. The side rails and the median
+all rest on the base rail, one level up, and the plate ties their apex ends.
+
+How it stands (user, 2026-10-25), fixture `triangle-isosceles.yaml`
+(`scripts/make_triangle_fixture.py`):
+
+| where | from the ground up |
+| --- | --- |
+| base corners (2) | foundation + block (6) → side rail (z 6, 2nd hole) → block → base rail (z 12, end hole) |
+| apex side ends (2) | foundation + block (6) → side rail (z 6, end hole) → 3-hole plate (z 7, outer hole) |
+| base center | base (z 12) → red splitter (13–18) → median (z 18, hole 1) |
+| apex middle | plate (z 7) → two blocks (8–18) → median (z 18, hole 2) |
+
+Rails are not laid straight on rails: a marble would only drop through the
+hole, so a block stands between (user). The red splitter belongs at the
+base end; at the apex its two sides are weak (user).
+
+Route (fixture): the marble enters at the median's apex end, rolls to the
+base end and drops into the red splitter, whose outlets face the base's two
+ends (user). Each half rolls along the base (holes 1 and 3 covered) into a
+corner block that sends it down the side rail toward the apex. The plate
+lies on the side's end hole, so the marble drops through hole 2 just before
+it. This build is one of the official examples (user).
+
+Extensions (user, 2026-10-25), next:
+- **double sides** (official): one more level of rails and blocks under
+  each side;
+- **apex tray**: a catcher at the apex takes the marbles from both sides
+  (the large trays are counted but not modeled yet).
+
+Four columns. Routes from the base down to the side rails that also keep it
+stable are few (user).
+
+Modeling: a hole plate laid across rails is a short rail without a groove
+(catalog `beam`, shape `plate`; nothing rolls on it). The median's two
+joints declare `play_cm` 0.3 each, capped by `geometry_cm.max_joint_play_cm`
+(0.35, provisional until the peg diameter is measured); without it the
+assembly check reports `support_xy_mismatch`.
+
+The viewer and the validators already handle any angle: every gallery
+layout turned by 30° or 60° stays valid, and Python and the browser agree
+(`+rot60` in the parity test). Only the generator's moves are on the
+90° grid; the triangle would be a placed skeleton.
 
 ### 6.3 Route first, supports after (two phases)
 
@@ -505,9 +555,19 @@ Each step adds a fixture and a test at its layer (§3).
 
 - TODO (user, 2026-10-24): register several **good-design combinations** as
   patterns (§6.2). Waiting for the user's examples.
-- The triangle's exact geometry: which holes sit at the corners, the side
-  length, the level of each side, and whether there is a center column (the
-  earlier note: rail ends on the triangle's sides, the middle hole on the
-  perpendicular).
+- TODO (user, 2026-10-25), at a good stopping point: make **efficient
+  structures like the isosceles triangle** (official builds) usable in two
+  ways, to raise the human score:
+  - **call them as one large pattern** (a skeleton the generator places
+    first, then grows routes and towers from its ports: here the median's
+    apex end in, the two side drops out, the red splitter's column up);
+  - **score them**: a term that recognizes the structure in any layout
+    (e.g. a triangle of rails sharing corner columns, a tower standing on a
+    plate), so builds that reach it on their own also gain.
+  Both need a pattern format with ports and a recognizer per pattern; the
+  triangle fixture is the first entry. Next for the triangle itself: double
+  sides (official) and an apex tray (needs the tray measured).
+- The triangle's exact geometry: settled for the isosceles type (§6.2,
+  fixture `triangle-isosceles.yaml`); the equilateral type is later.
 - Bracing: keep as a pass, or turn into a pattern?
 - Search: stay top-down, or propose a footprint pattern first?

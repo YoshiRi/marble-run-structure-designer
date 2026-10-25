@@ -1566,6 +1566,8 @@ def layout_to_dict(layout: Layout, source: PortRef = PortRef("rail0", "end_a"),
         if s.lower_rail_id is not None:
             out["lower_rail_id"] = s.lower_rail_id
             out["lower_hole_index"] = s.lower_hole_index
+        if s.play_cm:
+            out["play_cm"] = s.play_cm
         return out
 
     return {
