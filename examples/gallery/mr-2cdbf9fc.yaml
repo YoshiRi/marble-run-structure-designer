@@ -9,7 +9,7 @@ generator:
   - red_right_angle
   config: tallest
   seed: 3
-  score: 159.7
+  score: 161.7
 metrics:
   levels: 9
   rails: 8
@@ -36,6 +36,7 @@ metrics:
   merges: 0.0
   shared_towers: 5.0
   switchbacks: 0.0
+  frame_turns: 1.0
 inventory_used:
   blue: 8
   cover: 7

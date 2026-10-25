@@ -343,3 +343,21 @@ def test_gallery_fits_the_owned_inventory():
     for entry in index["layouts"]:
         usage = layout_usage(load_layout(ROOT / entry["file"]))
         assert _within_budget(usage, budget.counts), entry["id"]
+
+
+def test_frame_turns_counts_a_lap():
+    import yaml
+    from quadrilla_solver.generator import layout_source
+    from quadrilla_solver.model import layout_from_dict
+    from quadrilla_solver.scoring import layout_metrics
+    data = yaml.safe_load((ROOT / "tests" / "fixtures" / "frame-lap.yaml").read_text())
+    assert layout_metrics(layout_from_dict(data), CATALOG, layout_source(data))["frame_turns"] == 5
+
+
+def test_frames_close_a_rectangle():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(frame_probability=1.0, max_height_units=45, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    found = generate(CATALOG, budget, config=config, attempts=60, seed=2, keep=10)
+    assert max(c.metrics["frame_turns"] for c in found) >= 3

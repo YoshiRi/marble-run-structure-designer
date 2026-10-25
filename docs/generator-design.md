@@ -456,13 +456,34 @@ and twists, so they lose a few points under today's weights. The gallery has
 a `switchbacks` configuration and bucket. The defaults are unchanged until
 the user reviews them.
 
+**Frame** (`frame_probability`, `frame_sides` 6, `frame_min_side_cm` 18;
+built 2026-10-25). A run of drops that each turn the marble 90° the same
+way. The first two sides are free (at least 18 cm); the third fixes the
+rectangle, so later rails must stop exactly on its corners. It is a macro
+move that continues across drops (`_State.frames`), started with the
+alignment schedule. The metric `frame_turns` (longest run of same-way turns
+along the route, score +2 each) and the gallery bucket "frame" (≥ 3 turns)
+measure it. Measured (owned inventory, 3 seeds):
+
+| | parts | footprint cm² | shared towers | merges | score | valid |
+| --- | --- | --- | --- | --- | --- | --- |
+| 30 levels, off | 28.8 | 2283 | 2.3 | 0.33 | 107.2 | 82 % |
+| 30 levels, p 0.5 | 27.0 | 2618 | 2.4 | 0.07 | 111.9 | 84 % |
+| 30 levels, p 1 | 26.7 | 2829 | 2.5 | 0 | 113.7 | 85 % |
+| 45 levels, off | 49.5 | 3572 | 3.6 | 0.10 | 116.8 | 80 % |
+| 45 levels, p 1 | 49.8 | 3531 | 4.2 | 0.03 | 129.4 | 82 % |
+
+At p 1 and 45 levels, 30 % of the kept builds have three or more turns in a
+row. A frame takes over the drops, so merges and switchbacks almost vanish.
+A twist breaks the run. Off by default until the user reviews it.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
    gallery bucket "merged".
 2. The pattern format, placement and checks, with the switchback as the
    first pattern (a macro move). A bucket "switchback".
-3. The frame, as a skeleton.
+3. The frame (built as a macro move, 2026-10-25; a skeleton-first variant is open).
 4. The triangle, once its geometry is fixed.
 
 Each step adds a fixture and a test at its layer (§3).

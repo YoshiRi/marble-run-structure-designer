@@ -175,6 +175,13 @@ class GeneratorConfig:
     # back and forth between two towers. Chance per drop, on the same
     # schedule as alignment (0 near the top, full from align_full_depth).
     switchback_probability: float = 0.0
+    # Frame (design doc §6.2): a run of drops that each turn the same way by
+    # 90 degrees, rails closing a rectangle, so the marble circles downward
+    # and after a lap every corner is one tower. Chance per drop to start
+    # one (same schedule as alignment); it runs for up to frame_sides rails.
+    frame_probability: float = 0.0
+    frame_sides: int = 6
+    frame_min_side_cm: float = 18.0
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
     weights: Mapping[str, float] | None = None
 
@@ -228,12 +235,15 @@ class _State:
     counters: dict[str, int] = field(default_factory=dict)
     input_column: str | None = None  # free-standing column the marble is put into
     braces: list[str] = field(default_factory=list)  # rails that only brace towers
+    # Frame in progress: rail id -> (turn sign, corners so far, index of the
+    # corner the rail stops at). See GeneratorConfig.frame_probability.
+    frames: dict[str, tuple[int, tuple[tuple[float, float], ...], int]] = field(default_factory=dict)
 
     def copy(self) -> "_State":
         return _State(dict(self.rails), dict(self.columns), dict(self.corridors),
                       list(self.route_links), list(self.feeds), list(self.leaves),
                       list(self.dangling), self.covers, self.max_depth, dict(self.counters),
-                      self.input_column, list(self.braces))
+                      self.input_column, list(self.braces), dict(self.frames))
 
     def new_id(self, prefix: str) -> str:
         n = self.counters.get(prefix, 0)
@@ -518,6 +528,10 @@ class CascadeGenerator:
                 else ["ground", "landing"]
         room = self.config.max_exits - self._branches(state)
         prefer = self._switchback(rail, hole, depth)
+        frame = self._frame_plan(state, rail, hole, depth, hx, hy)
+        if frame is not None:
+            prefer = None
+            modes = ["landing"] + [m for m in modes if m != "landing"]
         for mode in modes:
             for block in self._block_order(depth):
                 outlets = self.drop_blocks[block]
@@ -528,13 +542,16 @@ class CascadeGenerator:
                 turns = self.rng.sample(range(4), 4)
                 if prefer is not None and mode == "landing":
                     turns = [2] + [t for t in turns if t != 2]  # reverse first
+                if frame is not None and mode == "landing":
+                    turns = [frame["turn"]] + [t for t in turns if t != frame["turn"]]
                 for turn in turns:
                     first = (incoming + turn) % 4
                     rotation = (90 * first + _PORT_ROTATION_OFFSET[outlets[0]]) % 360
                     dirs = {port: self._port_direction(port, rotation) for port in outlets}
                     if mode == "landing":
                         result = self._landing_drop(state, rail, hole, hx, hy, block, top_types, block_z,
-                                                    rotation, dirs, depth, prefer=prefer)
+                                                    rotation, dirs, depth, prefer=prefer,
+                                                    frame=frame if mode == "landing" else None)
                     else:
                         result = self._ground_drop(state, rail, hole, hx, hy, block, top_types, block_z,
                                                    rotation, dirs, depth)
@@ -602,11 +619,51 @@ class CascadeGenerator:
         k = next((i for i, h in enumerate(spec.holes_cm) if abs(h - mirror) < 1e-6), None)
         return None if k is None else (rail.rail_type, k)
 
+    def _frame_plan(self, state: _State, rail: PlacedRail, hole: int, depth: int,
+                    hx: float, hy: float) -> dict | None:
+        """Continue the frame `rail` belongs to, or start one under its stop
+        hole. Returns the landing direction and, once the rectangle is fixed,
+        where the next rail must stop (the next corner)."""
+        c = self.config
+        incoming = round(rail.yaw_deg / 90.0) % 4
+        if rail.id in state.frames:
+            sign, corners, idx = state.frames[rail.id]
+        else:
+            if c.frame_probability <= 0 or len(state.rails) + 4 > c.max_rails:
+                return None
+            span = max(1, c.align_full_depth - c.align_start_depth)
+            factor = 0.0 if depth < c.align_start_depth else min(1.0, (depth - c.align_start_depth + 1) / span)
+            if self.rng.random() >= c.frame_probability * factor:
+                return None
+            sign, corners, idx = self.rng.choice((1, -1)), ((hx, hy),), 0
+        nxt = idx + 1
+        target = corners[nxt % 4] if nxt % 4 < len(corners) else None
+        return {"sign": sign, "corners": corners, "idx": idx, "turn": sign % 4,
+                "d": (incoming + sign) % 4, "target": target}
+
+    def _frame_record(self, frame: dict, stop_xy: tuple[float, float]) -> tuple | None:
+        """Frame entry for the new rail stopping at `stop_xy`, or None when
+        the frame is complete."""
+        corners, nxt = frame["corners"], frame["idx"] + 1
+        if len(corners) == nxt:
+            corners = corners + (stop_xy,)
+            if len(corners) == 3:   # close the rectangle
+                (x0, y0), (x1, y1), (x2, y2) = corners
+                corners = corners + ((x0 + x2 - x1, y0 + y2 - y1),)
+        if nxt + 1 >= self.config.frame_sides:
+            return None
+        return (frame["sign"], corners, nxt)
+
     def _landing_drop(self, state, rail, hole, hx, hy, block, top_types, block_z, rotation, dirs, depth,
-                      prefer: tuple[str, int] | None = None):
+                      prefer: tuple[str, int] | None = None, frame: dict | None = None):
         """The drop block stands on a new rail and lands the marble on it."""
         ports = list(dirs)
         land_port = self.rng.choice(ports)
+        if frame is not None:
+            fitting = [p for p in ports if dirs[p] == frame["d"]]
+            if not fitting:
+                return None
+            land_port = fitting[0]
         d = dirs[land_port]
         # Other outlets must not face back against the landing rail's flow.
         if any(dirs[p] == (d + 2) % 4 for p in ports if p != land_port):
@@ -656,6 +713,22 @@ class CascadeGenerator:
             if twist:  # the funnel always drops through its center hole
                 stops = [("drop", len(spec.holes_cm) - 1)] if can_continue else []
                 ends = []
+            if frame is not None:
+                if twist or not can_continue:
+                    continue
+                sx_ = hx - spec.holes_cm[k] * _DIRS[d][0]
+                sy_ = hy - spec.holes_cm[k] * _DIRS[d][1]
+                if frame["target"] is not None:
+                    tx, ty = frame["target"]
+                    fit = [i for i in downstream
+                           if abs(sx_ + spec.holes_cm[i] * _DIRS[d][0] - tx) < 0.35
+                           and abs(sy_ + spec.holes_cm[i] * _DIRS[d][1] - ty) < 0.35]
+                else:
+                    fit = [i for i in downstream
+                           if spec.holes_cm[i] - spec.holes_cm[k] >= self.config.frame_min_side_cm]
+                if not fit:
+                    continue
+                stops = [("drop", self.rng.choice(fit))]
             stops = stops + ends
             for how, stop in stops:
                 trial = state.copy()
@@ -670,6 +743,10 @@ class CascadeGenerator:
                 if column.filler_units(self.heights) < 0 or self._hits(trial, [column.solid(self.half)]):
                     continue
                 trial.columns[column.id] = column
+                if frame is not None and how == "drop":
+                    entry = self._frame_record(frame, self._point(lower, spec.holes_cm[stop]))
+                    if entry is not None:
+                        trial.frames[lower.id] = entry
                 if not self._feasible(trial):
                     continue
                 outlets = []

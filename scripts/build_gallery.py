@@ -41,6 +41,8 @@ CONFIGS = [
                      "solve_supports": True}),
     # Seesaw diamonds (split and merge, design doc §6.1) on purpose.
     ("merges", {"seesaw_probability": 1.0, "weights": {"merges": 25.0}}),
+    # Frames (§6.2): the marble circles a rectangle downward; needs height.
+    ("frames", {"frame_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.
@@ -55,9 +57,14 @@ BUCKETS = [
     ("long roll", lambda m: m["min_exit_path_cm"] >= 200),
     ("compact", lambda m: m["footprint_area_cm2"] <= 2500),
     ("braced", lambda m: m.get("braces", 0) >= 1),
+]
+# Pattern buckets go first: each is rare and comes from one configuration,
+# which the per-configuration cap would otherwise fill with other buckets.
+BUCKETS = [
     ("merged", lambda m: m.get("merges", 0) >= 1),
     ("switchback", lambda m: m.get("switchbacks", 0) >= 1),
-]
+    ("frame", lambda m: m.get("frame_turns", 0) >= 3),
+] + BUCKETS
 
 
 def main() -> None:
