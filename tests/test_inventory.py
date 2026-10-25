@@ -113,7 +113,9 @@ def test_inventory_exceeded_is_reported():
 
 
 def test_unknown_owned_count_is_not_treated_as_unlimited():
-    inv = load_inventory(ROOT / "catalog" / "inventory.yaml")
+    owned = load_inventory(ROOT / "catalog" / "inventory.yaml")
+    inv = Inventory(name="partly counted",
+                    counts={**owned.counts, "wooden_foundation": None})
     result = validate_inventory(_example(), inv)
 
     assert not result.valid
@@ -138,3 +140,15 @@ def test_combined_validation_can_apply_inventory_constraint():
     assert result.inventory is not None
     assert result.inventory.valid
     assert result.valid
+
+
+def test_owned_inventory_is_counted():
+    inv = load_inventory(ROOT / "catalog" / "inventory.yaml")
+    assert inv.counts["yellow"] == 14
+    assert inv.counts["purple_drop"] == 39
+    assert inv.counts["seesaw"] == 4
+    assert inv.counts["straight_long_center"] == 3
+    assert inv.counts["straight_long"] == 8
+    assert inv.counts["straight_short"] == 2
+    assert inv.counts["accelerator_plate"] == 19 and inv.counts["cover"] == 9
+    assert "unmodeled" not in inv.counts and "plate_one_hole" not in inv.counts
