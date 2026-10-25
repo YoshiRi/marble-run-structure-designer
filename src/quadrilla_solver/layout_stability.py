@@ -250,7 +250,6 @@ def analyze_layout_statics(
             PointMass(support.name or f"free_stack_{i}", lower_spec.holes_cm[hole], float(sum(masses))))
 
     bodies: dict[str, RailBody] = {}
-    extra_masses: dict[str, list[PointMass]] = {}
 
     for rail in layout.rails:
         spec = catalog.rails.get(rail.rail_type)
@@ -328,31 +327,17 @@ def analyze_layout_statics(
                 )
             )
 
-        if len(converted) > 2 and len(converted) == len(supports):
-            # More than two columns (e.g. a collector held at both ends and at
-            # its center drop column): tipping is checked on the outermost two,
-            # which is conservative (a middle column only helps). A middle
-            # column's own weight still goes down to the rail it stands on.
-            ordered = sorted(converted, key=lambda c: c.x_cm)
-            for middle in ordered[1:-1]:
-                if middle.target_id is not None:
-                    extra_masses.setdefault(middle.target_id, []).append(
-                        PointMass(middle.name, middle.target_x_cm, middle.transfer_mass_g))
-            converted = [ordered[0], ordered[-1]]
-        if len(converted) == 2:
+        if len(converted) == len(supports):
+            # Any number of columns (2 or more): statics checks tipping on the
+            # outermost pair and every extreme split of the load among them.
             bodies[rail.id] = RailBody(
                 id=rail.id,
                 length_cm=spec.length_cm,
                 mass_g=spec.mass_g,
-                supports=(converted[0], converted[1]),
+                supports=tuple(converted),
                 com_cm=spec.com_cm,
                 point_masses=tuple(point_masses.get(rail.id, ())),
             )
-
-    for target, masses in extra_masses.items():
-        if target in bodies:
-            body = bodies[target]
-            bodies[target] = replace(body, point_masses=body.point_masses + tuple(masses))
 
     if reasons or len(bodies) != len(layout.rails):
         return LayoutStaticsResult(

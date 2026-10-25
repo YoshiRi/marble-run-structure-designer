@@ -7,41 +7,6 @@
   ],
   "layouts": [
     {
-      "id": "mr-f66be837",
-      "file": "examples/gallery/mr-f66be837.yaml",
-      "thumbnail": "examples/gallery/thumbs/mr-f66be837.jpg",
-      "config": "tallest",
-      "seed": 3,
-      "score": 193.5,
-      "tags": [
-        "twist",
-        "two twists",
-        "branched",
-        "tall",
-        "stacked",
-        "long roll",
-        "braced",
-        "merged"
-      ],
-      "metrics": {
-        "levels": 9,
-        "rails": 10,
-        "exits": 1,
-        "random_branches": 1,
-        "rolling_length_cm": 328.0,
-        "min_exit_path_cm": 328.0,
-        "columns_on_rails": 13,
-        "footprint_area_cm2": 5638,
-        "dead_area_cm2": 361,
-        "braces": 2,
-        "curves": 0,
-        "twists": 3,
-        "highest_exit": 2,
-        "parts": 91,
-        "covers": 11
-      }
-    },
-    {
       "id": "mr-34d6a5c9",
       "file": "examples/gallery/mr-34d6a5c9.yaml",
       "thumbnail": "examples/gallery/thumbs/mr-34d6a5c9.jpg",

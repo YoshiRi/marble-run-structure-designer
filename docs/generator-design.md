@@ -64,8 +64,12 @@ The validators decide, for any layout:
   plain rail and its center hole is the outlet. Rails have no direction of
   their own; each is labelled one way, or around a pivot hole: a collector
   (both ends into the hole) or outward (the rail under a seesaw).
-- **statics**: per rail, moments about its two supports with everything resting
-  on it; a global center of mass inside the ground support hull.
+- **statics**: per rail, its center of mass (with everything resting on it)
+  must lie within its outermost supports, whatever their number; a global
+  center of mass inside the ground support hull. On three or more columns the
+  split of the load is undetermined, so every extreme split is checked (one
+  bracketing pair carries the rail, the other columns only their own weight)
+  and all must pass.
 - **clearance**: nothing stands where the marble rolls.
 
 A physics fact the user corrects (e.g. "the twist's chute holes drop the
@@ -424,9 +428,13 @@ alignment schedule (`align_start_depth`).
 
 Two physics changes came with it:
 
-- Statics accepts a rail on three or more columns. Tipping is checked on the
-  outer two, which is conservative, and a middle column's weight goes down to
-  its rail. The seesaw diamond's collector now keeps both end columns when the
+- Statics accepts a rail on any number of columns (two or more). Tipping is
+  checked on the outermost pair; the load sent down is checked for every
+  extreme split (each pair of columns bracketing the center of mass carrying
+  it). The 20 g rule uses the outer pair. Of 199 layouts (gallery, fixtures,
+  generated), 58 have a rail on 3+ columns and 2 became invalid, both the same
+  case: a long rail balanced on its center column, which stands on the
+  overhang of a lower rail (mr-f66be837, dropped from the gallery). The seesaw diamond's collector now keeps both end columns when the
   branch continues under its center.
 - The support solver applies the overhang style rule (≥ 20 g on the lighter
   support) when choosing among its solutions.

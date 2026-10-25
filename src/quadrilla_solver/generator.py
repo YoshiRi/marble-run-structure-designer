@@ -1368,7 +1368,7 @@ def generate(
 def support_reactions_g(layout: Layout, catalog: PartCatalog,
                         overhang_only: bool = False) -> dict[str, float] | None:
     """Smaller support reaction of each rail in grams (moments about its two
-    supports, loads from everything above), or None if not evaluable.
+    outermost supports, loads from everything above), or None if not evaluable.
 
     With `overhang_only`, only rails carrying a load outside their supports
     are listed: a rail resting with its own center of mass on one support
@@ -1386,7 +1386,9 @@ def support_reactions_g(layout: Layout, catalog: PartCatalog,
                 not load.source.endswith(":self") and not min(xs) - 1e-6 <= load.x_cm <= max(xs) + 1e-6
                 for load in rs.applied_loads):
             continue
-        out[rid] = min(r.force_n for r in rs.reactions) / 9.80665 * 1000.0
+        # The outermost pair carrying everything (on two supports, the
+        # reactions themselves): a middle column cannot be relied on.
+        out[rid] = min(rs.outer_reactions_n) / 9.80665 * 1000.0
     return out
 
 
