@@ -382,13 +382,16 @@ How it stands (user, 2026-10-25), fixture `triangle-isosceles.yaml`
 
 | where | from the ground up |
 | --- | --- |
-| base corners (2) | foundation + block (6) → side rail (z 6, 2nd hole) → base rail (z 7, end hole) |
+| base corners (2) | foundation + block (6) → side rail (z 6, 2nd hole) → block → base rail (z 12, end hole) |
 | apex side ends (2) | foundation + block (6) → side rail (z 6, end hole) → 3-hole plate (z 7, outer hole) |
-| base center | base (z 7) → block (8–13) → median (z 13, hole 1) |
-| apex middle | plate (z 7) → red splitter (8–13) → median (z 13, hole 2) |
+| base center | base (z 12) → red splitter (13–18) → median (z 18, hole 1) |
+| apex middle | plate (z 7) → two blocks (8–18) → median (z 18, hole 2) |
 
-Four columns. The red splitter on the plate is where a tower goes on up
-(user). Routes from the base down to the side rails that also keep it
+Rails are not laid straight on rails: a marble would only drop through the
+hole, so a block stands between (user). The red splitter belongs at the
+base end; at the apex its two sides are weak (user).
+
+Four columns. Routes from the base down to the side rails that also keep it
 stable are few (user).
 
 Modeling: a hole plate laid across rails is a short rail without a groove

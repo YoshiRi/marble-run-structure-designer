@@ -25,7 +25,7 @@ rails:
   rail_type: straight_long_center
   x_cm: -25.0
   y_cm: 0.0
-  z_units: 7
+  z_units: 12
   yaw_deg: 0.0
   hole_states:
     0: block_connected
@@ -41,7 +41,7 @@ rails:
   rail_type: straight_long
   x_cm: 0.0
   y_cm: -6.705534
-  z_units: 13
+  z_units: 18
   yaw_deg: 90.0
   hole_states:
     1: block_connected
@@ -95,17 +95,35 @@ parts:
   y_cm: 36.588933
   z_units: 1
   rotation_deg: 0
-- id: median_foot
+- id: corner_left
   part_type: blue
+  x_cm: -23.0
+  y_cm: 0.0
+  z_units: 7
+  rotation_deg: 0
+- id: corner_right
+  part_type: yellow
+  x_cm: 23.0
+  y_cm: 0.0
+  z_units: 7
+  rotation_deg: 0
+- id: base_red
+  part_type: red_random_split
   x_cm: 0.0
   y_cm: 0.294466
-  z_units: 8
+  z_units: 13
   rotation_deg: 0
-- id: apex_red
-  part_type: red_random_split
+- id: apex_low
+  part_type: green
   x_cm: 0.0
   y_cm: 36.294466
   z_units: 8
+  rotation_deg: 0
+- id: apex_high
+  part_type: cyan
+  x_cm: 0.0
+  y_cm: 36.294466
+  z_units: 13
   rotation_deg: 0
 supports:
 - name: col_left_1
@@ -135,13 +153,15 @@ supports:
 - name: base_on_left
   upper_rail_id: base
   upper_hole_index: 0
-  stack_part_ids: []
+  stack_part_ids:
+  - corner_left
   lower_rail_id: side_left
   lower_hole_index: 1
 - name: base_on_right
   upper_rail_id: base
   upper_hole_index: 4
-  stack_part_ids: []
+  stack_part_ids:
+  - corner_right
   lower_rail_id: side_right
   lower_hole_index: 1
 - name: plate_on_left
@@ -160,7 +180,7 @@ supports:
   upper_rail_id: median
   upper_hole_index: 1
   stack_part_ids:
-  - median_foot
+  - base_red
   lower_rail_id: base
   lower_hole_index: 2
   play_cm: 0.3
@@ -168,7 +188,8 @@ supports:
   upper_rail_id: median
   upper_hole_index: 2
   stack_part_ids:
-  - apex_red
+  - apex_low
+  - apex_high
   lower_rail_id: apex_plate
   lower_hole_index: 1
   play_cm: 0.3

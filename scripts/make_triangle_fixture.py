@@ -3,13 +3,15 @@ base (design doc §6.2), built from the measured hole positions.
 
     python scripts/make_triangle_fixture.py
 
-Base: a center-hole long rail on top, its end holes over the side rails'
-second holes. Sides: long rails on four ground columns (foundation +
-block), second hole at a base corner, end hole at the apex. Apex: a 3-hole
-plate on the two side ends. Median: a long rail (holes 1 and 2, 36 cm)
-from a block on the base's center hole to a red splitter on the plate's
-middle hole. It is 0.59 cm short of the apex; the two median joints take
-half each as declared play (user: "it fits by a miracle").
+Sides: long rails on four ground columns (foundation + block), second
+hole at a base corner, end hole at the apex. Base: a center-hole long rail
+on a block standing on each side rail's corner hole (rails are not laid
+straight on rails: a marble would only drop through, user). Apex: a 3-hole
+plate on the two side ends. Median: a long rail (holes 1 and 2, 36 cm) from
+a red splitter on the base's center hole (the splitter belongs at the base,
+user) to two blocks on the plate's middle hole. It is 0.59 cm short of the
+apex; the two median joints take half each as declared play (user: "it
+fits by a miracle").
 """
 from __future__ import annotations
 
@@ -51,12 +53,15 @@ def main() -> None:
             supports.append({"name": col, "upper_rail_id": f"side_{side}", "upper_hole_index": hole,
                              "stack_part_ids": [f"{col}_foundation", f"{col}_block"]})
     rails.append({"id": "base", "rail_type": "straight_long_center", "x_cm": -BASE_HALF - 2, "y_cm": 0.0,
-                  "z_units": 7, "yaw_deg": 0.0, "hole_states": {0: "block_connected", 2: "block_connected",
-                                                                4: "block_connected"}})
-    supports += [{"name": "base_on_left", "upper_rail_id": "base", "upper_hole_index": 0, "stack_part_ids": [],
-                  "lower_rail_id": "side_left", "lower_hole_index": 1},
-                 {"name": "base_on_right", "upper_rail_id": "base", "upper_hole_index": 4, "stack_part_ids": [],
-                  "lower_rail_id": "side_right", "lower_hole_index": 1}]
+                  "z_units": 12, "yaw_deg": 0.0, "hole_states": {0: "block_connected", 2: "block_connected",
+                                                                 4: "block_connected"}})
+    for side, hole, block in (("left", 0, "blue"), ("right", 4, "yellow")):
+        (x, y) = corners[side]
+        parts.append({"id": f"corner_{side}", "part_type": block, "x_cm": r(x), "y_cm": r(y), "z_units": 7,
+                      "rotation_deg": 0})
+        supports.append({"name": f"base_on_{side}", "upper_rail_id": "base", "upper_hole_index": hole,
+                         "stack_part_ids": [f"corner_{side}"], "lower_rail_id": f"side_{side}",
+                         "lower_hole_index": 1})
     rails.append({"id": "apex_plate", "rail_type": "plate_three_holes", "x_cm": r(-PITCH - 2.25),
                   "y_cm": r(APEX), "z_units": 7, "yaw_deg": 0.0})
     supports += [{"name": "plate_on_left", "upper_rail_id": "apex_plate", "upper_hole_index": 0,
@@ -66,16 +71,19 @@ def main() -> None:
     # Median: holes 1 and 2 (7 and 43 cm), centered between the base center
     # hole and the plate's middle hole.
     y1 = SHORT / 2
-    rails.append({"id": "median", "rail_type": "straight_long", "x_cm": 0.0, "y_cm": r(y1 - 7), "z_units": 13,
+    rails.append({"id": "median", "rail_type": "straight_long", "x_cm": 0.0, "y_cm": r(y1 - 7), "z_units": 18,
                   "yaw_deg": 90.0, "hole_states": {1: "block_connected", 2: "block_connected"}})
-    parts += [{"id": "median_foot", "part_type": "blue", "x_cm": 0.0, "y_cm": r(y1), "z_units": 8, "rotation_deg": 0},
-              {"id": "apex_red", "part_type": "red_random_split", "x_cm": 0.0, "y_cm": r(y1 + MEDIAN),
-               "z_units": 8, "rotation_deg": 0}]
+    parts += [{"id": "base_red", "part_type": "red_random_split", "x_cm": 0.0, "y_cm": r(y1), "z_units": 13,
+               "rotation_deg": 0},
+              {"id": "apex_low", "part_type": "green", "x_cm": 0.0, "y_cm": r(y1 + MEDIAN), "z_units": 8,
+               "rotation_deg": 0},
+              {"id": "apex_high", "part_type": "cyan", "x_cm": 0.0, "y_cm": r(y1 + MEDIAN), "z_units": 13,
+               "rotation_deg": 0}]
     supports += [{"name": "median_on_base", "upper_rail_id": "median", "upper_hole_index": 1,
-                  "stack_part_ids": ["median_foot"], "lower_rail_id": "base", "lower_hole_index": 2, "play_cm": PLAY},
+                  "stack_part_ids": ["base_red"], "lower_rail_id": "base", "lower_hole_index": 2, "play_cm": PLAY},
                  {"name": "median_on_plate", "upper_rail_id": "median", "upper_hole_index": 2,
-                  "stack_part_ids": ["apex_red"], "lower_rail_id": "apex_plate", "lower_hole_index": 1,
-                  "play_cm": PLAY}]
+                  "stack_part_ids": ["apex_low", "apex_high"], "lower_rail_id": "apex_plate",
+                  "lower_hole_index": 1, "play_cm": PLAY}]
     data = {
         "schema_version": "0.1",
         "name": "triangle-isosceles",
