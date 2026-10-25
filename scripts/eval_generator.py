@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from quadrilla_solver import generator as g  # noqa: E402
 from quadrilla_solver.catalog import load_catalog  # noqa: E402
 
-SETS = ["QD001", "QD003", "QD005", "QDE6008AB05"]
+SETS = ["OWNED"]  # the counted collection (catalog/inventory.yaml)
 METRICS = ["levels", "rails", "parts", "exits", "rolling_length_cm", "footprint_area_cm2",
            "dead_area_cm2", "idle_rail_cm", "weak_towers", "braces", "twists", "curved_rails", "shared_towers", "switchbacks"]
 
@@ -35,12 +35,13 @@ def seeds(text: str) -> list[int]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seeds", default="1-5")
+    ap.add_argument("--sets", default=",".join(SETS), help="inventory ids, e.g. OWNED or QD001,QD003")
     ap.add_argument("--attempts", type=int, default=150)
     ap.add_argument("--keep", type=int, default=10)
     ap.add_argument("--set", action="append", default=[], help="GeneratorConfig field=value")
     args = ap.parse_args()
     catalog = load_catalog(ROOT / "catalog" / "parts.yaml")
-    budget = g.Budget.from_sets(g.resolve_set_paths(ROOT, SETS))
+    budget = g.Budget.from_sets(g.resolve_set_paths(ROOT, args.sets.split(",")))
     fields: dict = {"exclude_parts": ("red_right_angle",)}
     for item in args.set:
         key, _, value = item.partition("=")

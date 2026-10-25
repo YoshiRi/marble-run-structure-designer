@@ -1,6 +1,10 @@
 schema_version: "0.1"
 
 presets:
+  # The user's own collection (counted by hand); the generator's default.
+  owned:
+    - { id: OWNED, file: ../inventory.yaml, name_ja: "手持ち（実測）" }
+
   current_core:
     - { id: QD001, file: basic-qd001.yaml, name_ja: "ベーシックセット" }
     - { id: QD003, file: funny-function-qd003.yaml, name_ja: "ファニーファンクションセット" }

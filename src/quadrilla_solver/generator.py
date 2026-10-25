@@ -53,16 +53,27 @@ _FILLER_PREFERENCE = (
     "red_right_angle", "red_random_split",
 )
 _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
-# Inventory pool each rail kind draws from (presets do not list center holes
-# separately); `straight_unspecified` is a wildcard for any straight rail.
-_RAIL_POOL = {"straight_short": "straight_short", "straight_long": "straight_long",
-              "straight_long_center": "straight_long", "spiral": "spiral"}
 # The twist may be listed as one pool or by size; all are treated as one size.
 _SPIRAL_POOLS = ("spiral", "spiral_large", "spiral_small")
 
 
 def _spiral_capacity(counts: Mapping[str, int]) -> int:
     return sum(counts.get(k, 0) for k in _SPIRAL_POOLS)
+
+
+def _straights_fit(short: int, plain: int, center: int, counts: Mapping[str, int]) -> bool:
+    """Whether the straights used fit the inventory. An inventory that counts
+    center-hole long rails separately (the owned one) holds them to that count;
+    a plain long rail may also be a spare center-hole one. Set presets do not
+    tell them apart, so there both draw from `straight_long`.
+    `straight_unspecified` covers any overflow."""
+    overflow = max(0, short - counts.get("straight_short", 0))
+    if "straight_long_center" in counts:
+        c = counts.get("straight_long_center", 0) or 0
+        overflow += max(0, center - c) + max(0, plain - counts.get("straight_long", 0) - max(0, c - center))
+    else:
+        overflow += max(0, plain + center - counts.get("straight_long", 0))
+    return overflow <= counts.get("straight_unspecified", 0)
 # Holes a straight can be swapped to a curve on (substitution.py): building on
 # them keeps rails curve-ready.
 _CURVE_READY = {"straight_short": {0, 3}, "straight_long_center": {0, 2, 4}}
@@ -330,13 +341,11 @@ class CascadeGenerator:
     # ---- inventory --------------------------------------------------------
     def _feasible(self, state: _State) -> bool:
         counts = self.budget.counts
-        used: Counter = Counter()
-        for rail in state.rails.values():
-            used[_RAIL_POOL[rail.rail_type]] += 1
+        used: Counter = Counter(rail.rail_type for rail in state.rails.values())
         if used["spiral"] > _spiral_capacity(counts):
             return False
-        wildcard_needed = sum(max(0, used[p] - counts[p]) for p in ("straight_short", "straight_long"))
-        if wildcard_needed > counts["straight_unspecified"]:
+        if not _straights_fit(used["straight_short"], used["straight_long"],
+                              used["straight_long_center"], counts):
             return False
         if state.covers > counts["cover"]:
             return False
@@ -1088,10 +1097,8 @@ def layout_usage(layout: Layout) -> dict[str, int]:
 
 
 def _within_budget(usage: Mapping[str, int], counts: Mapping[str, int]) -> bool:
-    short = usage.get("straight_short", 0)
-    long_ = usage.get("straight_long", 0) + usage.get("straight_long_center", 0)
-    overflow = max(0, short - counts.get("straight_short", 0)) + max(0, long_ - counts.get("straight_long", 0))
-    if overflow > counts.get("straight_unspecified", 0):
+    if not _straights_fit(usage.get("straight_short", 0), usage.get("straight_long", 0),
+                          usage.get("straight_long_center", 0), counts):
         return False
     if usage.get("spiral", 0) > _spiral_capacity(counts):
         return False

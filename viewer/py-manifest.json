@@ -22,6 +22,7 @@
     "src/quadrilla_solver/validation.py",
     "src/quadrilla_solver/web.py",
     "catalog/parts.yaml",
+    "catalog/inventory.yaml",
     "catalog/sets/index.yaml",
     "catalog/sets/basic-qd001.yaml",
     "catalog/sets/funny-function-qd003.yaml",

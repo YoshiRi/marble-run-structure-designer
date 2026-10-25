@@ -1,17 +1,14 @@
 schema_version: '0.1'
-layout_id: mr-44eea9e8
-name: mr-44eea9e8
-description: Gallery candidate (balanced, seed 3).
+layout_id: mr-c77637cb
+name: mr-c77637cb
+description: Gallery candidate (balanced, seed 1).
 generator:
   sets:
-  - QD001
-  - QD003
-  - QD005
-  - QDE6008AB05
+  - OWNED
   exclude:
   - red_right_angle
   config: balanced
-  seed: 3
+  seed: 1
   score: 122.5
 metrics:
   levels: 5
@@ -41,6 +38,7 @@ metrics:
   switchbacks: 0.0
 inventory_used:
   cover: 6
+  cyan: 1
   green: 1
   natural_drop: 5
   purple_drop: 11
@@ -49,10 +47,11 @@ inventory_used:
   straight_long_center: 2
   straight_short: 1
   wooden_foundation: 4
-  yellow: 3
+  yellow: 2
 bill_of_materials:
   used:
     cover: 6
+    cyan: 1
     green: 1
     natural_drop: 5
     purple_drop: 11
@@ -61,54 +60,58 @@ bill_of_materials:
     straight_long_center: 2
     straight_short: 1
     wooden_foundation: 4
-    yellow: 3
+    yellow: 2
   check:
   - part: cover
     needed: 6
-    available: 18
+    available: 9
+    short: 0
+  - part: cyan
+    needed: 1
+    available: 13
     short: 0
   - part: green
     needed: 1
-    available: 5
+    available: 14
     short: 0
   - part: natural_drop
     needed: 5
-    available: 8
+    available: 6
     short: 0
   - part: purple_drop
     needed: 11
-    available: 32
+    available: 39
     short: 0
   - part: seesaw
     needed: 1
-    available: 1
+    available: 4
     short: 0
   - part: spiral
     needed: 1
-    available: 6
+    available: 2
     short: 0
   - part: straight_long
     needed: 2
-    available: 4
+    available: 11
     short: 0
   - part: straight_short
     needed: 1
-    available: 7
+    available: 2
     short: 0
   - part: wooden_foundation
     needed: 4
-    available: 16
+    available: 10
     short: 0
   - part: yellow
-    needed: 3
-    available: 10
+    needed: 2
+    available: 14
     short: 0
 rails:
 - id: rail1
   rail_type: spiral
-  x_cm: 18.0
-  y_cm: -1.5
-  yaw_deg: 90.0
+  x_cm: -1.5
+  y_cm: -18.0
+  yaw_deg: 0.0
   turn: left
   z_units: 21
   flow_direction: a_to_b
@@ -117,9 +120,9 @@ rails:
     2: block_connected
 - id: rail2
   rail_type: straight_short
-  x_cm: 18
-  y_cm: 25
-  yaw_deg: 270
+  x_cm: 25
+  y_cm: -18
+  yaw_deg: 180
   z_units: 15
   flow_direction: a_to_b
   hole_states:
@@ -127,9 +130,9 @@ rails:
     2: open
 - id: rail3
   rail_type: straight_long_center
-  x_cm: -7
-  y_cm: 5
-  yaw_deg: 0
+  x_cm: 5
+  y_cm: 7
+  yaw_deg: 270
   z_units: 7
   flow_direction: from_hole
   hole_states:
@@ -140,9 +143,9 @@ rails:
   flow_hole: 2
 - id: rail4
   rail_type: straight_long_center
-  x_cm: -7
-  y_cm: 5
-  yaw_deg: 0
+  x_cm: 5
+  y_cm: 7
+  yaw_deg: 270
   z_units: 1
   flow_direction: to_hole
   hole_states:
@@ -153,132 +156,133 @@ rails:
 parts:
 - id: c3_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 0
 - id: c3_1_natural_drop
   part_type: natural_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 1
 - id: c3_2_natural_drop
   part_type: natural_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 6
 - id: c3_3_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 11
 - id: c3_4_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 12
 - id: c3_5_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 13
 - id: c3_6_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 14
 - id: c4_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 0
 - id: c4_1_natural_drop
   part_type: natural_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 1
 - id: c4_2_natural_drop
   part_type: natural_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 6
 - id: c4_3_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 11
 - id: c4_4_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 12
 - id: c4_5_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 13
 - id: c4_6_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 14
 - id: c8_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: -5
+  x_cm: 5
   y_cm: 5
   z_units: 0
 - id: c9_0_wooden_foundation
   part_type: wooden_foundation
-  x_cm: 41
-  y_cm: 5
+  x_cm: 5
+  y_cm: -41
   z_units: 0
 - id: c6_0_yellow
   part_type: yellow
-  x_cm: -5
+  x_cm: 5
   y_cm: 5
   z_units: 2
-  rotation_deg: 270
+  rotation_deg: 180
 - id: c7_0_yellow
   part_type: yellow
-  x_cm: 41
-  y_cm: 5
+  x_cm: 5
+  y_cm: -41
   z_units: 2
-  rotation_deg: 90
 - id: c10_0_seesaw
   part_type: seesaw
-  x_cm: 18
-  y_cm: 5
+  x_cm: 5
+  y_cm: -18
   z_units: 8
+  rotation_deg: 270
 - id: c1_0_natural_drop
   part_type: natural_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 16
 - id: c1_1_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 21
 - id: c1_2_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 22
 - id: c1_3_purple_drop
   part_type: purple_drop
-  x_cm: 18
-  y_cm: 0
+  x_cm: 0
+  y_cm: -18
   z_units: 23
 - id: c5_0_green
   part_type: green
-  x_cm: 18
-  y_cm: 23
+  x_cm: 23
+  y_cm: -18
   z_units: 16
-  rotation_deg: 180
-- id: c2_0_yellow
-  part_type: yellow
-  x_cm: 18
-  y_cm: 0
+  rotation_deg: 90
+- id: c2_0_cyan
+  part_type: cyan
+  x_cm: 0
+  y_cm: -18
   z_units: 25
+  rotation_deg: 270
 supports:
 - name: c3
   upper_rail_id: rail2
@@ -354,13 +358,13 @@ supports:
   upper_rail_id: null
   upper_hole_index: null
   stack_part_ids:
-  - c2_0_yellow
+  - c2_0_cyan
   lower_rail_id: rail1
   lower_hole_index: 0
 route_links: []
 routing_query:
   source:
-    component_id: c2_0_yellow
+    component_id: c2_0_cyan
     port: top
   sinks:
   - component_id: rail4
