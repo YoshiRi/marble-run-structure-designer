@@ -160,7 +160,7 @@ class GeneratorConfig:
     # Re-solve the columns the marble never touches for all rails at once
     # (supports.py), dropping greedy braces; kept only if it validates and
     # scores better (design doc §6.3 support phase).
-    solve_supports: bool = False
+    solve_supports: bool = True  # default since 2026-10-25 (user): -13 % parts, score +3
     # Search schedule (user idea, 2026-10-25): branch early, align later.
     # Placements whose holes lie over/under existing holes in top view (a
     # tower the support solver can stack through) are tried first, with a

@@ -405,7 +405,10 @@ nothing. Shared spots (towers and frames) hardly appear, because the route
 rarely puts holes of different rails above each other. So **frames have to
 be planned in the route phase** (patterns: switchback, frame), and the
 support phase then turns the aligned holes into towers. `solve_supports` is
-off by default for now (2.6x slower; lower valid rate at 30 levels).
+on by default since 2026-10-25 (user decision). Measured on the owned
+inventory, 30 levels, 5 seeds: parts 32.6 → 27.9 (−14 %), footprint
+2797 → 2280 cm² (−18 %), merges 0.16 → 0.28, score 105.5 → 105.3,
+valid 84 → 80 %, 11 → 30 ms per attempt.
 
 **Search schedule** (user idea, 2026-10-25): branch early, align later.
 `align_weight` makes later placements try rails whose holes lie over or
