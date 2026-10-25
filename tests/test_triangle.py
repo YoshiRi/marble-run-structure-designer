@@ -48,3 +48,10 @@ def test_without_the_apex_columns_the_sides_tip():
     data = copy.deepcopy(DATA)
     data["supports"] = [s for s in data["supports"] if s["name"] not in ("col_left_3", "col_right_3")]
     assert not _validate(data).valid
+
+
+def test_the_marble_splits_at_the_base_and_runs_down_both_sides():
+    from quadrilla_solver.generator import layout_sinks, layout_source
+    result = validate_layout(layout_from_dict(DATA), CATALOG, source=layout_source(DATA), sinks=layout_sinks(DATA))
+    assert result.valid
+    assert set(result.connectivity.reached_sinks) == {"side_left:hole:2", "side_right:hole:2"}

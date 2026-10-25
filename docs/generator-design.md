@@ -391,6 +391,19 @@ Rails are not laid straight on rails: a marble would only drop through the
 hole, so a block stands between (user). The red splitter belongs at the
 base end; at the apex its two sides are weak (user).
 
+Route (fixture): the marble enters at the median's apex end, rolls to the
+base end and drops into the red splitter, whose outlets face the base's two
+ends (user). Each half rolls along the base (holes 1 and 3 covered) into a
+corner block that sends it down the side rail toward the apex. The plate
+lies on the side's end hole, so the marble drops through hole 2 just before
+it. This build is one of the official examples (user).
+
+Extensions (user, 2026-10-25), next:
+- **double sides** (official): one more level of rails and blocks under
+  each side;
+- **apex tray**: a catcher at the apex takes the marbles from both sides
+  (the large trays are counted but not modeled yet).
+
 Four columns. Routes from the base down to the side rails that also keep it
 stable are few (user).
 
