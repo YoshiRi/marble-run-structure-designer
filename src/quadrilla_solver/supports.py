@@ -333,18 +333,24 @@ def resolve_supports(layout: Layout, catalog: PartCatalog, counts: Mapping[str, 
     options.setdefault("keep", 40)
     solver = SupportSolver(stripped, catalog, counts, source, sinks, **options)
     best = None
+    # Solutions come cheapest first and the rank only adds penalties, so stop
+    # once the cost alone cannot beat the best; check the cheap things
+    # (rank, overhang rule) before the full validation.
     for cost, cols in solver.solve():
+        if best is not None and cost >= best[0]:
+            break
         trial = solver.build(cols)
-        result = validate_layout(trial, catalog, source=source, sinks=sinks)
-        if not (result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}):
+        # Weak towers weigh like the score does (15 points vs ~1 per part).
+        rank = cost + weak_tower_weight * weak_towers(trial, catalog)
+        if best is not None and rank >= best[0]:
             continue
         if min_support_g is not None:
             # The style rule on overhanging loads (review 3), as the generator applies it.
             reactions = support_reactions_g(trial, catalog, overhang_only=True)
             if reactions is None or any(g < min_support_g for g in reactions.values()):
                 continue
-        # Weak towers weigh like the score does (15 points vs ~1 per part).
-        rank = cost + weak_tower_weight * weak_towers(trial, catalog)
-        if best is None or rank < best[0]:
-            best = (rank, trial)
+        result = validate_layout(trial, catalog, source=source, sinks=sinks)
+        if not (result.valid and set(result.connectivity.reached_sinks) == {s.key for s in sinks}):
+            continue
+        best = (rank, trial)
     return best[1] if best else None

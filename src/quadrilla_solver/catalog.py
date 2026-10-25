@@ -56,6 +56,17 @@ class PartCatalog:
     rails: Mapping[str, RailSpec]
 
     def _find_part(self, part_type: str) -> tuple[str, Mapping[str, Any]] | None:
+        # The catalog never changes once loaded: look each part up once (the
+        # generator asks hundreds of thousands of times per run).
+        cache = self.__dict__.get("_part_cache")
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_part_cache", cache)
+        if part_type not in cache:
+            cache[part_type] = self._find_part_uncached(part_type)
+        return cache[part_type]
+
+    def _find_part_uncached(self, part_type: str) -> tuple[str, Mapping[str, Any]] | None:
         for category in ("routing_blocks", "structural_parts", "special_parts"):
             group = self.raw.get(category, {})
             if isinstance(group, Mapping) and part_type in group:
@@ -98,6 +109,15 @@ class PartCatalog:
     def mass_g(self, part_type: str) -> float | None:
         if part_type in self.rails:
             return self.rails[part_type].mass_g
+        cache = self.__dict__.get("_mass_cache")
+        if cache is None:
+            cache = {}
+            object.__setattr__(self, "_mass_cache", cache)
+        if part_type not in cache:
+            cache[part_type] = self._mass_g_uncached(part_type)
+        return cache[part_type]
+
+    def _mass_g_uncached(self, part_type: str) -> float | None:
 
         found = self._find_part(part_type)
         if found is None:
