@@ -314,7 +314,8 @@ class SupportSolver:
             ids = []
             for k, t in enumerate(sequence):
                 pid = f"s{n}_{k}_{t}"
-                parts.append(PlacedPart(pid, t, c.x, c.y, z, 0))
+                # rounded like the YAML writer so a saved layout loads back equal
+                parts.append(PlacedPart(pid, t, round(c.x, 4), round(c.y, 4), z, 0))
                 ids.append(pid)
                 z += self.catalog.height_units(t)
             supports.append(SupportLink(c.rail_id, c.hole, tuple(ids), c.base_rail, c.base_hole, name=f"s{n}"))

@@ -200,7 +200,7 @@
       "key": "solve_supports",
       "label": "Solve supports",
       "type": "bool",
-      "default": false,
+      "default": true,
       "help": "re-solve the columns the marble never touches for all rails at once (fewer parts, slower)",
       "source": "two-phase design"
     },
