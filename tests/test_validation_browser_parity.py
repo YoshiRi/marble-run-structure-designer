@@ -66,6 +66,8 @@ def _mutations(name, data):
         m = copy.deepcopy(data)
         m["rails"][0]["x_cm"] = float(m["rails"][0]["x_cm"]) + 0.7  # off its columns
         out.append((name + "+railshift", m))
+    if data.get("rails"):
+        out.append((name + "+rot60", _rotated(data, 60.0)))  # off the 90-degree grid (triangles)
     if any(p["part_type"] == "seesaw" for p in data.get("parts", [])):
         out.extend(_seesaw_mutations(name, data))
     third = _third_support(data)
@@ -95,6 +97,20 @@ def _third_support(data):
                               "stack_part_ids": ids})
         return m
     return None
+
+
+def _rotated(data, deg):
+    """The whole layout turned about the origin: rails and parts at angles
+    that are not multiples of 90 degrees."""
+    import math
+    m = copy.deepcopy(data)
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    for item in m.get("rails", []) + m.get("parts", []):
+        x, y = float(item["x_cm"]), float(item["y_cm"])
+        item["x_cm"], item["y_cm"] = x * c - y * s, x * s + y * c
+        key = "yaw_deg" if item in m.get("rails", []) else "rotation_deg"
+        item[key] = (float(item.get(key, 0)) + deg) % 360
+    return m
 
 
 def _seesaw_mutations(name, data):

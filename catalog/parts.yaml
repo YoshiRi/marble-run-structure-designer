@@ -198,7 +198,8 @@ structural_parts:
     hole_layout: in_a_row
     solver_support: not_yet
     confidence: reported
-    todo: measure hole pitch, outline size and thickness; describe typical use
+    hole_pitch_cm: { value: 4.5, source: inferred_block_grid, confidence: inferred, note: "user: the 2- and 3-hole plates have the same pitch; assumed equal to the block width" }
+    todo: measure hole pitch, outline size and thickness
   plate_three_holes:
     appearance: natural_wood
     routing: false
@@ -206,7 +207,9 @@ structural_parts:
     hole_layout: in_a_row
     solver_support: not_yet
     confidence: reported
-    todo: measure hole pitch, outline size and thickness; describe typical use
+    hole_pitch_cm: { value: 4.5, source: inferred_block_grid, confidence: inferred, note: "user: the 2- and 3-hole plates have the same pitch; assumed equal to the block width" }
+    todo: measure hole pitch, outline size and thickness
+    use: ties the apex of the isosceles triangle (design doc §6.2)
   plate_four_corner_holes:
     appearance: natural_wood
     routing: false

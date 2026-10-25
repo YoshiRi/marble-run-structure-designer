@@ -366,7 +366,21 @@ Two ways to use a pattern:
 | --- | --- | --- | --- |
 | switchback | two columns one rail apart; rails stacked at steps of k levels with alternating flow; at each end a drop block in the column turns the marble back onto the next rail down | turns, rail kind, k | yes (straight rails, drop blocks) |
 | frame | four corner columns on a rectangle sized by rail hole spacing; one rail per side, each side lower than the last, so the marble circles the frame downward | rail kinds per side, step | yes (rectangle); spacing to choose |
-| triangle | three corner columns; rails on the three sides at 60°, at different levels | ? | **no: needs the user's geometry** |
+| triangle, isosceles | base: a center-hole long rail, corners on its end holes (46 cm apart). Two long side rails: 2nd hole on a base corner, end hole at the apex (41 cm). At the apex a 3-hole plate takes both side ends on its outer holes; on its middle hole a median long rail (holes 2 and 4 from the end, 36 cm) runs to the base's center hole | — | yes (user, 2026-10-25); see below |
+| triangle, equilateral | three equal sides at 60°; the three sides end up at three different levels, so the corners need many purples | side length | possible in theory, never built (user); later |
+
+**Isosceles triangle, geometry check.** Plate hole pitch p, assumed
+4.5 cm (the user says the 2- and 3-hole plates share it). The apex is
+h = √(41² − (23 − p)²) from the base: 36.59 cm for p = 4.5 (36.33 for 4.0,
+36.84 for 5.0). The median spans 36 cm, so it is 0.6 cm short, which the
+1.8 cm holes can absorb at two joints ("it fits by a miracle", user). The
+apex angle is 54°, the base angles 63°. The side rails and the median
+all rest on the base rail, one level up, and the plate ties their apex ends.
+
+The viewer and the validators already handle any angle: every gallery
+layout turned by 30° or 60° stays valid, and Python and the browser agree
+(`+rot60` in the parity test). Only the generator's moves are on the
+90° grid; the triangle would be a placed skeleton.
 
 ### 6.3 Route first, supports after (two phases)
 
