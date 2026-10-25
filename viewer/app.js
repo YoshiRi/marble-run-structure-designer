@@ -2323,6 +2323,8 @@
         build.step = Math.max(0, Number(params.get("step")) || 0);
       }
       await loadExample(select.value);
+      // ?play=1 opens in play mode (the home-screen app starts this way).
+      if (params.get("play") === "1") setTimeout(() => setPlayMode(true), 0);
     } catch (error) {
       document.getElementById("layoutMeta").textContent = String(error);
       console.error(error);
@@ -3554,7 +3556,9 @@
       sound.unlock();
       const root = document.documentElement;
       const request = root.requestFullscreen || root.webkitRequestFullscreen;
-      if (request && !fullscreenElement()) {
+      const gesture = !navigator.userActivation || navigator.userActivation.isActive;
+      const standalone = window.matchMedia?.("(display-mode: fullscreen), (display-mode: standalone)").matches;
+      if (request && gesture && !standalone && !fullscreenElement()) {
         try { Promise.resolve(request.call(root)).catch(() => {}); } catch (error) { /* not allowed */ }
       }
     } else {

@@ -314,17 +314,19 @@ body.play .overlay-controls,
 body.play .ground-level-label,
 body.play .parts-board,
 body.play .edit-popup { display: none !important; }
-body.play #app { min-height: 0; }
-body.play .main-grid { grid-template-columns: minmax(0, 1fr); }
+body.play { overflow: hidden; }
+body.play #app { position: fixed; inset: 0; height: 100vh; height: 100dvh; min-height: 0; }
+body.play .main-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+body.play .viewport-panel { height: auto; }
 .play-bar[hidden] { display: none; }
 .play-bar { position: absolute; inset: 0; pointer-events: none; }
 .play-roll {
-  position: absolute; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
   pointer-events: auto; touch-action: manipulation; user-select: none; -webkit-user-select: none;
-  font-size: 30px; font-weight: 700; padding: 22px 56px; border-radius: 999px; border: 0;
-  background: #f59e0b; color: #1f2937; box-shadow: 0 6px 0 #b45309, 0 10px 24px rgba(0, 0, 0, .35);
+  font-size: 18px; font-weight: 700; padding: 12px 26px; border-radius: 999px; border: 0;
+  background: rgba(245, 158, 11, .92); color: #1f2937; box-shadow: 0 4px 0 #b45309, 0 6px 16px rgba(0, 0, 0, .35);
 }
-.play-roll:active { transform: translateX(-50%) translateY(4px); box-shadow: 0 2px 0 #b45309, 0 6px 16px rgba(0, 0, 0, .35); }
+.play-roll:active { transform: translateY(3px); box-shadow: 0 1px 0 #b45309, 0 4px 10px rgba(0, 0, 0, .35); }
 .play-exit {
   position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; pointer-events: auto;
   touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden;
