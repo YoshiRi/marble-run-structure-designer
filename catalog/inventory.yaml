@@ -1,47 +1,59 @@
 schema_version: "0.2"
+name: owned
 
-# Counts are intentionally unknown.
-# The owned collection combines multiple sets and has missing pieces.
-# Populate this file from a manual count. Null means UNKNOWN, not unlimited.
+# The user's own collection (core set + Twist set), counted by hand on
+# 2026-10-25. The raw count, in the user's own words, is
+# catalog/owned-count-2026-10-25.json; this file maps it to catalog ids
+# (mappings confirmed by the user). Null means UNKNOWN, not unlimited.
+# The raw count's rail names were misread (OCR): its 長いレール are the long
+# rails with the center hole, 中くらいのレール the long rails without, and
+# 短いレール the 27 cm short rail.
 
 parts:
   routing_blocks:
-    yellow: null
-    blue: null
-    green: null
-    cyan: null
-    natural_drop: null
-    red_random_split: null
-    red_right_angle: null
-    orange_vertical: null
-    purple_drop: null
+    yellow: 14            # 黄色 9 + 5
+    blue: 12              # 青紫 6 (core) + 青 6 (Twist)
+    green: 14             # 緑 6 + 8
+    cyan: 13              # 水色 6 + 7
+    natural_drop: 6       # 白木（ナチュラル）2 + 4
+    red_random_split: 10  # 赤（穴の向き違い）4 + 6
+    red_right_angle: 2    # 赤（横穴あり）1 + 1
+    orange_vertical: 10   # オレンジ 6 + 4
+    purple_drop: 39       # 濃い紫/グレー 15 (core) + 薄い紫ブロック 24 (Twist)
 
   structural_parts:
-    wooden_foundation: null
-    plate_two_holes: null
-    plate_three_holes: null
-    plate_four_corner_holes: null
+    wooden_foundation: 10 # 薄い白木ブロック (Twist)
+    plate_two_holes: 4
+    plate_three_holes: 2
+    plate_four_corner_holes: 4
 
   rails:
-    straight_long: null
-    straight_long_center: null
-    straight_short: null
-    curved_short: null
-    curved_long: null
-    s_curve: null
+    straight_long_center: 3  # 長いレール (center hole: seesaw mount)
+    straight_long: 8         # 中くらいのレール (no center hole)
+    straight_short: 2        # 短いレール (27 cm)
+    curved_short: 5
+    curved_long: 6
+    s_curve: 2
 
   special_parts:
-    seesaw: null
-    spiral: null   # twist; the user's two pieces are the same size
+    seesaw: 4             # 赤い切り替え（シーソー）2 + 2
+    spiral: 2             # うずまきパーツ
 
   routing_accessories:
-    cover: null
-    covered_slope: null
+    cover: 9              # 白木の小さな傾斜パーツ = hole cover; 5 + 5, one lost from the core set
+    covered_slope: 0      # not in the user's sets
 
   non_routing_accessories:
-    accelerator_plate: null
+    accelerator_plate: 19 # 赤い小さな傾斜パーツ; 10 + 10, one lost from the core set
+
+# Counted but not in the catalog yet (the solver ignores this section).
+unmodeled:
+  plate_one_hole: 10           # プレート 1つ穴
+  red_large_tray: 1            # 赤い大きな受け皿/レール
+  green_large_tray: 1          # 緑の大きな受け皿/レール
+  marbles: 200
 
 notes:
   - "Do not infer owned counts from commercial set specifications."
   - "Null is treated as unknown by InventoryValidator."
-  - "Curved rails, S-curves, the twist and hole plates are listed so they can be counted; the solver does not use them yet."
+  - "Curved rails, S-curves and hole plates are listed so they can be counted; the solver does not use them yet."
