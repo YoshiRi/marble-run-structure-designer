@@ -79,6 +79,8 @@ def build_routing_graph(
 
         for node in ["end_a", *(f"hole:{i}" for i in range(len(spec.holes_cm))), "end_b"]:
             graph.setdefault(_rail_node(rail.id, node), set())
+        if spec.shape == "plate":
+            continue  # a hole plate has no groove: nothing rolls on it
 
         for sequence in flow_sequences(rail, len(spec.holes_cm)):
             for i in range(len(sequence) - 1):

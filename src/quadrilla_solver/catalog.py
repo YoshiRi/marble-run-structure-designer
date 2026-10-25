@@ -84,6 +84,13 @@ class PartCatalog:
                         return f"accessories.{subcategory}", spec
         return None
 
+    def max_joint_play_cm(self) -> float:
+        """How far apart two pegged holes may be (geometry_cm.max_joint_play_cm)."""
+        value = (self.raw.get("geometry_cm") or {}).get("max_joint_play_cm", 0.0)
+        if isinstance(value, Mapping):
+            value = value.get("value", 0.0)
+        return float(value or 0.0)
+
     def has_part(self, part_type: str) -> bool:
         return part_type in self.rails or self._find_part(part_type) is not None
 
@@ -240,6 +247,20 @@ def load_rail_specs(parts_path: str | Path) -> dict[str, RailSpec]:
             radius_cm=radius,
             segments=segments,
             needs_load_above=spec.get("stability") == "needs_load_above",
+        )
+    # Hole plates laid across rails (the triangle's apex) behave like a
+    # short rail without a groove: shape "plate", never part of a route.
+    for name, spec in (data.get("structural_parts") or {}).items():
+        beam = spec.get("beam") if isinstance(spec, dict) else None
+        if not isinstance(beam, dict):
+            continue
+        result[name] = RailSpec(
+            name=name,
+            length_cm=float(beam["length_cm"]),
+            holes_cm=tuple(float(x) for x in beam["hole_positions_cm"]),
+            height_units=int(spec.get("height", 1)),
+            mass_g=_mass_value(spec),
+            shape="plate",
         )
     for name, spec in rails.items():
         if not isinstance(spec, dict):

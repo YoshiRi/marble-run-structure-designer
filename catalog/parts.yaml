@@ -16,6 +16,11 @@ geometry_cm:
     source: user_measurement
     confidence: measured
     note: effective height per standard block in an assembled stack
+  max_joint_play_cm:
+    value: 0.35
+    source: assumption
+    confidence: provisional
+    note: how far a pegged joint may be off in top view (hole 1.8 cm; peg diameter not measured). Only joints that declare play_cm use it (the isosceles triangle's median, user 2026-10-25 "it fits by a miracle").
   standard_block_connector_protrusion_cm:
     value: 1.0
     source: user_measurement
@@ -197,6 +202,11 @@ structural_parts:
     hole_count: 2
     hole_layout: in_a_row
     solver_support: not_yet
+    height: 1   # user 2026-10-25: one level
+    mass_g: { value: 24, source: estimate_from_wooden_foundation_per_cell, confidence: estimated }
+    # Laid across rails like a short rail (triangle apex); outline assumed
+    # 2 cells of the 4.5 cm block grid.
+    beam: { length_cm: 9.0, hole_positions_cm: [2.25, 6.75] }
     confidence: reported
     hole_pitch_cm: { value: 4.5, source: inferred_block_grid, confidence: inferred, note: "user: the 2- and 3-hole plates have the same pitch; assumed equal to the block width" }
     todo: measure hole pitch, outline size and thickness
@@ -206,6 +216,11 @@ structural_parts:
     hole_count: 3
     hole_layout: in_a_row
     solver_support: not_yet
+    height: 1   # user 2026-10-25: one level
+    mass_g: { value: 36, source: estimate_from_wooden_foundation_per_cell, confidence: estimated }
+    # Laid across rails like a short rail (triangle apex); outline assumed
+    # 3 cells of the 4.5 cm block grid.
+    beam: { length_cm: 13.5, hole_positions_cm: [2.25, 6.75, 11.25] }
     confidence: reported
     hole_pitch_cm: { value: 4.5, source: inferred_block_grid, confidence: inferred, note: "user: the 2- and 3-hole plates have the same pitch; assumed equal to the block width" }
     todo: measure hole pitch, outline size and thickness

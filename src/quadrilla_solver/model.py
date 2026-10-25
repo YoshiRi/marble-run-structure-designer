@@ -83,6 +83,11 @@ class SupportLink:
     lower_rail_id: str | None = None
     lower_hole_index: int | None = None
     name: str = ""
+    # Declared play at this joint (cm): the upper and lower holes may be this
+    # far apart in top view, taken up by the peg in the hole. Used where a
+    # pattern only fits within the hole clearance (the isosceles triangle's
+    # median). Limited by geometry_cm.max_joint_play_cm in the catalog.
+    play_cm: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -248,6 +253,7 @@ def layout_from_dict(data: dict[str, Any], default_name: str = "layout") -> Layo
                 else None
             ),
             name=str(x.get("name", "")),
+            play_cm=float(x.get("play_cm", 0.0) or 0.0),
         )
         for x in data.get("supports", ())
     )

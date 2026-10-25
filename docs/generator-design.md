@@ -377,6 +377,26 @@ h = √(41² − (23 − p)²) from the base: 36.59 cm for p = 4.5 (36.33 for 4.
 apex angle is 54°, the base angles 63°. The side rails and the median
 all rest on the base rail, one level up, and the plate ties their apex ends.
 
+How it stands (user, 2026-10-25), fixture `triangle-isosceles.yaml`
+(`scripts/make_triangle_fixture.py`):
+
+| where | from the ground up |
+| --- | --- |
+| base corners (2) | foundation + block (6) → side rail (z 6, 2nd hole) → base rail (z 7, end hole) |
+| apex side ends (2) | foundation + block (6) → side rail (z 6, end hole) → 3-hole plate (z 7, outer hole) |
+| base center | base (z 7) → block (8–13) → median (z 13, hole 1) |
+| apex middle | plate (z 7) → red splitter (8–13) → median (z 13, hole 2) |
+
+Four columns. The red splitter on the plate is where a tower goes on up
+(user). Routes from the base down to the side rails that also keep it
+stable are few (user).
+
+Modeling: a hole plate laid across rails is a short rail without a groove
+(catalog `beam`, shape `plate`; nothing rolls on it). The median's two
+joints declare `play_cm` 0.3 each, capped by `geometry_cm.max_joint_play_cm`
+(0.35, provisional until the peg diameter is measured); without it the
+assembly check reports `support_xy_mismatch`.
+
 The viewer and the validators already handle any angle: every gallery
 layout turned by 30° or 60° stays valid, and Python and the browser agree
 (`+rot60` in the parity test). Only the generator's moves are on the
