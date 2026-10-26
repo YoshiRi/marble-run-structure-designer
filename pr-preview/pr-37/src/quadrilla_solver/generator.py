@@ -187,6 +187,12 @@ class GeneratorConfig:
     # median instead; the marble then splits at the base and leaves down
     # both sides.
     triangle_probability: float = 0.0
+    # Base lottery (user, 2026-10-26): each attempt draws one base design by
+    # weight and the build must end on it ("free" = no base, the plain
+    # search with the probabilities above). None keeps the plain search.
+    # Bases: triangle (§6.2), diamond (seesaw split and merge, §6.1), free.
+    bases: Mapping[str, float] | None = field(
+        default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
     frame_min_side_cm: float = 18.0
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
@@ -1510,6 +1516,35 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
     }
 
 
+BASES = ("triangle", "diamond", "free")
+
+
+def _base_lottery(config: GeneratorConfig) -> list[tuple[str, float]]:
+    if not config.bases:
+        return []
+    unknown = set(config.bases) - set(BASES)
+    if unknown:
+        raise ValueError(f"unknown base(s): {', '.join(sorted(unknown))}; known: {', '.join(BASES)}")
+    return [(b, float(w)) for b, w in config.bases.items() if float(w) > 0]
+
+
+def _base_config(config: GeneratorConfig, base: str) -> GeneratorConfig:
+    """The search settings for one attempt that must end on `base`."""
+    if base == "triangle":
+        return replace(config, triangle_probability=1.0, seesaw_probability=0.0)
+    if base == "diamond":
+        return replace(config, triangle_probability=0.0, seesaw_probability=1.0)
+    return replace(config, triangle_probability=0.0)
+
+
+def _has_base(state: _State, base: str) -> bool:
+    if base == "triangle":
+        return bool(state.fixed)
+    if base == "diamond":
+        return any(c.top_types[:1] == ("seesaw",) for c in state.columns.values())
+    return True
+
+
 def generate(
     catalog: PartCatalog,
     budget: Budget,
@@ -1527,11 +1562,20 @@ def generate(
     rng = random.Random(seed)
     generator = CascadeGenerator(catalog, budget, config, rng)
     found: dict[tuple, Candidate] = {}
+    lottery = _base_lottery(config)
     for attempt in range(attempts):
         stats["attempts"] += 1
+        base = None
+        if lottery:
+            base = rng.choices([b for b, _ in lottery], weights=[w for _, w in lottery])[0]
+            generator.config = _base_config(config, base)
         state = generator.build_once()
+        generator.config = config
         if state is None or len(state.rails) < 2:
             continue
+        if base is not None and not _has_base(state, base):
+            continue  # the drawn base was not reached: try again
+        stats[f"base_{base}"] = stats.get(f"base_{base}", 0) + 1 if base else 0
         layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
         if config.brace_towers:
             spots = tower_spots(layout, catalog)
@@ -1548,11 +1592,12 @@ def generate(
             continue
         paths = result.connectivity.paths
         resolved = False
-        if config.solve_supports and not state.fixed:   # patterns keep their own supports
+        if config.solve_supports:
             from .supports import resolve_supports
             counts = {k: v for k, v in generator.budget.counts.items()}
+            # A placed pattern keeps its own supports; the rest is solved again.
             better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                                      min_support_g=config.min_support_reaction_g)
+                                      min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
             if better is not None:
                 layout, resolved = better, True
         layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
