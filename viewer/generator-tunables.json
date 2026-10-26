@@ -191,15 +191,37 @@
       "source": "official builds"
     },
     {
-      "key": "triangle_probability",
-      "label": "Triangle bases",
+      "key": "base_triangle",
+      "label": "Base: triangle",
       "type": "float",
       "min": 0,
-      "max": 1,
-      "step": 0.1,
-      "default": 0.0,
-      "help": "chance per drop to end on the isosceles triangle base (needs about 25 levels below the drop)",
-      "source": "official builds (user)"
+      "max": 5,
+      "step": 0.5,
+      "default": 1.0,
+      "help": "weight of the isosceles triangle base in the draw (0: never)",
+      "source": "user (base lottery)"
+    },
+    {
+      "key": "base_diamond",
+      "label": "Base: seesaw diamond",
+      "type": "float",
+      "min": 0,
+      "max": 5,
+      "step": 0.5,
+      "default": 1.0,
+      "help": "weight of the seesaw split-and-merge base in the draw",
+      "source": "user (base lottery)"
+    },
+    {
+      "key": "base_free",
+      "label": "Base: none",
+      "type": "float",
+      "min": 0,
+      "max": 5,
+      "step": 0.5,
+      "default": 1.0,
+      "help": "weight of builds without a base design (the plain search)",
+      "source": "user (base lottery)"
     },
     {
       "key": "frame_probability",

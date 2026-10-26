@@ -24,7 +24,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from itertools import combinations
 from math import hypot
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from .catalog import PartCatalog
 from .collision import Solid, component_solids, marble_corridor, penetration_cm, _rail_node_local_x
@@ -67,15 +67,21 @@ def route_parts(layout: Layout, catalog: PartCatalog, source: PortRef) -> set[st
 
 
 def strip_supports(layout: Layout, catalog: PartCatalog, source: PortRef,
-                   keep_braces: bool = True) -> Layout:
+                   keep_braces: bool = True, fixed_rails: Iterable[str] = ()) -> Layout:
     """Remove the columns and counterweights the marble never touches. Rails
     the marble never touches (braces tying towers) stay with `keep_braces`
-    (their supports are solved again), else they go too."""
+    (their supports are solved again), else they go too. Rails in
+    `fixed_rails` (a placed pattern such as the triangle) keep their own
+    supports as they are."""
     on_route = route_parts(layout, catalog, source)
-    rails = tuple(r for r in layout.rails if r.id in on_route or keep_braces)
+    fixed = set(fixed_rails)
+    rails = tuple(r for r in layout.rails if r.id in on_route or keep_braces or r.id in fixed)
     keep_rails = {r.id for r in rails}
     supports = []
     for s in layout.supports:
+        if s.upper_rail_id in fixed:
+            supports.append(s)
+            continue
         if not any(p in on_route for p in s.stack_part_ids):
             continue
         if (s.upper_rail_id is not None and s.upper_rail_id not in keep_rails) or \
@@ -324,12 +330,13 @@ class SupportSolver:
 
 def resolve_supports(layout: Layout, catalog: PartCatalog, counts: Mapping[str, int], source: PortRef,
                      sinks: Sequence[PortRef], weak_tower_weight: float = 15.0, keep_braces: bool = True,
-                     min_support_g: float | None = None, **options) -> Layout | None:
+                     min_support_g: float | None = None, fixed_rails: Iterable[str] = (),
+                     **options) -> Layout | None:
     """Strip the supports of a valid build and solve them again; None if no
     valid solution was found."""
     from .generator import support_reactions_g, weak_towers
 
-    stripped = strip_supports(layout, catalog, source, keep_braces=keep_braces)
+    stripped = strip_supports(layout, catalog, source, keep_braces=keep_braces, fixed_rails=fixed_rails)
     options.setdefault("keep", 40)
     solver = SupportSolver(stripped, catalog, counts, source, sinks, **options)
     best = None

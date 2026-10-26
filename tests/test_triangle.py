@@ -81,3 +81,22 @@ def test_the_pattern_matches_the_fixture_geometry():
     from quadrilla_solver.patterns import isosceles_triangle
     tri = isosceles_triangle(CATALOG)
     assert abs(tri["apex_cm"] - 36.589) < 1e-3 and tri["play_cm"] == 0.3
+
+
+def test_a_base_lottery_of_only_triangles_keeps_only_triangle_builds():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(bases={"triangle": 1.0}, max_height_units=45, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    found = generate(CATALOG, budget, config=config, attempts=60, seed=1, keep=10)
+    assert found and all(c.metrics["triangles"] == 1 for c in found)
+    # the pattern keeps its supports; the rest was solved again (no braces left)
+    assert all(c.metrics["braces"] == 0 for c in found)
+
+
+def test_unknown_bases_are_refused():
+    import pytest
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    with pytest.raises(ValueError):
+        generate(CATALOG, budget, config=GeneratorConfig(bases={"pyramid": 1.0}), attempts=1)
