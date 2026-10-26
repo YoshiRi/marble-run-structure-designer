@@ -650,6 +650,29 @@ missing: switchbacks are rare (0 kept), and only the feed column stands on
 the base (pattern_columns 1). Next: the merge at the base center fed from
 above and the side, and supports preferring the base's holes.
 
+**Experiment: fewer new columns, stay over the base** (user, 2026-10-27).
+`ground_column_penalty` (the support solver's extra cost per ground column),
+the score term `ground_columns` (off by default) and `up_within_base` (rails
+grown bottom-up keep both ends inside the base's top-view box, 5 cm margin).
+45 levels, bottom-up, 3 seeds × 100 attempts, 30 kept; score without the
+new term:
+
+| | score | ground columns | columns on the base | rails | parts | footprint cm² | levels |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 149.6 | 3.4 | 1.0 | 10.5 | 50.6 | 4814 | 8.0 |
+| ground penalty (6, term 8) | 146.6 | 2.4 | 1.0 | 10.4 | 40.8 | 4679 | 7.6 |
+| within base | 158.9 | 4.0 | 1.0 | 10.8 | 55.9 | 3275 | 8.0 |
+| both | 158.3 | 3.8 | 1.0 | 10.7 | 54.0 | 3248 | 7.9 |
+| both, strong (15, term 20) | 130.6 | 2.0 | 1.0 | 9.2 | 36.2 | 2971 | 6.9 |
+
+Staying over the base shrinks the footprint by a third and raises the score,
+but the rails over the base's open middle need ground columns there. The
+ground penalty cuts parts by a fifth; strong, it also cuts the route (fewer
+rails and levels). No setting puts more columns on the base itself: its
+holes rarely line up with the grid of the rails above (the sides are at
+63°; the base center holds the red splitter). That needs placement that
+aims at the base's free holes (corners, side holes, plate ends).
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
