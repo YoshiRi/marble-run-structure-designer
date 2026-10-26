@@ -39,6 +39,16 @@ STYLE_TUNABLES: tuple[dict[str, Any], ...] = (
      "step": 0.1, "default": GeneratorConfig().seesaw_probability,
      "help": "chance to end a dive on a seesaw whose arms merge on a collector rail (search bias)",
      "source": "official builds"},
+    *({"key": f"base_{name}", "label": label, "type": "float", "min": 0, "max": 5, "step": 0.5,
+       "default": float((GeneratorConfig().bases or {}).get(name, 0.0)), "help": help_, "source": "user (base lottery)"}
+      for name, label, help_ in (
+          ("triangle", "Base: triangle", "weight of the isosceles triangle base in the draw (0: never)"),
+          ("diamond", "Base: seesaw diamond", "weight of the seesaw split-and-merge base in the draw"),
+          ("free", "Base: none", "weight of builds without a base design (the plain search)"))),
+    {"key": "frame_probability", "label": "Frames", "type": "float", "min": 0, "max": 1,
+     "step": 0.1, "default": GeneratorConfig().frame_probability,
+     "help": "chance to start a frame (the marble circling a rectangle); only from 45 levels",
+     "source": "official builds"},
     {"key": "switchback_probability", "label": "Switchbacks", "type": "float", "min": 0, "max": 1,
      "step": 0.1, "default": GeneratorConfig().switchback_probability,
      "help": "chance to land on a reversed rail right under the one above (back and forth between two towers)",
@@ -106,7 +116,11 @@ def generate_layouts(options: Mapping[str, Any], root: str | Path,
         exclude_parts=exclude,
         weights={k: float(v) for k, v in (options.get("weights") or {}).items()} or None,
     )
-    fields.update(_style(options))
+    style = _style(options)
+    bases = {k[5:]: style.pop(k) for k in list(style) if k.startswith("base_")}
+    if bases:
+        fields["bases"] = {**(GeneratorConfig().bases or {}), **bases}
+    fields.update(style)
     config = GeneratorConfig(**fields)
     attempts = int(options.get("attempts", 200))
     seed = int(options.get("seed", 1))

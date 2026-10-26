@@ -12,6 +12,7 @@
     "src/quadrilla_solver/layout_stability.py",
     "src/quadrilla_solver/model.py",
     "src/quadrilla_solver/optimizer.py",
+    "src/quadrilla_solver/patterns.py",
     "src/quadrilla_solver/queries.py",
     "src/quadrilla_solver/routing_geometry.py",
     "src/quadrilla_solver/scoring.py",
