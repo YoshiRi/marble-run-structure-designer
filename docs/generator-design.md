@@ -673,6 +673,15 @@ holes rarely line up with the grid of the rails above (the sides are at
 63°; the base center holds the red splitter). That needs placement that
 aims at the base's free holes (corners, side holes, plate ends).
 
+**Experiment: rails at any angle** (`up_free_angles`, off). Holes are round,
+so a column joins rails at any angle (user). Bottom-up growth also tried
+every angle that puts another hole of the new rail over a base hole. 45
+levels: valid 52 % (100 % on the grid), score 102.8 alone and 149.9 within
+the base (grid: 163.3), columns on the base 1.1. The aimed angles win the
+ordering, then dead-end. Not kept. User's next idea: keep a 2D map of hole
+sites for the whole build (the base's holes first) and make columns stand
+only on those sites, a new site costing extra.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
