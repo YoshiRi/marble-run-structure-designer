@@ -1576,53 +1576,68 @@ def generate(
         if base is not None and not _has_base(state, base):
             continue  # the drawn base was not reached: try again
         stats[f"base_{base}"] = stats.get(f"base_{base}", 0) + 1 if base else 0
-        layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
-        if config.brace_towers:
-            spots = tower_spots(layout, catalog)
-            if spots:
-                state = generator.brace(state, spots)
-                layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
-        sinks = tuple(PortRef(*leaf.split(":", 1)) for leaf in state.leaves)
-        sinks += tuple(PortRef(block_ids[col], port) for col, port in state.dangling)
-        if not sinks:
+        candidate = candidate_from_state(generator, state, config, catalog, budget, rng,
+                                         f"generated-{seed}-{attempt}", stats)
+        if candidate is None:
             continue
-        source = generator.source
-        result = validate_layout(layout, catalog, source=source, sinks=sinks)
-        if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
-            continue
-        paths = result.connectivity.paths
-        resolved = False
-        if config.solve_supports:
-            from .supports import resolve_supports
-            counts = {k: v for k, v in generator.budget.counts.items()}
-            # A placed pattern keeps its own supports; the rest is solved again.
-            better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                                      min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
-            if better is not None:
-                layout, resolved = better, True
-        layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
-        layout = add_curves(layout, catalog, budget, rng, source, sinks,
-                            keep_straight=list(state.braces) + list(state.fixed))
-        layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
-        if layout is None:
-            continue
-        stats["valid"] += 1
-        solids = component_solids(layout, catalog)  # the final rails, after swaps
-        usage = layout_usage(layout)
-        metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
-        metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
-        metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
-        metrics["covers"] = usage.get("cover", 0)
-        metrics.update(layout_metrics(layout, catalog, source))
-        if resolved:
-            metrics["braces"] = sum(1 for r in layout.rails if r.id in state.braces)
+        metrics, layout = candidate.metrics, candidate.layout
         signature = (metrics["levels"], metrics["rails"], metrics["exits"], metrics["columns_on_rails"],
                      metrics["curved_rails"],
                      tuple(sorted(Counter(p.part_type for p in layout.parts).items())))
-        candidate = Candidate(layout, score(metrics, config.weights), metrics, usage, sinks, source)
         if signature not in found or found[signature].score < candidate.score:
             found[signature] = candidate
     return sorted(found.values(), key=lambda c: c.score, reverse=True)[:keep]
+
+
+def candidate_from_state(generator: "CascadeGenerator", state: "_State", config: GeneratorConfig,
+                         catalog: PartCatalog, budget: Budget, rng: random.Random, name: str,
+                         stats: dict[str, int] | None = None) -> Candidate | None:
+    """One grown build -> a validated, post-processed, scored candidate (or
+    None): materialize, brace, validate, solve supports, shorten, curves,
+    balance, metrics. Shared by generate() and the annealer."""
+    stats = stats if stats is not None else {}
+    stats.setdefault("valid", 0)
+    layout, usage, block_ids = generator.materialize(state, name)
+    if config.brace_towers:
+        spots = tower_spots(layout, catalog)
+        if spots:
+            state = generator.brace(state, spots)
+            layout, usage, block_ids = generator.materialize(state, name)
+    sinks = tuple(PortRef(*leaf.split(":", 1)) for leaf in state.leaves)
+    sinks += tuple(PortRef(block_ids[col], port) for col, port in state.dangling)
+    if not sinks:
+        return None
+    source = generator.source
+    result = validate_layout(layout, catalog, source=source, sinks=sinks)
+    if not result.valid or set(result.connectivity.reached_sinks) != {s.key for s in sinks}:
+        return None
+    paths = result.connectivity.paths
+    resolved = False
+    if config.solve_supports:
+        from .supports import resolve_supports
+        counts = {k: v for k, v in generator.budget.counts.items()}
+        # A placed pattern keeps its own supports; the rest is solved again.
+        better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
+                                  min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
+        if better is not None:
+            layout, resolved = better, True
+    layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
+    layout = add_curves(layout, catalog, budget, rng, source, sinks,
+                        keep_straight=list(state.braces) + list(state.fixed))
+    layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
+    if layout is None:
+        return None
+    stats["valid"] += 1
+    solids = component_solids(layout, catalog)  # the final rails, after swaps
+    usage = layout_usage(layout)
+    metrics = _metrics(state, layout, catalog, paths, solids, block_ids)
+    metrics["curved_rails"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "arc")
+    metrics["twists"] = sum(1 for r in layout.rails if catalog.rails[r.rail_type].shape == "twist")
+    metrics["covers"] = usage.get("cover", 0)
+    metrics.update(layout_metrics(layout, catalog, source))
+    if resolved:
+        metrics["braces"] = sum(1 for r in layout.rails if r.id in state.braces)
+    return Candidate(layout, score(metrics, config.weights), metrics, usage, sinks, source)
 
 
 def support_reactions_g(layout: Layout, catalog: PartCatalog,

@@ -569,6 +569,33 @@ row. A frame takes over the drops, so merges and switchbacks almost vanish.
 A twist breaks the run. Default (user, 2026-10-25): on (p 1) only in tall
 builds, `max_height_units` ≥ `frame_min_height_units` (45).
 
+### 6.5 Annealing (polish a build)
+
+User idea (2026-10-26): improve a random build by local changes, as in
+simulated annealing: move columns, swap blocks, re-attach rails, add a
+switchback. First version (`anneal.py`, `scripts/anneal_layout.py`): the
+generator's random decisions are recorded as a tape; a neighbour re-rolls the
+tape from a point (re-grows everything after it), changes one decision, or
+nudges one. Every neighbour is grown by the generator and goes through the
+same validation and post-passes, so each step is buildable; the score is the
+generator's. Worse neighbours are accepted with exp(Δ/T).
+
+Measured (triangle base, 45 levels, 300 neighbours, 4 seeds):
+
+| start | start score | after annealing |
+| --- | --- | --- |
+| first valid random build | 131.0 | 143.8–146.1 (T from 3–8 down) |
+| best of 150 random builds | 153.7 | 157.9 (+15.9 on one seed, +0.7 on one, 0 on two) |
+| (best of 300 random builds, no annealing) | | 158.4 |
+
+So far the tape is a weak neighbourhood: a change early in the tape reshapes
+everything after it, so annealing behaves much like re-sampling the lower
+part. It helps a weak start, barely a good one. Next: layout-level moves
+that keep the rest in place (move a column onto an aligned hole, swap a
+drop block for the merge block where a rail ends against it, re-attach a
+rail end, insert a switchback), with the tape re-roll kept as the large
+move.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
