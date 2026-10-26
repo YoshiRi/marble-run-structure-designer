@@ -100,3 +100,17 @@ def test_unknown_bases_are_refused():
     budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
     with pytest.raises(ValueError):
         generate(CATALOG, budget, config=GeneratorConfig(bases={"pyramid": 1.0}), attempts=1)
+
+
+def test_bottom_up_grows_a_valid_route_up_from_the_triangle():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(strategy="bottom_up", max_height_units=45, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    stats = {}
+    found = generate(CATALOG, budget, config=config, attempts=20, seed=1, keep=5, stats=stats)
+    assert found and stats["valid"] >= 10
+    for c in found:
+        assert c.metrics["triangles"] == 1
+        assert c.metrics["rails"] >= 7          # the base's five and at least two above
+        assert c.source.port == "top"

@@ -45,6 +45,8 @@ CONFIGS = [
     ("frames", {"frame_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
     # The isosceles triangle base under a tower (§6.2, user's official build).
     ("triangles", {"triangle_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
+    # Triangle base first, route grown upward from it (§6.6).
+    ("bottom-up", {"strategy": "bottom_up", "max_height_units": 45, "max_rails": 14}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.

@@ -619,6 +619,37 @@ from above and the side, a switchback through the apex column, ground
 columns moved onto the triangle's ends) changes the route, not just its
 orientation. Those route-level moves are next.
 
+### 6.6 Generation strategies (switchable)
+
+User decision (2026-10-27): several generation patterns to switch between
+(`GeneratorConfig.strategy`, the viewer's "Generation" choice).
+
+- `top_down` (default): the cascade from the input down; a base is drawn
+  by the lottery (§6.2).
+- `bottom_up`: the triangle base is placed first, centered, in one of four
+  directions. The route then grows upward from its entry (the median's apex
+  end): each step puts a rail above whose stop hole drops the marble,
+  through a block, onto the rail below. Rails whose holes lie over existing
+  holes (the base's corners and beams, other rails) and reversed rails right
+  above (switchbacks) are tried first, with some randomness. The supports
+  must bracket the hole the next block stands on. A free-standing input
+  block tops the last rail. Reviews of the annealed builds asked for this:
+  the route should be chosen knowing the base.
+
+Measured (owned inventory, 3 seeds, 100 attempts, 30 kept):
+
+| | valid / attempt | mean score | rails | parts | shared towers |
+| --- | --- | --- | --- | --- | --- |
+| 30 levels, top_down (lottery) | 0.29 | 105.2 | | 27.4 | |
+| 30 levels, bottom_up | 1.00 | 115.4 | 8.0 | 34.0 | 3.0 |
+| 45 levels, top_down (lottery) | 0.38 | 127.7 | | 44.4 | |
+| 45 levels, bottom_up | 1.00 | 149.6 | 10.5 | 50.6 | 4.7 |
+
+The bottom-up builds stack a compact zigzag tower over the apex. Still
+missing: switchbacks are rare (0 kept), and only the feed column stands on
+the base (pattern_columns 1). Next: the merge at the base center fed from
+above and the side, and supports preferring the base's holes.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
