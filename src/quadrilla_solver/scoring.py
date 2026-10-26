@@ -131,6 +131,26 @@ def _switchbacks(ctx: MetricContext) -> float:
     return float(count)
 
 
+@layout_metric("triangles")
+def _triangles(ctx: MetricContext) -> float:
+    """Triangle bases (design doc §6.2): a hole plate resting on two rails
+    that carries a column on its middle hole, as at the apex of the user's
+    isosceles triangle. Recognized in any layout, placed or not."""
+    rails = {r.id: r for r in ctx.layout.rails}
+    count = 0
+    for plate in ctx.layout.rails:
+        if ctx.catalog.rails[plate.rail_type].shape != "plate":
+            continue
+        below = {s.lower_rail_id for s in ctx.layout.supports
+                 if s.upper_rail_id == plate.id and s.lower_rail_id in rails}
+        middle = len(ctx.catalog.rails[plate.rail_type].holes_cm) // 2
+        carries = any(s.lower_rail_id == plate.id and s.lower_hole_index == middle and s.upper_rail_id
+                      for s in ctx.layout.supports)
+        if len(below) >= 2 and carries:
+            count += 1
+    return float(count)
+
+
 @layout_metric("frame_turns")
 def _frame_turns(ctx: MetricContext) -> float:
     """Longest run of drops along the route that each turn the marble 90
@@ -207,6 +227,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
     {"key": "switchbacks", "sign": 1, "weight": 4.0, "label": "Switchbacks",
      "help": "per rail lying right under a route rail of the same type, reversed",
      "source": "official builds (switchback pattern)"},
+    {"key": "triangles", "sign": 1, "weight": 20.0, "label": "Triangle bases",
+     "help": "per triangle base (a plate tying two side rails, carrying the median)",
+     "source": "official builds; user (efficient structure, 2026-10-26)"},
     {"key": "frame_turns", "sign": 1, "weight": 2.0, "label": "Frame turns",
      "help": "per drop in the longest run turning the same way (the marble circling a frame)",
      "source": "official builds (design doc §6.2)"},

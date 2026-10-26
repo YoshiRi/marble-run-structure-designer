@@ -30,7 +30,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field, replace
-from math import cos, pi, radians, sin
+from math import atan2, cos, degrees, pi, radians, sin
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -182,6 +182,17 @@ class GeneratorConfig:
     # Only in tall builds (user, 2026-10-25): a lap needs about 24 levels.
     frame_probability: float = 1.0
     frame_min_height_units: int = 45
+    # Isosceles triangle base (design doc §6.2, user's official build): chance
+    # per drop, once the drop is high enough, to land it on the triangle's
+    # median instead; the marble then splits at the base and leaves down
+    # both sides.
+    triangle_probability: float = 0.0
+    # Base lottery (user, 2026-10-26): each attempt draws one base design by
+    # weight and the build must end on it ("free" = no base, the plain
+    # search with the probabilities above). None keeps the plain search.
+    # Bases: triangle (§6.2), diamond (seesaw split and merge, §6.1), free.
+    bases: Mapping[str, float] | None = field(
+        default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
     frame_min_side_cm: float = 18.0
     # Score weights (magnitudes) overriding DEFAULT_WEIGHTS: the user's profile.
@@ -201,6 +212,7 @@ class Column:
     top_z: int                 # level of the rail bottom it holds up (or its own top)
     top_types: tuple[str, ...] = ()   # bottom -> top, e.g. (drop block, pass parts)
     block_rotation: int = 0           # rotation of top_types[0]
+    play_cm: float = 0.0              # declared joint play (SupportLink.play_cm)
 
     def filler_units(self, heights: Mapping[str, int]) -> int:
         foundation = 1 if self.base_rail is None else 0
@@ -240,12 +252,15 @@ class _State:
     # Frame in progress: rail id -> (turn sign, corners so far, index of the
     # corner the rail stops at). See GeneratorConfig.frame_probability.
     frames: dict[str, tuple[int, tuple[tuple[float, float], ...], int]] = field(default_factory=dict)
+    # Rails of placed patterns (the triangle): kept as they are by the later
+    # passes (curves, support solving).
+    fixed: list[str] = field(default_factory=list)
 
     def copy(self) -> "_State":
         return _State(dict(self.rails), dict(self.columns), dict(self.corridors),
                       list(self.route_links), list(self.feeds), list(self.leaves),
                       list(self.dangling), self.covers, self.max_depth, dict(self.counters),
-                      self.input_column, list(self.braces), dict(self.frames))
+                      self.input_column, list(self.braces), dict(self.frames), list(self.fixed))
 
     def new_id(self, prefix: str) -> str:
         n = self.counters.get(prefix, 0)
@@ -368,6 +383,9 @@ class CascadeGenerator:
             return False
         if not _straights_fit(used["straight_short"], used["straight_long"],
                               used["straight_long_center"], counts):
+            return False
+        if any(used[k] > counts[k] for k in used
+               if k not in _RAIL_KINDS and k != "spiral" and self.catalog.rails[k].shape == "plate"):
             return False
         if state.covers > counts["cover"]:
             return False
@@ -539,6 +557,10 @@ class CascadeGenerator:
             modes = ["landing", "ground"] if self.rng.random() < self.config.landing_probability \
                 else ["ground", "landing"]
         room = self.config.max_exits - self._branches(state)
+        if self.config.triangle_probability > 0 and self.rng.random() < self.config.triangle_probability:
+            tri = self._triangle(state, rail, hole, hx, hy, depth)
+            if tri is not None:
+                return tri
         prefer = self._switchback(rail, hole, depth)
         frame = self._frame_plan(state, rail, hole, depth, hx, hy)
         if frame is not None:
@@ -814,6 +836,103 @@ class CascadeGenerator:
         else:
             state.leaves.append(f"{rail.id}:end_b")
         return state, []
+
+    # ---- isosceles triangle base (pattern) -----------------------------------
+    def _triangle(self, state: _State, rail: PlacedRail, hole: int, hx: float, hy: float,
+                  depth: int) -> tuple[_State, list[_Outlet]] | None:
+        """Under the stop hole of `rail`: a drop block standing on the apex end
+        of the triangle's median, the whole triangle below it (design doc
+        §6.2, fixture triangle-isosceles.yaml). The marble rolls down the
+        median into the red splitter, along the base both ways, down the side
+        rails and drops through each side's hole 2: two exits."""
+        from .patterns import isosceles_triangle
+        tri = isosceles_triangle(self.catalog)
+        top = self._level(rail, hole)
+        block = next((b for b in ("yellow", "blue", "green", "cyan") if b in self.drop_blocks
+                      and self.drop_blocks[b] == ("front",)), None)
+        if block is None or len(state.rails) + len(tri["rails"]) > self.config.max_rails:
+            return None
+        # The drop block stands right on the median; pass-through parts above
+        # it (orange 5, purple 1) reach up to the rail it holds.
+        gap = top - tri["feed_z"] - self.heights[block]
+        if gap < 0:
+            return None
+        passes = ("orange_vertical",) * (gap // self.block_units) + ("purple_drop",) * (gap % self.block_units)
+        for dm in self.rng.sample(range(4), 4):
+            trial = self._place_triangle(state, tri, rail, hole, hx, hy, top, dm, (block,) + passes)
+            if trial is not None:
+                trial.max_depth = max(trial.max_depth, depth + 4)
+                return trial, []
+        return None
+
+    def _place_triangle(self, state, tri, rail, hole, hx, hy, top, dm, feed_types):
+        dx, dy = _DIRS[dm]
+        phi = atan2(dx, -dy)      # local -y (the median's flow) -> world direction dm
+        c, s_ = cos(phi), sin(phi)
+        fx, fy = tri["feed_xy"]
+        tx, ty = hx - (c * fx - s_ * fy), hy - (s_ * fx + c * fy)
+
+        def world(x: float, y: float) -> tuple[float, float]:
+            return tx + c * x - s_ * y, ty + s_ * x + c * y
+
+        deg = degrees(phi)
+        trial = state.copy()
+        ids: dict[str, str] = {}
+        new_solids: list[Solid] = []
+        for r in tri["rails"]:
+            x, y = world(r["x"], r["y"])
+            placed = PlacedRail(trial.new_id("rail"), r["type"], round(x, 6), round(y, 6), r["z"],
+                                yaw_deg=round((r["yaw"] + deg) % 360, 6), flow_direction=r.get("flow", "a_to_b"),
+                                flow_hole=r.get("flow_hole"), hole_states=dict(r.get("holes", {})))
+            body = rail_solids(placed, self.catalog)
+            if not all(self._in_footprint(piece) for piece in body):
+                return None
+            ids[r["key"]] = placed.id
+            trial.rails[placed.id] = placed
+            trial.fixed.append(placed.id)
+            new_solids += body
+        columns = []
+        for col in tri["columns"]:
+            x, y = world(*col["xy"])
+            rotation = int(round(col.get("rotation", 0) + deg)) % 360 if col.get("top_types") else 0
+            columns.append(Column(trial.new_id("c"), round(x, 6), round(y, 6),
+                                  ids.get(col["base_rail"]), col.get("base_hole"), col["base_z"],
+                                  ids[col["top_rail"]], col["top_hole"], col["top_z"],
+                                  tuple(col.get("top_types", ())), rotation, col.get("play", 0.0)))
+        # The drop block on the median's apex end, holding the rail above.
+        feed = Column(trial.new_id("c"), hx, hy, ids["median"], tri["feed_hole"], tri["feed_z"],
+                      rail.id, hole, top, feed_types, (90 * dm - 90) % 360)
+        corridors = []
+        for key, start, end in tri["rolls"]:
+            placed = trial.rails[ids[key]]
+            corridors.append(replace(self._corridor(placed, min(start, end), max(start, end)),
+                                     id=f"{placed.id}#roll{len(corridors)}#marble"))
+        r_m = _MARBLE_DIAMETER_CM / 2.0
+        for key, h in tri["drops"]:
+            placed = trial.rails[ids[key]]
+            x, y = self._point(placed, self.catalog.rails[placed.rail_type].holes_cm[h])
+            corridors.append(Solid(f"{placed.id}#dive#marble", (x, y), (r_m, r_m), 0.0, 0.0,
+                                   placed.z_units * _UNIT_CM))
+        candidates = new_solids + [col.solid(self.half) for col in columns + [feed]
+                                   if col.top_z > col.base_z] + corridors
+        own = {f"{rail.id}#dive#marble"}
+        if self._hits(state, candidates, ignore=own):
+            return None
+        # The stop hole now holds the feed block instead of a dive.
+        trial.rails[rail.id] = replace(rail, hole_states={**rail.hole_states, hole: "block_connected"})
+        trial.corridors.pop(f"{rail.id}#dive#marble", None)
+        for col in columns + [feed]:
+            if col.filler_units(self.heights) < 0:
+                return None
+            trial.columns[col.id] = col
+        for corridor in corridors:
+            trial.corridors[corridor.id] = corridor
+        trial.covers += tri["covers"]
+        if not self._feasible(trial):
+            return None
+        for key, h in tri["drops"]:
+            trial.leaves.append(f"{ids[key]}:hole:{h}")
+        return trial
 
     # ---- seesaw diamond (split and merge) ---------------------------------
     _DIAMOND_RAIL = "straight_long_center"
@@ -1146,9 +1265,11 @@ class CascadeGenerator:
                     block_ids[column.id] = pid
                 ids.append(pid)
                 z += self.heights[part_type]
-            top_parts[column.id] = ids[-1]
+            if ids:
+                top_parts[column.id] = ids[-1]
             supports.append(SupportLink(column.top_rail, column.top_hole, tuple(ids),
-                                        column.base_rail, column.base_hole, name=column.id))
+                                        column.base_rail, column.base_hole, name=column.id,
+                                        play_cm=column.play_cm))
         links = tuple(RouteLink(PortRef(block_ids[col], port), PortRef(rail, "end_a"))
                       for col, port, rail in state.route_links)
         links += tuple(RouteLink(PortRef(rail, "end_b"), PortRef(block_ids[col], port))
@@ -1384,13 +1505,44 @@ def _metrics(state: _State, layout: Layout, catalog: PartCatalog,
         "dead_area_cm2": round(_dead_area(state, catalog, solids)),
         "braces": len(state.braces),
         "weak_towers": weak_towers(layout, catalog),
-        # Brace rails are idle on purpose (they hold a tower); not counted.
+        # Brace rails are idle on purpose (they hold a tower), and so are the
+        # structural parts of a placed pattern (the triangle); not counted.
         "idle_rail_cm": round(sum(catalog.rails[r.rail_type].length_cm - roll.get(r.id, 0.0)
                                   for r in layout.rails
-                                  if catalog.rails[r.rail_type].shape != "twist" and r.id not in state.braces), 1),
+                                  if catalog.rails[r.rail_type].shape not in ("twist", "plate")
+                                  and r.id not in state.braces and r.id not in state.fixed), 1),
         "covers": state.covers,
         "parts": len(layout.parts),
     }
+
+
+BASES = ("triangle", "diamond", "free")
+
+
+def _base_lottery(config: GeneratorConfig) -> list[tuple[str, float]]:
+    if not config.bases:
+        return []
+    unknown = set(config.bases) - set(BASES)
+    if unknown:
+        raise ValueError(f"unknown base(s): {', '.join(sorted(unknown))}; known: {', '.join(BASES)}")
+    return [(b, float(w)) for b, w in config.bases.items() if float(w) > 0]
+
+
+def _base_config(config: GeneratorConfig, base: str) -> GeneratorConfig:
+    """The search settings for one attempt that must end on `base`."""
+    if base == "triangle":
+        return replace(config, triangle_probability=1.0, seesaw_probability=0.0)
+    if base == "diamond":
+        return replace(config, triangle_probability=0.0, seesaw_probability=1.0)
+    return replace(config, triangle_probability=0.0)
+
+
+def _has_base(state: _State, base: str) -> bool:
+    if base == "triangle":
+        return bool(state.fixed)
+    if base == "diamond":
+        return any(c.top_types[:1] == ("seesaw",) for c in state.columns.values())
+    return True
 
 
 def generate(
@@ -1410,11 +1562,20 @@ def generate(
     rng = random.Random(seed)
     generator = CascadeGenerator(catalog, budget, config, rng)
     found: dict[tuple, Candidate] = {}
+    lottery = _base_lottery(config)
     for attempt in range(attempts):
         stats["attempts"] += 1
+        base = None
+        if lottery:
+            base = rng.choices([b for b, _ in lottery], weights=[w for _, w in lottery])[0]
+            generator.config = _base_config(config, base)
         state = generator.build_once()
+        generator.config = config
         if state is None or len(state.rails) < 2:
             continue
+        if base is not None and not _has_base(state, base):
+            continue  # the drawn base was not reached: try again
+        stats[f"base_{base}"] = stats.get(f"base_{base}", 0) + 1 if base else 0
         layout, usage, block_ids = generator.materialize(state, f"generated-{seed}-{attempt}")
         if config.brace_towers:
             spots = tower_spots(layout, catalog)
@@ -1434,12 +1595,14 @@ def generate(
         if config.solve_supports:
             from .supports import resolve_supports
             counts = {k: v for k, v in generator.budget.counts.items()}
+            # A placed pattern keeps its own supports; the rest is solved again.
             better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                                      min_support_g=config.min_support_reaction_g)
+                                      min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
             if better is not None:
                 layout, resolved = better, True
         layout = shorten_rails(layout, catalog, generator.budget, source, sinks)
-        layout = add_curves(layout, catalog, budget, rng, source, sinks, keep_straight=state.braces)
+        layout = add_curves(layout, catalog, budget, rng, source, sinks,
+                            keep_straight=list(state.braces) + list(state.fixed))
         layout = balance(layout, catalog, generator.budget, source, sinks, config.min_support_reaction_g)
         if layout is None:
             continue

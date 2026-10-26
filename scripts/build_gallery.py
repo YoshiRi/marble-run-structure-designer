@@ -43,6 +43,8 @@ CONFIGS = [
     ("merges", {"seesaw_probability": 1.0, "weights": {"merges": 25.0}}),
     # Frames (§6.2): the marble circles a rectangle downward; needs height.
     ("frames", {"frame_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
+    # The isosceles triangle base under a tower (§6.2, user's official build).
+    ("triangles", {"triangle_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.
@@ -64,6 +66,7 @@ BUCKETS = [
     ("merged", lambda m: m.get("merges", 0) >= 1),
     ("switchback", lambda m: m.get("switchbacks", 0) >= 1),
     ("frame", lambda m: m.get("frame_turns", 0) >= 3),
+    ("triangle", lambda m: m.get("triangles", 0) >= 1),
 ] + BUCKETS
 
 

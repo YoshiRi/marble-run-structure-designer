@@ -398,6 +398,47 @@ corner block that sends it down the side rail toward the apex. The plate
 lies on the side's end hole, so the marble drops through hole 2 just before
 it. This build is one of the official examples (user).
 
+**As a generator pattern** (`patterns.isosceles_triangle`,
+`GeneratorConfig.triangle_probability`, built 2026-10-26). At a drop high
+enough (25 levels or more), the drop block lands on the median's apex end,
+with pass-through parts above it, and the whole triangle is placed below,
+turned to one of four directions. It ends the branch with two exits (both
+sides). The triangle keeps its own supports: the support solver skips such
+builds, and curve swaps leave its rails alone. Its structural rails do not
+count as idle rail. The score term `triangles` (+20) recognizes the
+structure in any layout (a plate on two rails carrying a column on its
+middle hole).
+
+Measured (owned inventory, 3 seeds, kept builds with a triangle):
+
+| | 30 levels | 45 levels |
+| --- | --- | --- |
+| p 0.3 | 2 / 30 | 7 / 30 (best 147) |
+| p 1 | 12 / 30 | 17 / 30 (best 141; mean score 129.8 vs 126.9 at p 0.3) |
+
+Gallery configuration `triangles` and bucket "triangle".
+
+**Base lottery** (user, 2026-10-26; `GeneratorConfig.bases`, default
+`{triangle: 1, diamond: 1, free: 1}`). Each attempt draws one base design
+by weight and the build must end on it, else the attempt is dropped:
+triangle (the triangle at a drop with room), diamond (the seesaw split and
+merge, §6.1) or free (the plain search). A weight of 0 leaves a base out,
+e.g. to explore without triangles. The viewer's dialog has one weight per
+base. A placed pattern keeps its own supports while the support solver
+re-solves the rest (no more greedy braces left over the pattern).
+
+Measured (owned inventory, 5 seeds, 150 attempts, 50 kept builds):
+
+| | valid / attempt | kept: triangle / diamond / free | score | parts | ms / attempt |
+| --- | --- | --- | --- | --- | --- |
+| 30 levels, plain | 0.79 | 0 / 13 / 37 | 105.8 | 27.9 | 17 |
+| 30 levels, lottery | 0.29 | 9 / 19 / 22 | 105.2 | 27.4 | 8 |
+| 45 levels, plain | 0.83 | 0 / 3 / 47 | 133.2 | 51.0 | 49 |
+| 45 levels, lottery | 0.38 | 17 / 5 / 28 | 127.7 | 44.4 | 25 |
+
+Attempts whose base is not reached are dropped early, so they cost little.
+More base designs are wanted (user examples, as with the triangle).
+
 Extensions (user, 2026-10-25), next:
 - **double sides** (official): one more level of rails and blocks under
   each side;
@@ -565,7 +606,7 @@ Each step adds a fixture and a test at its layer (§3).
     (e.g. a triangle of rails sharing corner columns, a tower standing on a
     plate), so builds that reach it on their own also gain.
   Both need a pattern format with ports and a recognizer per pattern; the
-  triangle fixture is the first entry. Next for the triangle itself: double
+  triangle is the first entry (placed and recognized, §6.2, 2026-10-26). Next for the triangle itself: double
   sides (official) and an apex tray (needs the tray measured).
 - The triangle's exact geometry: settled for the isosceles type (§6.2,
   fixture `triangle-isosceles.yaml`); the equilateral type is later.
