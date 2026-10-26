@@ -30,7 +30,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field, replace
-from math import atan2, cos, degrees, pi, radians, sin
+from math import atan2, cos, degrees, hypot, pi, radians, sin
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -45,6 +45,15 @@ from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, shorten, substitut
 from .validation import validate_layout
 
 _DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
+
+
+def _dir_vec(direction) -> tuple[float, float]:
+    """A grid direction 0-3, or any angle in degrees given as a float
+    (bottom-up growth places rails at any angle: holes are round, user)."""
+    if isinstance(direction, int):
+        return _DIRS[direction % 4]
+    a = radians(direction)
+    return cos(a), sin(a)
 # Rotation that points a block's side port toward world direction index d:
 # rotation = 90 * d + offset.
 _PORT_ROTATION_OFFSET = {"right": 0, "front": -90, "rear": 90, "left": 180}
@@ -205,6 +214,9 @@ class GeneratorConfig:
     # bottom-up inside the base's top-view box (plus a margin).
     ground_column_penalty: float = 0.0
     up_within_base: bool = False
+    # bottom_up: also try any angle that puts a rail's hole over a base hole
+    # (experiment 2026-10-27: did not help; off).
+    up_free_angles: bool = False
     up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
@@ -344,7 +356,11 @@ class CascadeGenerator:
 
     # ---- geometry ----------------------------------------------------------
     def _point(self, rail: PlacedRail, local_x: float) -> tuple[float, float]:
-        dx, dy = _DIRS[int(round(rail.yaw_deg / 90)) % 4]
+        q = rail.yaw_deg / 90.0
+        if abs(q - round(q)) < 1e-9:
+            dx, dy = _DIRS[int(round(q)) % 4]
+        else:
+            dx, dy = cos(radians(rail.yaw_deg)), sin(radians(rail.yaw_deg))
         return rail.x_cm + local_x * dx, rail.y_cm + local_x * dy
 
     def _corridor(self, rail: PlacedRail, start: float, end: float) -> Solid:
@@ -489,7 +505,8 @@ class CascadeGenerator:
         states = {i: "covered" for i in covered}
         if stop is not None:
             states[stop] = "open" if dive else "block_connected"
-        rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=90.0 * direction,
+        yaw = 90.0 * direction if isinstance(direction, int) else round(float(direction) % 360, 6)
+        rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=yaw,
                           flow_direction="a_to_b", hole_states=states)
         body = rail_solids(rail, self.catalog)
         # The twist's marble path runs inside its own funnel: no corridor.
@@ -643,8 +660,9 @@ class CascadeGenerator:
         """Holes of a candidate rail over or under existing holes/columns in
         top view (1 each), or one block width beside them (0.3 each)."""
         score = 0.0
+        ux, uy = _dir_vec(d)
         for h in self.catalog.rails[kind].holes_cm:
-            x, y = sx + h * _DIRS[d][0], sy + h * _DIRS[d][1]
+            x, y = sx + h * ux, sy + h * uy
             best = min((((x - a) ** 2 + (y - b) ** 2) ** 0.5 for a, b in spots), default=99.0)
             if best < 0.35:
                 score += 1.0
@@ -1181,7 +1199,7 @@ class CascadeGenerator:
             return None
         state.max_depth = 4
         lower = state.rails[self._last_triangle_ids["median"]]
-        lower_hole, flow, block_z = tri["feed_hole"], dm, tri["feed_z"]
+        lower_hole, flow, block_z = tri["feed_hole"], 90.0 * dm, tri["feed_z"]
         point = (hx, hy)
         top_level = self.config.max_height_units
         blocks = [b for b, outs in self.drop_blocks.items() if outs == ("front",) and self.budget.counts[b] > 0]
@@ -1198,8 +1216,9 @@ class CascadeGenerator:
             return None                    # nothing grew above the base
         # The input: a block standing on the top rail's landing hole.
         block = self.rng.choice(blocks)
-        rotation = (90 * flow - 90) % 360
-        col = Column(state.new_id("c"), point[0], point[1], lower.id, lower_hole, block_z, None, None,
+        rotation = int(round(flow - 90)) % 360
+        col = Column(state.new_id("c"), round(point[0], 6), round(point[1], 6), lower.id, lower_hole, block_z,
+                     None, None,
                      block_z + self.heights[block], (block,), rotation)
         if self._hits(state, [col.solid(self.half)]):
             return None
@@ -1209,25 +1228,40 @@ class CascadeGenerator:
 
     def _grow_up(self, state, lower, lower_hole, flow, block_z, point, blocks, top_level):
         """One rail above `point`: its stop hole drops the marble into a block
-        standing on `lower` at `lower_hole`, whose outlet faces `flow`."""
+        standing on `lower` at `lower_hole`, whose outlet faces `flow`
+        (degrees). Directions: the four grid ones, plus every angle that puts
+        another hole of the rail right over a hole of the base (holes are
+        round: a column joins rails at any angle)."""
         px, py = point
         spots = self._spots(state)
+        targets = [self._point(state.rails[rid], h)
+                   for rid in state.fixed for h in self.catalog.rails[state.rails[rid].rail_type].holes_cm]
         options = []
         for kind in _RAIL_KINDS:
             spec = self.catalog.rails[kind]
             holes = spec.holes_cm
-            for d in range(4):
+            angles = {float(90 * d) for d in range(4)}
+            for tx, ty in (targets if self.config.up_free_angles else ()):
+                r = hypot(tx - px, ty - py)
+                for st in range(len(holes)):
+                    for h in range(len(holes)):
+                        delta = holes[h] - holes[st]
+                        if h != st and abs(abs(delta) - r) < 0.3:
+                            ang = degrees(atan2((ty - py) / delta, (tx - px) / delta)) % 360
+                            angles.add(round(ang, 3))
+            for ang in angles:
+                ux, uy = _dir_vec(ang)
                 for stop in range(len(holes)):
                     for entry in range(stop):
                         if holes[stop] - holes[entry] - self.half < self.config.min_roll_cm:
                             continue
-                        sx, sy = px - holes[stop] * _DIRS[d][0], py - holes[stop] * _DIRS[d][1]
-                        pull = self.config.up_align_weight * self._alignment(spots, kind, sx, sy, d)
-                        if d == (flow + 2) % 4:
+                        sx, sy = px - holes[stop] * ux, py - holes[stop] * uy
+                        pull = self.config.up_align_weight * self._alignment(spots, kind, sx, sy, ang)
+                        if abs(((ang - flow - 180) + 180) % 360 - 180) < 1.0:
                             pull += self.config.up_switchback_weight
-                        options.append((-(pull + 2.0 * self.rng.random()), kind, d, stop, entry, sx, sy))
+                        options.append((-(pull + 2.0 * self.rng.random()), kind, ang, stop, entry, sx, sy))
         options.sort()
-        for _, kind, d, stop, entry, sx, sy in options[:60]:
+        for _, kind, ang, stop, entry, sx, sy in options[:80]:
             block = self.rng.choice(blocks)
             passes = ("purple_drop",) * (1 if self.rng.random() < 0.25 else 0)
             z = block_z + self.heights[block] + sum(self.heights[p] for p in passes)
@@ -1235,14 +1269,15 @@ class CascadeGenerator:
                 continue
             spec = self.catalog.rails[kind]
             trial = state.copy()
-            if self.config.up_within_base and not self._over_base(state, kind, sx, sy, d):
+            if self.config.up_within_base and not self._over_base(state, kind, sx, sy, ang):
                 continue
-            upper = self._place_rail(trial, kind, sx, sy, z, d, spec.holes_cm[entry] + self.half, stop,
+            direction = int(round(ang / 90)) % 4 if abs(ang / 90 - round(ang / 90)) < 1e-9 else ang
+            upper = self._place_rail(trial, kind, sx, sy, z, direction, spec.holes_cm[entry] + self.half, stop,
                                      keep_free=(entry,))
             if upper is None:
                 continue
-            column = Column(trial.new_id("c"), px, py, lower.id, lower_hole, block_z, upper.id, stop, z,
-                            (block,) + passes, (90 * flow - 90) % 360)
+            column = Column(trial.new_id("c"), round(px, 6), round(py, 6), lower.id, lower_hole, block_z,
+                            upper.id, stop, z, (block,) + passes, int(round(flow - 90)) % 360)
             if column.filler_units(self.heights) != 0 or self._hits(trial, [column.solid(self.half)]):
                 continue
             trial.columns[column.id] = column
@@ -1254,7 +1289,7 @@ class CascadeGenerator:
             if not self._feasible(trial):
                 continue
             trial.max_depth += 1
-            return (trial, upper, entry, d, z + 1, self._point(upper, spec.holes_cm[entry]))
+            return (trial, upper, entry, ang, z + 1, self._point(upper, spec.holes_cm[entry]))
         return None
 
     def _over_base(self, state: _State, kind: str, sx: float, sy: float, d: int) -> bool:
@@ -1270,8 +1305,9 @@ class CascadeGenerator:
             return True
         m = self.config.up_base_margin_cm
         length = self.catalog.rails[kind].length_cm
+        ux, uy = _dir_vec(d)
         for t in (0.0, length):
-            x, y = sx + t * _DIRS[d][0], sy + t * _DIRS[d][1]
+            x, y = sx + t * ux, sy + t * uy
             if not (min(xs) - m <= x <= max(xs) + m and min(ys) - m <= y <= max(ys) + m):
                 return False
         return True
