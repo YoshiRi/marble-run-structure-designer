@@ -299,3 +299,70 @@ def candidate_after_move(generator, state, config: GeneratorConfig, catalog: Par
     metrics["covers"] = usage.get("cover", 0)
     metrics.update(layout_metrics(layout, catalog, source))
     return Candidate(layout, score(metrics, config.weights), metrics, usage, sinks, source)
+
+
+def apply_moves(generator, state, moves: list[tuple[str, int]]):
+    """Apply layout-level moves in order; a move that does not fit is skipped."""
+    for junction, quarter in moves:
+        if junction not in state.columns:
+            continue
+        turned = rotate_above(generator, state, junction, quarter)
+        if turned is not None:
+            state = turned
+    return state
+
+
+def anneal_with_moves(catalog: PartCatalog, budget: Budget, config: GeneratorConfig, start_tape: list[float], *,
+                      seed: int = 1, iterations: int = 200, base: str | None = None, p_tape: float = 0.3,
+                      t_start: float = 3.0, t_end: float = 0.1) -> AnnealResult | None:
+    """Anneal over (tape, layout moves). A tape change re-grows and drops the
+    moves; otherwise a turn is added, removed or changed. Every candidate is
+    scored after the same support solving (candidate_after_move)."""
+    rng = random.Random(seed)
+    fresh = random.Random(seed * 7919 + 1)
+
+    def evaluate(tape, moves):
+        r = TapeRandom(tape, fresh)
+        generator = CascadeGenerator(catalog, budget, _base_config(config, base) if base else config, r)
+        state = generator.build_once()
+        generator.config = config
+        if state is None or len(state.rails) < 2 or (base and not _has_base(state, base)):
+            return None, r.used(), []
+        moved = apply_moves(generator, state, moves)
+        return candidate_after_move(generator, moved, config, catalog, budget), r.used(), junctions(state)
+
+    current, tape, joints = evaluate(start_tape, [])
+    if current is None:
+        return None
+    moves: list[tuple[str, int]] = []
+    result = AnnealResult(start=current, best=current, best_tape=list(tape))
+    result.best_moves = []  # type: ignore[attr-defined]
+    valid = 1
+    for i in range(iterations):
+        t = t_start * (t_end / t_start) ** (i / max(1, iterations - 1))
+        new_tape, new_moves = tape, list(moves)
+        if rng.random() < p_tape or not joints:
+            new_tape, new_moves = mutate(tape, rng), []
+        else:
+            roll = rng.random()
+            if new_moves and roll < 0.3:
+                new_moves.pop(rng.randrange(len(new_moves)))
+            elif new_moves and roll < 0.5:
+                k = rng.randrange(len(new_moves))
+                new_moves[k] = (new_moves[k][0], rng.choice((1, 2, 3)))
+            else:
+                new_moves.append((rng.choice(joints), rng.choice((1, 2, 3))))
+        candidate, used, new_joints = evaluate(new_tape, new_moves)
+        accepted = False
+        if candidate is not None:
+            valid += 1
+            delta = candidate.score - current.score
+            if delta >= 0 or rng.random() < math.exp(delta / t):
+                current, tape, moves, joints, accepted = candidate, used, new_moves, new_joints, True
+                if current.score > result.best.score:
+                    result.best, result.best_tape = current, list(tape)
+                    result.best_moves = list(moves)  # type: ignore[attr-defined]
+        result.history.append({"i": i, "valid": candidate is not None, "current": round(current.score, 2),
+                               "best": round(result.best.score, 2), "accepted": accepted, "moves": len(moves)})
+    result.evaluated, result.valid = iterations + 1, valid
+    return result

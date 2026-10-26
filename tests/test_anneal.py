@@ -71,3 +71,21 @@ def test_turning_the_part_above_a_drop_keeps_the_build_valid():
             if candidate_after_move(generator, new, CONFIG, CATALOG, BUDGET) is not None:
                 turned += 1
     assert turned >= 1
+
+
+def test_pattern_columns_counts_columns_standing_on_the_triangle():
+    import yaml
+    from quadrilla_solver.generator import layout_source
+    from quadrilla_solver.model import layout_from_dict
+    from quadrilla_solver.scoring import layout_metrics
+    data = yaml.safe_load((ROOT / "examples" / "anneal" / "mr-5119dc15.yaml").read_text())
+    assert layout_metrics(layout_from_dict(data), CATALOG, layout_source(data))["pattern_columns"] == 2
+    fixture = yaml.safe_load((ROOT / "tests" / "fixtures" / "triangle-isosceles.yaml").read_text())
+    assert layout_metrics(layout_from_dict(fixture), CATALOG, layout_source(fixture))["pattern_columns"] == 0
+
+
+def test_annealing_with_moves_never_ends_below_its_start():
+    from quadrilla_solver.anneal import anneal_with_moves
+    _, tape = _first_valid("triangle")
+    result = anneal_with_moves(CATALOG, BUDGET, CONFIG, tape, seed=1, iterations=15, base="triangle")
+    assert result is not None and result.best.score >= result.start.score

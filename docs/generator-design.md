@@ -609,6 +609,16 @@ rest of the build, 2 had no valid supports, and the valid ones scored lower
 the frame's same-way turns broken; the twist 90°: 150.6). The turn that
 opens a switchback needs the switchback inserted too: a move to combine.
 
+**Score term `pattern_columns`** (+4, user review of mr-5119dc15): columns
+of the build that stand on a triangle base's rails (corners, beams) rather
+than on the ground. **Annealing with moves** (`anneal_with_moves`): the
+state is (tape, list of turns); a step changes the tape (the turns are
+dropped) or adds, removes or changes a turn. On mr-a5c66ca1 no turn improves
+the score: what the reviews ask for (a merge block at the base center fed
+from above and the side, a switchback through the apex column, ground
+columns moved onto the triangle's ends) changes the route, not just its
+orientation. Those route-level moves are next.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
