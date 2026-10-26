@@ -90,8 +90,8 @@ def test_a_base_lottery_of_only_triangles_keeps_only_triangle_builds():
                              exclude_parts=("red_right_angle",))
     found = generate(CATALOG, budget, config=config, attempts=60, seed=1, keep=10)
     assert found and all(c.metrics["triangles"] == 1 for c in found)
-    # the pattern keeps its supports; the rest was solved again (no braces left)
-    assert all(c.metrics["braces"] == 0 for c in found)
+    # the pattern keeps its own supports (the median's play) after solving
+    assert all(any(s.play_cm for s in c.layout.supports) for c in found)
 
 
 def test_unknown_bases_are_refused():
