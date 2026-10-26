@@ -596,6 +596,19 @@ drop block for the merge block where a rail ends against it, re-attach a
 rail end, insert a switchback), with the tape re-roll kept as the large
 move.
 
+**Layout-level move: turn the part above a drop** (user review of
+mr-a5c66ca1, 2026-10-26: "turn this four-corner frame by 90 degrees; columns
+would be shared and a switchback could be added"). `rotate_above` turns
+every rail upstream of a drop column, with their drop columns and marble
+corridors, by 90/180/270 degrees about that column's axis; the column stays
+and its lower rail does not move. Plain supports of the turned part are
+dropped and solved again. The footprint is checked as a size, not a place.
+On mr-a5c66ca1 (165.6 through the same passes): of the 9 turns, 5 hit the
+rest of the build, 2 had no valid supports, and the valid ones scored lower
+(upper part 180° about the drop onto the median: 159.2, larger footprint,
+the frame's same-way turns broken; the twist 90°: 150.6). The turn that
+opens a switchback needs the switchback inserted too: a move to combine.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
