@@ -199,6 +199,13 @@ class GeneratorConfig:
     strategy: str = "top_down"
     up_align_weight: float = 3.0      # bottom_up: pull toward holes over existing ones
     up_switchback_weight: float = 2.0  # bottom_up: pull toward a reversed rail right above
+    # Experiment (user, 2026-10-27): discourage new ground columns and keep
+    # the build over the base. ground_column_penalty is the support solver's
+    # extra cost per ground column; up_within_base keeps every rail grown
+    # bottom-up inside the base's top-view box (plus a margin).
+    ground_column_penalty: float = 0.0
+    up_within_base: bool = False
+    up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
@@ -1228,6 +1235,8 @@ class CascadeGenerator:
                 continue
             spec = self.catalog.rails[kind]
             trial = state.copy()
+            if self.config.up_within_base and not self._over_base(state, kind, sx, sy, d):
+                continue
             upper = self._place_rail(trial, kind, sx, sy, z, d, spec.holes_cm[entry] + self.half, stop,
                                      keep_free=(entry,))
             if upper is None:
@@ -1247,6 +1256,25 @@ class CascadeGenerator:
             trial.max_depth += 1
             return (trial, upper, entry, d, z + 1, self._point(upper, spec.holes_cm[entry]))
         return None
+
+    def _over_base(self, state: _State, kind: str, sx: float, sy: float, d: int) -> bool:
+        """Both ends of a rail inside the top-view box of the placed base."""
+        xs, ys = [], []
+        for rid in state.fixed:
+            for piece in self._rail_solids(state.rails[rid]):
+                (cx, cy), (hx, hy), a = piece.center_xy, piece.half_extents_xy, piece.angle_rad
+                ex, ey = abs(hx * cos(a)) + abs(hy * sin(a)), abs(hx * sin(a)) + abs(hy * cos(a))
+                xs += [cx - ex, cx + ex]
+                ys += [cy - ey, cy + ey]
+        if not xs:
+            return True
+        m = self.config.up_base_margin_cm
+        length = self.catalog.rails[kind].length_cm
+        for t in (0.0, length):
+            x, y = sx + t * _DIRS[d][0], sy + t * _DIRS[d][1]
+            if not (min(xs) - m <= x <= max(xs) + m and min(ys) - m <= y <= max(ys) + m):
+                return False
+        return True
 
     def _trim_input(self, state: _State, top: PlacedRail, stop: int) -> _State | None:
         """Drop the input rail: the marble goes straight into the top of the
@@ -1726,7 +1754,8 @@ def candidate_from_state(generator: "CascadeGenerator", state: "_State", config:
         counts = {k: v for k, v in generator.budget.counts.items()}
         # A placed pattern keeps its own supports; the rest is solved again.
         better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                                  min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
+                                  min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed,
+                                  ground_penalty=config.ground_column_penalty)
         if better is not None:
             layout, resolved = better, True
     layout = shorten_rails(layout, catalog, generator.budget, source, sinks)

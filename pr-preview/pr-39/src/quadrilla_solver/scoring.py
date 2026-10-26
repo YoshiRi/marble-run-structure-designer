@@ -182,6 +182,16 @@ def _pattern_columns(ctx: MetricContext) -> float:
                      if s.lower_rail_id in pattern and s.upper_rail_id and s.upper_rail_id not in pattern))
 
 
+@layout_metric("ground_columns")
+def _ground_columns(ctx: MetricContext) -> float:
+    """Columns standing on the ground, other than a triangle base's own four
+    (user experiment, 2026-10-27: every new column costs)."""
+    pattern = _pattern_rails(ctx)
+    return float(sum(1 for s in ctx.layout.supports
+                     if s.lower_rail_id is None and s.stack_part_ids and s.upper_rail_id
+                     and s.upper_rail_id not in pattern))
+
+
 @layout_metric("frame_turns")
 def _frame_turns(ctx: MetricContext) -> float:
     """Longest run of drops along the route that each turn the marble 90
@@ -264,6 +274,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
     {"key": "pattern_columns", "sign": 1, "weight": 4.0, "label": "Columns on the base",
      "help": "per column of the build standing on the triangle base's rails",
      "source": "user review (annealing, 2026-10-26)"},
+    {"key": "ground_columns", "sign": -1, "weight": 0.0, "label": "Ground columns",
+     "help": "per column standing on the ground (a triangle base's own excepted); 0 = off",
+     "source": "user experiment (2026-10-27)"},
     {"key": "frame_turns", "sign": 1, "weight": 2.0, "label": "Frame turns",
      "help": "per drop in the longest run turning the same way (the marble circling a frame)",
      "source": "official builds (design doc §6.2)"},

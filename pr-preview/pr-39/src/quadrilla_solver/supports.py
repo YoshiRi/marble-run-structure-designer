@@ -99,6 +99,7 @@ def strip_supports(layout: Layout, catalog: PartCatalog, source: PortRef,
 class SupportSolver:
     def __init__(self, layout: Layout, catalog: PartCatalog, counts: Mapping[str, int],
                  source: PortRef, sinks: Sequence[PortRef], share_bonus: float = 2.0,
+                 ground_penalty: float = 0.0,
                  tower_bonus: float = 4.0,
                  max_nodes: int = 20000, keep: int = 12):
         self.layout, self.catalog, self.source, self.sinks = layout, catalog, source, tuple(sinks)
@@ -107,6 +108,7 @@ class SupportSolver:
         self.half = 2.25
         self.share_bonus, self.max_nodes, self.keep = share_bonus, max_nodes, keep
         self.tower_bonus = tower_bonus
+        self.ground_penalty = ground_penalty   # extra cost of a new column from the ground
         # Holes with a stack standing on them: a support right under one
         # completes a tower (the score's shared_towers).
         self.stood_on = {(s.lower_rail_id, s.lower_hole_index) for s in layout.supports
@@ -214,7 +216,8 @@ class SupportSolver:
             hypot(c.x - sx, c.y - sy) < _ALIGN_CM
             for rid, spots in self.hole_spots.items() if rid != c.rail_id for sx, sy in spots)
         tower = self.tower_bonus if (c.rail_id, c.hole) in self.stood_on else 0.0
-        return f + b + p - (self.share_bonus if shared or c.base_rail is not None else 0.0) - tower
+        ground = self.ground_penalty if c.base_rail is None else 0.0
+        return f + b + p + ground - (self.share_bonus if shared or c.base_rail is not None else 0.0) - tower
 
     def _choices(self, rail) -> list[tuple[float, tuple[Column, ...]]]:
         spec = self.catalog.rails[rail.rail_type]

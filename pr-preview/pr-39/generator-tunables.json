@@ -65,6 +65,14 @@
       "source": "user review (annealing, 2026-10-26)"
     },
     {
+      "key": "ground_columns",
+      "sign": -1,
+      "weight": 0.0,
+      "label": "Ground columns",
+      "help": "per column standing on the ground (a triangle base's own excepted); 0 = off",
+      "source": "user experiment (2026-10-27)"
+    },
+    {
       "key": "frame_turns",
       "sign": 1,
       "weight": 2.0,

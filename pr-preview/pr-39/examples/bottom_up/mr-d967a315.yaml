@@ -1,10 +1,10 @@
 schema_version: '0.1'
 layout_id: mr-d967a315
-name: mr-d967a315 (bottom-up 45)
-description: triangle base first, route grown up from it; 45 levels; score 159.3
+name: mr-d967a315 (ground penalty, 45)
+description: bottom-up, 45 levels, ground penalty
 generator:
   strategy: bottom_up
-  max_height_units: 45
+  experiment: ground penalty
 metrics:
   levels: 8
   rails: 11
@@ -35,6 +35,7 @@ metrics:
   switchbacks: 0.0
   triangles: 1.0
   pattern_columns: 1.0
+  ground_columns: 2.0
   frame_turns: 1.0
 inventory_used:
   blue: 5
