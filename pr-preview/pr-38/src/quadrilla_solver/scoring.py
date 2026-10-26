@@ -151,6 +151,37 @@ def _triangles(ctx: MetricContext) -> float:
     return float(count)
 
 
+def _pattern_rails(ctx: MetricContext) -> set[str]:
+    """Rails of triangle bases: each plate, the rails it rests on (sides),
+    the rail its middle column carries (median), and rails standing on the
+    sides through a block (the base)."""
+    rails = {r.id: r for r in ctx.layout.rails}
+    out: set[str] = set()
+    for plate in ctx.layout.rails:
+        if ctx.catalog.rails[plate.rail_type].shape != "plate":
+            continue
+        sides = {s.lower_rail_id for s in ctx.layout.supports
+                 if s.upper_rail_id == plate.id and s.lower_rail_id in rails}
+        if len(sides) < 2:
+            continue
+        out |= {plate.id} | sides
+        out |= {s.upper_rail_id for s in ctx.layout.supports
+                if s.lower_rail_id == plate.id and s.upper_rail_id}
+        out |= {s.upper_rail_id for s in ctx.layout.supports
+                if s.lower_rail_id in sides and s.upper_rail_id and s.upper_rail_id != plate.id}
+    return out
+
+
+@layout_metric("pattern_columns")
+def _pattern_columns(ctx: MetricContext) -> float:
+    """Columns of the rest of the build standing on a triangle base's rails
+    (user review, 2026-10-26: "columns can stand on the triangle's corners
+    and beams") instead of on the ground."""
+    pattern = _pattern_rails(ctx)
+    return float(sum(1 for s in ctx.layout.supports
+                     if s.lower_rail_id in pattern and s.upper_rail_id and s.upper_rail_id not in pattern))
+
+
 @layout_metric("frame_turns")
 def _frame_turns(ctx: MetricContext) -> float:
     """Longest run of drops along the route that each turn the marble 90
@@ -230,6 +261,9 @@ SCORE_TERMS: tuple[dict[str, Any], ...] = (
     {"key": "triangles", "sign": 1, "weight": 20.0, "label": "Triangle bases",
      "help": "per triangle base (a plate tying two side rails, carrying the median)",
      "source": "official builds; user (efficient structure, 2026-10-26)"},
+    {"key": "pattern_columns", "sign": 1, "weight": 4.0, "label": "Columns on the base",
+     "help": "per column of the build standing on the triangle base's rails",
+     "source": "user review (annealing, 2026-10-26)"},
     {"key": "frame_turns", "sign": 1, "weight": 2.0, "label": "Frame turns",
      "help": "per drop in the longest run turning the same way (the marble circling a frame)",
      "source": "official builds (design doc §6.2)"},
