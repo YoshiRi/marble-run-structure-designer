@@ -61,6 +61,11 @@ STYLE_TUNABLES: tuple[dict[str, Any], ...] = (
      "default": GeneratorConfig().solve_supports,
      "help": "re-solve the columns the marble never touches for all rails at once (fewer parts, slower)",
      "source": "two-phase design"},
+    {"key": "strategy", "label": "Generation", "type": "choice", "choices": ["top_down", "bottom_up"],
+     "default": GeneratorConfig().strategy,
+     "help": "top_down: grow the route down from the input (base drawn by lottery); "
+             "bottom_up: place the triangle base first and grow the route up from it",
+     "source": "user (2026-10-27)"},
     {"key": "exit_style", "label": "Exits", "type": "choice", "choices": ["contained", "any"],
      "default": GeneratorConfig().exit_style,
      "help": "contained: block outlets or dives only; any: rails may also roll off their end",

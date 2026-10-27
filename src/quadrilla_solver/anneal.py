@@ -279,7 +279,8 @@ def candidate_after_move(generator, state, config: GeneratorConfig, catalog: Par
     source = generator.source
     counts = dict(generator.budget.counts)
     layout = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                              min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
+                              min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed,
+                              ground_penalty=config.ground_column_penalty)
     if layout is None:
         return None
     result = validate_layout(layout, catalog, source=source, sinks=sinks)

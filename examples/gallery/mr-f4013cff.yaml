@@ -37,6 +37,8 @@ metrics:
   shared_towers: 4.0
   switchbacks: 0.0
   triangles: 0.0
+  pattern_columns: 0.0
+  ground_columns: 4.0
   frame_turns: 0.0
 inventory_used:
   cover: 6
