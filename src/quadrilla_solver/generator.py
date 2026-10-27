@@ -223,6 +223,10 @@ class GeneratorConfig:
     # plain support on a site stands on the hole below instead of the ground.
     up_sites: bool = True
     up_site_weight: float = 6.0
+    # bottom_up: chance that a drop block is a red splitter (user review of
+    # mr-6cd8d488): the second branch rolls back along the lower rail and
+    # leaves through its first free hole.
+    up_split_probability: float = 0.5
     up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
@@ -1321,8 +1325,14 @@ class CascadeGenerator:
                                      keep_free=(entry,) + on_sites)
             if upper is None:
                 continue
+            split = (self.rng.random() < self.config.up_split_probability
+                     and self._branches(trial) < self.config.max_exits
+                     and self.budget.counts.get("red_random_split", 0) > sum(
+                         1 for c in trial.columns.values() if c.top_types[:1] == ("red_random_split",))
+                     and self._split_back(trial, lower, lower_hole))
             column = Column(trial.new_id("c"), round(px, 6), round(py, 6), lower.id, lower_hole, block_z,
-                            upper.id, stop, z, (block,) + passes, int(round(flow - 90)) % 360)
+                            upper.id, stop, z, (("red_random_split",) if split else (block,)) + passes,
+                            int(round(flow - 90)) % 360)
             if column.filler_units(self.heights) != 0 or self._hits(trial, [column.solid(self.half)]):
                 continue
             trial.columns[column.id] = column
@@ -1336,6 +1346,43 @@ class CascadeGenerator:
             trial.max_depth += 1
             return (trial, upper, entry, ang, z + 1, self._point(upper, spec.holes_cm[entry]))
         return None
+
+    def _split_back(self, state: _State, rail: PlacedRail, hole: int) -> bool:
+        """Let a splitter on `rail` at `hole` send its second marble backward:
+        the rail flows out from that hole both ways; going back, the marble
+        crosses covered holes and leaves through the first hole with nothing
+        under it. Changes `state` (rail, corridors, leaves) and returns True,
+        or returns False and leaves it as it was."""
+        if rail.id in state.fixed or rail.flow_direction != "a_to_b":
+            return False
+        spec = self.catalog.rails[rail.rail_type]
+        holes = spec.holes_cm
+        held = {c.top_hole for c in state.columns.values() if c.top_rail == rail.id}
+        stood = {c.base_hole for c in state.columns.values() if c.base_rail == rail.id}
+        back = [j for j in range(hole - 1, -1, -1)]
+        exit_hole = next((j for j in back if j not in held and j not in stood
+                          and rail.hole_states.get(j, "open") == "open"), None)
+        if exit_hole is None or holes[hole] - self.half - holes[exit_hole] < 1.0:
+            return False
+        between = [j for j in back if j > exit_hole]
+        if any(j in held or j in stood for j in between):
+            return False
+        x, y = self._point(rail, holes[exit_hole])
+        r = _MARBLE_DIAMETER_CM / 2.0
+        fall = Solid(f"{rail.id}#back#dive#marble", (x, y), (r, r), 0.0, 0.0, rail.z_units * _UNIT_CM)
+        roll = replace(self._corridor(rail, holes[exit_hole], holes[hole] - self.half),
+                       id=f"{rail.id}#roll_back#marble")
+        if self._hits(state, [fall, roll], ignore={rail.id}):
+            return False
+        states = dict(rail.hole_states)
+        for j in between:
+            states[j] = "covered"
+        state.covers += len(between)
+        state.rails[rail.id] = replace(rail, flow_direction="from_hole", flow_hole=hole, hole_states=states)
+        state.corridors[fall.id] = fall
+        state.corridors[roll.id] = roll
+        state.leaves.append(f"{rail.id}:hole:{exit_hole}")
+        return True
 
     def _sites(self, state: _State) -> list[tuple[float, float]]:
         """Top-view spots a column may join: free holes of the base and of
