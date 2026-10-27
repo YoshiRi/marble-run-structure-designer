@@ -30,7 +30,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from dataclasses import dataclass, field, replace
-from math import atan2, cos, degrees, pi, radians, sin
+from math import atan2, cos, degrees, hypot, pi, radians, sin
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -45,11 +45,22 @@ from .substitution import CURVE_FOR_STRAIGHT, eligible_rails, shorten, substitut
 from .validation import validate_layout
 
 _DIRS = ((1, 0), (0, 1), (-1, 0), (0, -1))
+
+
+def _dir_vec(direction) -> tuple[float, float]:
+    """A grid direction 0-3, or any angle in degrees given as a float
+    (bottom-up growth places rails at any angle: holes are round, user)."""
+    if isinstance(direction, int):
+        return _DIRS[direction % 4]
+    a = radians(direction)
+    return cos(a), sin(a)
 # Rotation that points a block's side port toward world direction index d:
 # rotation = 90 * d + offset.
 _PORT_ROTATION_OFFSET = {"right": 0, "front": -90, "rear": 90, "left": 180}
+# Filler blocks inside columns, first choice first. The natural-wood merge
+# comes late: it is kept for curve ends and merges (user, 2026-10-27).
 _FILLER_PREFERENCE = (
-    "natural_drop", "orange_vertical", "cyan", "green", "blue", "yellow",
+    "orange_vertical", "cyan", "green", "blue", "yellow", "natural_drop",
     "red_right_angle", "red_random_split",
 )
 _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
@@ -191,6 +202,34 @@ class GeneratorConfig:
     # weight and the build must end on it ("free" = no base, the plain
     # search with the probabilities above). None keeps the plain search.
     # Bases: triangle (§6.2), diamond (seesaw split and merge, §6.1), free.
+    # How a build is grown (user, 2026-10-27: several generation patterns to
+    # switch between): "top_down" grows the route down from the input;
+    # "bottom_up" places the triangle base first and grows the route up from
+    # its entry, preferring rails whose holes sit over the base's holes
+    # (columns on the triangle) and switchbacks.
+    strategy: str = "top_down"
+    up_align_weight: float = 3.0      # bottom_up: pull toward holes over existing ones
+    up_switchback_weight: float = 2.0  # bottom_up: pull toward a reversed rail right above
+    # Experiment (user, 2026-10-27): discourage new ground columns and keep
+    # the build over the base. ground_column_penalty is the support solver's
+    # extra cost per ground column; up_within_base keeps every rail grown
+    # bottom-up inside the base's top-view box (plus a margin).
+    ground_column_penalty: float = 0.0
+    up_within_base: bool = True
+    # bottom_up: also try any angle that puts a rail's hole over a base hole
+    # (experiment 2026-10-27: did not help; off).
+    up_free_angles: bool = False
+    # bottom_up: a 2D map of hole sites kept for the whole build (user,
+    # 2026-10-27): the base's free holes first, then every hole of a rail
+    # placed above. Rails whose other holes land on sites come first, and a
+    # plain support on a site stands on the hole below instead of the ground.
+    up_sites: bool = True
+    up_site_weight: float = 6.0
+    # bottom_up: chance that a drop block is a red splitter (user review of
+    # mr-6cd8d488): the second branch rolls back along the lower rail and
+    # leaves through its first free hole.
+    up_split_probability: float = 1.0
+    up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
@@ -329,7 +368,11 @@ class CascadeGenerator:
 
     # ---- geometry ----------------------------------------------------------
     def _point(self, rail: PlacedRail, local_x: float) -> tuple[float, float]:
-        dx, dy = _DIRS[int(round(rail.yaw_deg / 90)) % 4]
+        q = rail.yaw_deg / 90.0
+        if abs(q - round(q)) < 1e-9:
+            dx, dy = _DIRS[int(round(q)) % 4]
+        else:
+            dx, dy = cos(radians(rail.yaw_deg)), sin(radians(rail.yaw_deg))
         return rail.x_cm + local_x * dx, rail.y_cm + local_x * dy
 
     def _corridor(self, rail: PlacedRail, start: float, end: float) -> Solid:
@@ -417,7 +460,37 @@ class CascadeGenerator:
 
     def _plain_column(self, state: _State, rail: PlacedRail, hole: int) -> Column:
         x, y = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[hole])
-        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, self._level(rail, hole))
+        top = self._level(rail, hole)
+        if self.config.up_sites and self.config.strategy == "bottom_up":
+            base = self._hole_below(state, x, y, top, exclude=rail.id)
+            if base is not None:
+                lower, k, z = base
+                return Column(state.new_id("c"), x, y, lower, k, z, rail.id, hole, top)
+        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, top)
+
+    def _hole_below(self, state: _State, x: float, y: float, top: int, exclude: str):
+        """The highest free rail hole right under (x, y) below level `top`:
+        (rail, hole, level of its top), or None. A hole the marble rolls over,
+        drops through or that already holds a column is not free."""
+        best = None
+        for r in state.rails.values():
+            if r.id == exclude:
+                continue
+            spec = self.catalog.rails[r.rail_type]
+            for k, h in enumerate(spec.holes_cm):
+                hx, hy = self._point(r, h)
+                if (hx - x) ** 2 + (hy - y) ** 2 > 0.35 ** 2:
+                    continue
+                z = int(r.z_units) + spec.hole_level(k) + spec.height_units
+                if z > top or r.hole_states.get(k, "open") in ("covered", "block_connected"):
+                    continue
+                if any(c.base_rail == r.id and c.base_hole == k for c in state.columns.values()):
+                    continue
+                if f"{r.id}:hole:{k}" in state.leaves:
+                    continue
+                if best is None or z > best[2]:
+                    best = (r.id, k, z)
+        return best
 
     def _split_crossed_columns(self, state: _State, rail: PlacedRail,
                                corridor: Solid | None) -> list[int] | None:
@@ -474,7 +547,8 @@ class CascadeGenerator:
         states = {i: "covered" for i in covered}
         if stop is not None:
             states[stop] = "open" if dive else "block_connected"
-        rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=90.0 * direction,
+        yaw = 90.0 * direction if isinstance(direction, int) else round(float(direction) % 360, 6)
+        rail = PlacedRail(state.new_id("rail"), kind, x, y, z, yaw_deg=yaw,
                           flow_direction="a_to_b", hole_states=states)
         body = rail_solids(rail, self.catalog)
         # The twist's marble path runs inside its own funnel: no corridor.
@@ -628,8 +702,9 @@ class CascadeGenerator:
         """Holes of a candidate rail over or under existing holes/columns in
         top view (1 each), or one block width beside them (0.3 each)."""
         score = 0.0
+        ux, uy = _dir_vec(d)
         for h in self.catalog.rails[kind].holes_cm:
-            x, y = sx + h * _DIRS[d][0], sy + h * _DIRS[d][1]
+            x, y = sx + h * ux, sy + h * uy
             best = min((((x - a) ** 2 + (y - b) ** 2) ** 0.5 for a, b in spots), default=99.0)
             if best < 0.35:
                 score += 1.0
@@ -899,9 +974,13 @@ class CascadeGenerator:
                                   ids.get(col["base_rail"]), col.get("base_hole"), col["base_z"],
                                   ids[col["top_rail"]], col["top_hole"], col["top_z"],
                                   tuple(col.get("top_types", ())), rotation, col.get("play", 0.0)))
-        # The drop block on the median's apex end, holding the rail above.
-        feed = Column(trial.new_id("c"), hx, hy, ids["median"], tri["feed_hole"], tri["feed_z"],
-                      rail.id, hole, top, feed_types, (90 * dm - 90) % 360)
+        self._last_triangle_ids = ids
+        # The drop block on the median's apex end, holding the rail above
+        # (none when the triangle is the skeleton a build grows up from).
+        feed = None if rail is None else Column(
+            trial.new_id("c"), hx, hy, ids["median"], tri["feed_hole"], tri["feed_z"],
+            rail.id, hole, top, feed_types, (90 * dm - 90) % 360)
+        feeds = [feed] if feed is not None else []
         corridors = []
         for key, start, end in tri["rolls"]:
             placed = trial.rails[ids[key]]
@@ -913,15 +992,16 @@ class CascadeGenerator:
             x, y = self._point(placed, self.catalog.rails[placed.rail_type].holes_cm[h])
             corridors.append(Solid(f"{placed.id}#dive#marble", (x, y), (r_m, r_m), 0.0, 0.0,
                                    placed.z_units * _UNIT_CM))
-        candidates = new_solids + [col.solid(self.half) for col in columns + [feed]
+        candidates = new_solids + [col.solid(self.half) for col in columns + feeds
                                    if col.top_z > col.base_z] + corridors
-        own = {f"{rail.id}#dive#marble"}
+        own = {f"{rail.id}#dive#marble"} if rail is not None else set()
         if self._hits(state, candidates, ignore=own):
             return None
-        # The stop hole now holds the feed block instead of a dive.
-        trial.rails[rail.id] = replace(rail, hole_states={**rail.hole_states, hole: "block_connected"})
-        trial.corridors.pop(f"{rail.id}#dive#marble", None)
-        for col in columns + [feed]:
+        if rail is not None:
+            # The stop hole now holds the feed block instead of a dive.
+            trial.rails[rail.id] = replace(rail, hole_states={**rail.hole_states, hole: "block_connected"})
+            trial.corridors.pop(f"{rail.id}#dive#marble", None)
+        for col in columns + feeds:
             if col.filler_units(self.heights) < 0:
                 return None
             trial.columns[col.id] = col
@@ -1140,6 +1220,229 @@ class CascadeGenerator:
         ended = self._block_exit(state, outlet)
         return (ended, []) if ended is not None else None
 
+    # ---- bottom-up growth (strategy "bottom_up") ----------------------------
+    def build_up_once(self, work: int = 400) -> _State | None:
+        """Place the triangle base, then grow the route upward from its entry
+        (the median's apex end): each step puts a rail above whose stop hole
+        drops the marble, through a block, onto the rail below. At the top a
+        free-standing input block stands on the last rail."""
+        from .patterns import isosceles_triangle
+        self.work = work
+        tri = isosceles_triangle(self.catalog)
+        dm = self.rng.randrange(4)
+        dx, dy = _DIRS[dm]
+        phi = atan2(dx, -dy)
+        c, s_ = cos(phi), sin(phi)
+        fx, fy = tri["feed_xy"]
+        cy = tri["apex_cm"] / 2.0          # center the triangle on the footprint
+        hx, hy = c * fx - s_ * (fy - cy), s_ * fx + c * (fy - cy)
+        state = self._place_triangle(_State(), tri, None, None, hx, hy, None, dm, ())
+        if state is None:
+            return None
+        state.max_depth = 4
+        lower = state.rails[self._last_triangle_ids["median"]]
+        lower_hole, flow, block_z = tri["feed_hole"], 90.0 * dm, tri["feed_z"]
+        point = (hx, hy)
+        top_level = self.config.max_height_units
+        blocks = [b for b, outs in self.drop_blocks.items() if outs == ("front",) and self.budget.counts[b] > 0]
+        while True:
+            grown = self._grow_up(state, lower, lower_hole, flow, block_z, point, blocks, top_level)
+            if grown is None:
+                break
+            state, lower, lower_hole, flow, block_z, point = grown
+            if len(state.rails) >= self.config.max_rails or block_z + 5 > top_level:
+                break
+            if block_z + 5 > top_level - 2 * 6 and self.rng.random() < 0.3:
+                break
+        if lower.id in state.fixed:
+            return None                    # nothing grew above the base
+        # The input: a block standing on the top rail's landing hole.
+        block = self.rng.choice(blocks)
+        rotation = int(round(flow - 90)) % 360
+        col = Column(state.new_id("c"), round(point[0], 6), round(point[1], 6), lower.id, lower_hole, block_z,
+                     None, None,
+                     block_z + self.heights[block], (block,), rotation)
+        if self._hits(state, [col.solid(self.half)]):
+            return None
+        state.columns[col.id] = col
+        state.input_column = col.id
+        return state if self._feasible(state) else None
+
+    def _grow_up(self, state, lower, lower_hole, flow, block_z, point, blocks, top_level):
+        """One rail above `point`: its stop hole drops the marble into a block
+        standing on `lower` at `lower_hole`, whose outlet faces `flow`
+        (degrees). Directions: the four grid ones, plus every angle that puts
+        another hole of the rail right over a hole of the base (holes are
+        round: a column joins rails at any angle)."""
+        px, py = point
+        spots = self._spots(state)
+        state_sites = self._sites(state) if self.config.up_sites else []
+        targets = [self._point(state.rails[rid], h)
+                   for rid in state.fixed for h in self.catalog.rails[state.rails[rid].rail_type].holes_cm]
+        options = []
+        for kind in _RAIL_KINDS:
+            spec = self.catalog.rails[kind]
+            holes = spec.holes_cm
+            angles = {float(90 * d) for d in range(4)}
+            for tx, ty in (targets if self.config.up_free_angles else ()):
+                r = hypot(tx - px, ty - py)
+                for st in range(len(holes)):
+                    for h in range(len(holes)):
+                        delta = holes[h] - holes[st]
+                        if h != st and abs(abs(delta) - r) < 0.3:
+                            ang = degrees(atan2((ty - py) / delta, (tx - px) / delta)) % 360
+                            angles.add(round(ang, 3))
+            for ang in angles:
+                ux, uy = _dir_vec(ang)
+                for stop in range(len(holes)):
+                    for entry in range(stop):
+                        if holes[stop] - holes[entry] - self.half < self.config.min_roll_cm:
+                            continue
+                        sx, sy = px - holes[stop] * ux, py - holes[stop] * uy
+                        pull = self.config.up_align_weight * self._alignment(spots, kind, sx, sy, ang)
+                        on_sites = ()
+                        if self.config.up_sites:
+                            on_sites = tuple(
+                                h for h in range(len(holes)) if h not in (stop, entry)
+                                and any((sx + holes[h] * ux - a) ** 2 + (sy + holes[h] * uy - b) ** 2 < 0.35 ** 2
+                                        for a, b in state_sites))
+                            pull += self.config.up_site_weight * len(on_sites)
+                        if abs(((ang - flow - 180) + 180) % 360 - 180) < 1.0:
+                            pull += self.config.up_switchback_weight
+                        options.append((-(pull + 2.0 * self.rng.random()), kind, ang, stop, entry, sx, sy,
+                                        on_sites))
+        options.sort()
+        for _, kind, ang, stop, entry, sx, sy, on_sites in options[:80]:
+            block = self.rng.choice(blocks)
+            passes = ("purple_drop",) * (1 if self.rng.random() < 0.25 else 0)
+            z = block_z + self.heights[block] + sum(self.heights[p] for p in passes)
+            if z > top_level:
+                continue
+            spec = self.catalog.rails[kind]
+            trial = state.copy()
+            if self.config.up_within_base and not self._over_base(state, kind, sx, sy, ang):
+                continue
+            direction = int(round(ang / 90)) % 4 if abs(ang / 90 - round(ang / 90)) < 1e-9 else ang
+            upper = self._place_rail(trial, kind, sx, sy, z, direction, spec.holes_cm[entry] + self.half, stop,
+                                     keep_free=(entry,) + on_sites)
+            if upper is None:
+                continue
+            split = (self.rng.random() < self.config.up_split_probability
+                     and self.budget.counts.get("red_random_split", 0) > sum(
+                         1 for c in trial.columns.values() if c.top_types[:1] == ("red_random_split",))
+                     and self._split_back(trial, lower, lower_hole))
+            column = Column(trial.new_id("c"), round(px, 6), round(py, 6), lower.id, lower_hole, block_z,
+                            upper.id, stop, z, (("red_random_split",) if split else (block,)) + passes,
+                            int(round(flow - 90)) % 360)
+            if column.filler_units(self.heights) != 0 or self._hits(trial, [column.solid(self.half)]):
+                continue
+            trial.columns[column.id] = column
+            # The next block will stand on the entry hole: the supports must
+            # bracket it, or that load tips the rail.
+            held = [spec.holes_cm[c.top_hole] for c in trial.columns.values() if c.top_rail == upper.id]
+            if not held or not min(held) - 1e-6 <= spec.holes_cm[entry] <= max(held) + 1e-6:
+                continue
+            if not self._feasible(trial):
+                continue
+            trial.max_depth += 1
+            return (trial, upper, entry, ang, z + 1, self._point(upper, spec.holes_cm[entry]))
+        return None
+
+    def _split_back(self, state: _State, rail: PlacedRail, hole: int) -> bool:
+        """Let a splitter on `rail` at `hole` send its second marble backward:
+        the rail flows out from that hole both ways; going back, the marble
+        crosses covered holes and leaves through the first hole with nothing
+        under it. Changes `state` (rail, corridors, leaves) and returns True,
+        or returns False and leaves it as it was."""
+        if rail.id in state.fixed or rail.flow_direction != "a_to_b":
+            return False
+        spec = self.catalog.rails[rail.rail_type]
+        holes = spec.holes_cm
+        held = {c.top_hole for c in state.columns.values() if c.top_rail == rail.id}
+        stood = {c.base_hole for c in state.columns.values() if c.base_rail == rail.id}
+        back = [j for j in range(hole - 1, -1, -1)]
+        exit_hole = next((j for j in back if j not in held and j not in stood
+                          and rail.hole_states.get(j, "open") == "open"), None)
+        if exit_hole is None or holes[hole] - self.half - holes[exit_hole] < 1.0:
+            return False
+        between = [j for j in back if j > exit_hole]
+        if any(j in held or j in stood for j in between):
+            return False
+        x, y = self._point(rail, holes[exit_hole])
+        r = _MARBLE_DIAMETER_CM / 2.0
+        # Hole to hole (user): right under the exit hole may be a lower rail's
+        # hole the main route drops through (a block under it): the second
+        # branch merges there. Otherwise it falls to the ground and leaves.
+        below = None
+        for other in state.rails.values():
+            if other.id == rail.id:
+                continue
+            ospec = self.catalog.rails[other.rail_type]
+            for k, h in enumerate(ospec.holes_cm):
+                ox, oy = self._point(other, h)
+                top = int(other.z_units) + ospec.hole_level(k) + ospec.height_units
+                if (ox - x) ** 2 + (oy - y) ** 2 <= 0.35 ** 2 and top <= rail.z_units and \
+                        (below is None or top > below[2]):
+                    below = (other, k, top)
+        floor = 0.0
+        merge = False
+        if below is None and len(state.leaves) + len(state.dangling) >= self.config.max_exits:
+            return False      # a new exit would exceed max_exits; only a merge fits
+        if below is not None:
+            other, k, top = below
+            if other.hole_states.get(k, "open") != "block_connected" or \
+                    any(c.base_rail == other.id and c.base_hole == k for c in state.columns.values()):
+                return False
+            floor, merge = top * _UNIT_CM, True
+        fall = Solid(f"{rail.id}#back#dive#marble", (x, y), (r, r), 0.0, floor, rail.z_units * _UNIT_CM)
+        roll = replace(self._corridor(rail, holes[exit_hole], holes[hole] - self.half),
+                       id=f"{rail.id}#roll_back#marble")
+        ignore = {rail.id} | ({below[0].id} if merge else set())
+        if self._hits(state, [fall, roll], ignore=ignore):
+            return False
+        states = dict(rail.hole_states)
+        for j in between:
+            states[j] = "covered"
+        state.covers += len(between)
+        state.rails[rail.id] = replace(rail, flow_direction="from_hole", flow_hole=hole, hole_states=states)
+        state.corridors[fall.id] = fall
+        state.corridors[roll.id] = roll
+        if not merge:
+            state.leaves.append(f"{rail.id}:hole:{exit_hole}")
+        return True
+
+    def _sites(self, state: _State) -> list[tuple[float, float]]:
+        """Top-view spots a column may join: free holes of the base and of
+        the rails above, and existing columns."""
+        out = [(c.x, c.y) for c in state.columns.values()]
+        for r in state.rails.values():
+            spec = self.catalog.rails[r.rail_type]
+            for k, h in enumerate(spec.holes_cm):
+                if r.id in state.fixed and r.hole_states.get(k, "open") in ("covered", "block_connected"):
+                    continue
+                out.append(self._point(r, h))
+        return out
+
+    def _over_base(self, state: _State, kind: str, sx: float, sy: float, d: int) -> bool:
+        """Both ends of a rail inside the top-view box of the placed base."""
+        xs, ys = [], []
+        for rid in state.fixed:
+            for piece in self._rail_solids(state.rails[rid]):
+                (cx, cy), (hx, hy), a = piece.center_xy, piece.half_extents_xy, piece.angle_rad
+                ex, ey = abs(hx * cos(a)) + abs(hy * sin(a)), abs(hx * sin(a)) + abs(hy * cos(a))
+                xs += [cx - ex, cx + ex]
+                ys += [cy - ey, cy + ey]
+        if not xs:
+            return True
+        m = self.config.up_base_margin_cm
+        length = self.catalog.rails[kind].length_cm
+        ux, uy = _dir_vec(d)
+        for t in (0.0, length):
+            x, y = sx + t * ux, sy + t * uy
+            if not (min(xs) - m <= x <= max(xs) + m and min(ys) - m <= y <= max(ys) + m):
+                return False
+        return True
+
     def _trim_input(self, state: _State, top: PlacedRail, stop: int) -> _State | None:
         """Drop the input rail: the marble goes straight into the top of the
         drop column, which stays as a free-standing stack on its lower rail.
@@ -1353,13 +1656,56 @@ def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random
     rng.shuffle(candidates)
     for rail_id in candidates:
         for turn in rng.sample(("left", "right"), 2):
-            trial = substitute(layout, catalog, rail_id, turn)
+            trial = load_curve_ends(substitute(layout, catalog, rail_id, turn), catalog, budget)
+            if trial is None:
+                continue
             if not _within_budget(layout_usage(trial), budget.counts):
                 break
             if validate_layout(trial, catalog, source=source, sinks=sinks).valid:
                 layout = trial
                 break
     return layout
+
+
+def load_curve_ends(layout: Layout, catalog: PartCatalog, budget: Budget) -> Layout | None:
+    """Put a block on every end hole of a curve that has none (a curve stands
+    only with a block on each end, user 2026-10-27). On the hole the marble
+    drops through, the block is the natural-wood merge with its notches
+    along the rail (the marble rolls in and drops through); elsewhere any
+    standard block. None if an end cannot take one (the marble rolls over
+    it, or no block is left)."""
+    from .model import rail_pose
+    usage = Counter(layout_usage(layout))
+    parts = list(layout.parts)
+    supports = list(layout.supports)
+    weights = [t for t in _FILLER_PREFERENCE if (catalog.height_units(t) or 0) >= 4]
+    n = 0
+    for rail in layout.rails:
+        spec = catalog.rails[rail.rail_type]
+        if not spec.needs_load_above:
+            continue
+        for hole in (0, len(spec.holes_cm) - 1):
+            if any(s.lower_rail_id == rail.id and s.lower_hole_index == hole and s.stack_part_ids
+                   for s in supports):
+                continue
+            state = rail.hole_states.get(hole, "open")
+            if state == "block_connected":
+                block = "natural_drop"
+            elif state == "open":
+                block = next((t for t in weights if budget.counts[t] - usage[t] > 0), None)
+            else:
+                return None
+            if block is None or budget.counts[block] - usage[block] <= 0:
+                return None
+            x, y, angle = rail_pose(rail, spec, spec.holes_cm[hole])
+            rotation = int(round(degrees(angle) - 90)) % 360   # notches (front/rear) along the rail
+            pid = f"ce{n}_{rail.id}_{block}"
+            parts.append(PlacedPart(pid, block, round(x, 6), round(y, 6),
+                                    rail.z_units + spec.hole_level(hole) + spec.height_units, rotation))
+            supports.append(SupportLink(None, None, (pid,), rail.id, hole, name=f"ce{n}"))
+            usage[block] += 1
+            n += 1
+    return replace(layout, parts=tuple(parts), supports=tuple(supports)) if n else layout
 
 
 # Rough rolling distance inside a twist: down the chute and about 1.75 turns
@@ -1562,14 +1908,14 @@ def generate(
     rng = random.Random(seed)
     generator = CascadeGenerator(catalog, budget, config, rng)
     found: dict[tuple, Candidate] = {}
-    lottery = _base_lottery(config)
+    lottery = _base_lottery(config) if config.strategy == "top_down" else []
     for attempt in range(attempts):
         stats["attempts"] += 1
         base = None
         if lottery:
             base = rng.choices([b for b, _ in lottery], weights=[w for _, w in lottery])[0]
             generator.config = _base_config(config, base)
-        state = generator.build_once()
+        state = generator.build_up_once() if config.strategy == "bottom_up" else generator.build_once()
         generator.config = config
         if state is None or len(state.rails) < 2:
             continue
@@ -1618,7 +1964,8 @@ def candidate_from_state(generator: "CascadeGenerator", state: "_State", config:
         counts = {k: v for k, v in generator.budget.counts.items()}
         # A placed pattern keeps its own supports; the rest is solved again.
         better = resolve_supports(layout, catalog, counts, source, sinks, keep_braces=False,
-                                  min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed)
+                                  min_support_g=config.min_support_reaction_g, fixed_rails=state.fixed,
+                                  ground_penalty=config.ground_column_penalty)
         if better is not None:
             layout, resolved = better, True
     layout = shorten_rails(layout, catalog, generator.budget, source, sinks)

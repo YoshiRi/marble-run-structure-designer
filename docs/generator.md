@@ -262,6 +262,9 @@ Reviews reported by ID feed the scoring and future pattern weights.
     extend toward the apex for area efficiency; make the base-center pass
     block a natural-wood merge taking marbles from above and the side; route
     through the apex column and switch back there.
+  - mr-6cd8d488 (bottom-up): a curve stands only with a block on each end;
+    make the drop block a red splitter for a second route. Hole to hole
+    falls work, hole onto a groove does not.
   Led to: a score term for columns standing on a pattern, layout-level
   moves in the annealer (turn above a drop; next: snap a hole onto a
   pattern hole, merge at the base center, switchback through the apex).

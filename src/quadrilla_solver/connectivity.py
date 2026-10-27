@@ -43,6 +43,34 @@ def _rail_node(rail_id: str, port: str) -> str:
     return f"{rail_id}:{port}"
 
 
+def _add_hole_falls(graph: dict[str, set[str]], layout: Layout, catalog: PartCatalog) -> None:
+    held = {(s.upper_rail_id, s.upper_hole_index) for s in layout.supports if s.stack_part_ids}
+    stood = {(s.lower_rail_id, s.lower_hole_index) for s in layout.supports if s.stack_part_ids}
+    holes = []
+    for rail in layout.rails:
+        spec = catalog.rails.get(rail.rail_type)
+        if spec is None:
+            continue
+        for k in range(len(spec.holes_cm)):
+            x, y, _ = rail_hole_world(rail, catalog, k)
+            level = rail.z_units + spec.hole_level(k)
+            holes.append((rail, k, x, y, level, level + spec.height_units))
+    for rail, j, x, y, level, _top in holes:
+        if rail.hole_states.get(j, "open") != "open" or (rail.id, j) in held or (rail.id, j) in stood:
+            continue
+        if catalog.rails[rail.rail_type].shape == "plate":
+            continue
+        below = [h for h in holes if h[0].id != rail.id and hypot(h[2] - x, h[3] - y) <= 0.35
+                 and h[5] <= level + 1e-9]
+        if not below:
+            continue
+        lower, k = max(below, key=lambda h: h[5])[:2]
+        # A covered hole stops it; so does a block standing on the hole.
+        if lower.hole_states.get(k, "open") == "covered" or (lower.id, k) in stood:
+            continue
+        _add_edge(graph, _rail_node(rail.id, f"hole:{j}"), _rail_node(lower.id, f"hole:{k}"))
+
+
 def build_routing_graph(
     layout: Layout,
     catalog: PartCatalog,
@@ -184,6 +212,12 @@ def build_routing_graph(
         below_top = below.stack_part_ids[-1]
         if "bottom" in part_ports.get(stack[0], set()) and "top" in part_ports.get(below_top, set()):
             _add_edge(graph, f"{stack[0]}:bottom", f"{below_top}:top")
+
+    # A marble dropping through a free hole falls through the hole right under
+    # it on a lower rail (user, 2026-10-27: hole to hole works; hole onto a
+    # rail's groove does not). It then goes on as that hole does: into the
+    # block under it, or out. Not through a covered hole.
+    _add_hole_falls(graph, layout, catalog)
 
     # A block standing directly on a rail can land the marble on that rail:
     # a side outlet facing along the rail drops one unit onto its groove just

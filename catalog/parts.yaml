@@ -298,7 +298,7 @@ curved_rails:
     hole_arc_positions_cm: [2.0, 26.0855437]
     end_hole_chord_cm: 23.0     # equals straight_short hole 0 to hole 3
     stacks_on: [straight_short]  # user-confirmed: hole on hole, levels at least 1 unit apart
-    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    stability: needs_load_above  # user-confirmed: unstable alone; stable with a block on each end hole (2026-10-27)
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 
@@ -323,7 +323,7 @@ curved_rails:
     centerline_length_cm: 52.1710874  # derived: 4 + 2*23*pi/3
     hole_arc_positions_cm: [2.0, 26.0855437, 50.1710874]
     end_hole_chord_cm: 39.84    # derived; user-confirmed: end holes match no convenient hole of other rails
-    stability: needs_load_above  # user-confirmed: unstable alone; stable once a block stands on it
+    stability: needs_load_above  # user-confirmed: unstable alone; stable with a block on each end hole (2026-10-27)
     solver_support: not_yet
     confidence: estimated_shape_user_confirmed
 

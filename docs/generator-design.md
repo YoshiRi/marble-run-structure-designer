@@ -619,6 +619,107 @@ from above and the side, a switchback through the apex column, ground
 columns moved onto the triangle's ends) changes the route, not just its
 orientation. Those route-level moves are next.
 
+### 6.6 Generation strategies (switchable)
+
+User decision (2026-10-27): several generation patterns to switch between
+(`GeneratorConfig.strategy`, the viewer's "Generation" choice).
+
+- `top_down` (default): the cascade from the input down; a base is drawn
+  by the lottery (§6.2).
+- `bottom_up`: the triangle base is placed first, centered, in one of four
+  directions. The route then grows upward from its entry (the median's apex
+  end): each step puts a rail above whose stop hole drops the marble,
+  through a block, onto the rail below. Rails whose holes lie over existing
+  holes (the base's corners and beams, other rails) and reversed rails right
+  above (switchbacks) are tried first, with some randomness. The supports
+  must bracket the hole the next block stands on. A free-standing input
+  block tops the last rail. Reviews of the annealed builds asked for this:
+  the route should be chosen knowing the base.
+
+Measured (owned inventory, 3 seeds, 100 attempts, 30 kept):
+
+| | valid / attempt | mean score | rails | parts | shared towers |
+| --- | --- | --- | --- | --- | --- |
+| 30 levels, top_down (lottery) | 0.29 | 105.2 | | 27.4 | |
+| 30 levels, bottom_up | 1.00 | 115.4 | 8.0 | 34.0 | 3.0 |
+| 45 levels, top_down (lottery) | 0.38 | 127.7 | | 44.4 | |
+| 45 levels, bottom_up | 1.00 | 149.6 | 10.5 | 50.6 | 4.7 |
+
+The bottom-up builds stack a compact zigzag tower over the apex. Still
+missing: switchbacks are rare (0 kept), and only the feed column stands on
+the base (pattern_columns 1). Next: the merge at the base center fed from
+above and the side, and supports preferring the base's holes.
+
+**Experiment: fewer new columns, stay over the base** (user, 2026-10-27).
+`ground_column_penalty` (the support solver's extra cost per ground column),
+the score term `ground_columns` (off by default) and `up_within_base` (rails
+grown bottom-up keep both ends inside the base's top-view box, 5 cm margin).
+45 levels, bottom-up, 3 seeds × 100 attempts, 30 kept; score without the
+new term:
+
+| | score | ground columns | columns on the base | rails | parts | footprint cm² | levels |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 149.6 | 3.4 | 1.0 | 10.5 | 50.6 | 4814 | 8.0 |
+| ground penalty (6, term 8) | 146.6 | 2.4 | 1.0 | 10.4 | 40.8 | 4679 | 7.6 |
+| within base | 158.9 | 4.0 | 1.0 | 10.8 | 55.9 | 3275 | 8.0 |
+| both | 158.3 | 3.8 | 1.0 | 10.7 | 54.0 | 3248 | 7.9 |
+| both, strong (15, term 20) | 130.6 | 2.0 | 1.0 | 9.2 | 36.2 | 2971 | 6.9 |
+
+Staying over the base shrinks the footprint by a third and raises the score,
+but the rails over the base's open middle need ground columns there. The
+ground penalty cuts parts by a fifth; strong, it also cuts the route (fewer
+rails and levels). No setting puts more columns on the base itself: its
+holes rarely line up with the grid of the rails above (the sides are at
+63°; the base center holds the red splitter). That needs placement that
+aims at the base's free holes (corners, side holes, plate ends).
+
+**Experiment: rails at any angle** (`up_free_angles`, off). Holes are round,
+so a column joins rails at any angle (user). Bottom-up growth also tried
+every angle that puts another hole of the new rail over a base hole. 45
+levels: valid 52 % (100 % on the grid), score 102.8 alone and 149.9 within
+the base (grid: 163.3), columns on the base 1.1. The aimed angles win the
+ordering, then dead-end. Not kept. User's next idea: keep a 2D map of hole
+sites for the whole build (the base's holes first) and make columns stand
+only on those sites, a new site costing extra.
+
+**2D hole-site map** (user, 2026-10-27; `up_sites`, on for bottom-up, with
+`up_within_base`). Bottom-up growth keeps a top-view map of sites for the
+whole build: the base's free holes (not ones the marble rolls over or drops
+through), every hole of the rails placed above, and the columns. A new rail
+whose other holes land on sites comes first (`up_site_weight` 6 per hole),
+those holes are its preferred supports, and a plain support on a site
+stands on the free hole below instead of the ground. 45 levels, 3 seeds:
+
+| | valid | score | ground columns | columns on the base | towers | parts | footprint cm² |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| grid, within base | 100 % | 163.3 | 4.0 | 1.0 | 4.3 | 55.6 | 3096 |
+| **site map** | 80 % | **190.8** | **0.1** | 2.0 | 5.2 | **24.3** | 2866 |
+
+The builds become a switchback tower standing on the triangle. Also fixed
+on the way: the generator placed hole positions of angled rails (the
+triangle's sides) as if on the grid, which mattered for their dive corridors
+and alignment spots.
+
+**Review of mr-6cd8d488 (2026-10-27).**
+- *Curves need a block on each end* (user-confirmed; one is not enough).
+  Assembly and the browser check both end holes. `load_curve_ends` (in the
+  curve pass) puts one there: on the hole the marble drops through, the
+  natural-wood merge with its notches along the rail (the marble rolls in
+  and drops through it, so clearance lets it be); elsewhere a standard
+  block. Fillers now take the natural-wood block last, keeping it for this.
+  Two old examples whose curve ends are covered holes were removed.
+- *Hole to hole* (user): a marble dropping through a free hole falls through
+  the hole right under it on a lower rail, then goes on as that hole does
+  (a block under it, or out); a covered hole or a block standing on it stops
+  it. Hole onto a rail's groove does not work. Routing (Python and browser)
+  adds these edges.
+- *Split and merge in the tower*: bottom-up drop blocks may be red
+  splitters (`up_split_probability` 1). The second branch rolls back along
+  the lower rail and drops through its first free hole, into the hole of
+  the rail below where the main route drops (a merge), or to the ground if
+  an exit is still allowed. 3 seeds: 30 levels score 138.8 → 156.3 (merges
+  0.97, parts 23 → 19), 45 levels 189.6 → 198.4 (merges 0.7).
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

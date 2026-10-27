@@ -267,6 +267,21 @@ def marble_clearance_conflicts(
             reached.setdefault((rail.id, side), []).append(local_x)
 
     solids = component_solids(layout, catalog)
+    # A block with side-entry notches (the natural-wood merge) standing on a
+    # rail's drop hole takes the marble in and drops it through the hole:
+    # it is not in the way of that rail's marble (user, 2026-10-27).
+    parts = layout.part_map()
+    entries: dict[str, set[str]] = {}
+    for s in layout.supports:
+        if s.upper_rail_id is not None or s.lower_rail_id not in rails or not s.stack_part_ids:
+            continue
+        lower = rails[s.lower_rail_id]
+        if lower.hole_states.get(s.lower_hole_index) != "block_connected":
+            continue
+        first = parts.get(s.stack_part_ids[0])
+        spec = catalog.part_spec(first.part_type) if first else None
+        if spec and (spec.get("port_visualization") or {}).get("side_entry_notches"):
+            entries.setdefault(lower.id, set()).add(first.id)
     reasons = []
     for (rail_id, _), xs in sorted(reached.items()):
         start, end = min(xs), max(xs)
@@ -274,7 +289,7 @@ def marble_clearance_conflicts(
             continue  # the twist's path runs inside its own funnel
         corridor = marble_corridor(rails[rail_id], catalog, start, end, marble_diameter_cm)
         for solid in solids:
-            if solid.id == rail_id:
+            if solid.id == rail_id or solid.id in entries.get(rail_id, ()):
                 continue
             if any(penetration_cm(piece, solid) > tolerance_cm for piece in corridor):
                 reasons.append(f"marble_path_blocked:{rail_id}:{solid.id}")

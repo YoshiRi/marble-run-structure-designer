@@ -100,3 +100,52 @@ def test_unknown_bases_are_refused():
     budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
     with pytest.raises(ValueError):
         generate(CATALOG, budget, config=GeneratorConfig(bases={"pyramid": 1.0}), attempts=1)
+
+
+def test_bottom_up_grows_a_valid_route_up_from_the_triangle():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(strategy="bottom_up", max_height_units=45, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    stats = {}
+    found = generate(CATALOG, budget, config=config, attempts=20, seed=1, keep=5, stats=stats)
+    assert found and stats["valid"] >= 10
+    for c in found:
+        assert c.metrics["triangles"] == 1
+        assert c.metrics["rails"] >= 7          # the base's five and at least two above
+        assert c.source.port == "top"
+
+
+def test_the_site_map_keeps_bottom_up_columns_off_the_ground():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    base = dict(strategy="bottom_up", max_height_units=45, max_rails=14, exclude_parts=("red_right_angle",))
+    with_sites = generate(CATALOG, budget, config=GeneratorConfig(**base), attempts=30, seed=1, keep=5)
+    without = generate(CATALOG, budget, config=GeneratorConfig(**base, up_sites=False), attempts=30, seed=1, keep=5)
+    mean = lambda cs, k: sum(c.metrics[k] for c in cs) / len(cs)
+    assert mean(with_sites, "ground_columns") < mean(without, "ground_columns")
+    assert mean(with_sites, "parts") < mean(without, "parts")
+
+
+def test_curves_need_a_block_on_each_end_and_get_one():
+    from quadrilla_solver.generator import Budget, load_curve_ends, layout_sinks, layout_source, resolve_set_paths
+    data = yaml.safe_load((ROOT / "examples" / "bottom_up" / "mr-6cd8d488.yaml").read_text())
+    layout = layout_from_dict(data)
+    assert validate_layout(layout, CATALOG, source=layout_source(data), sinks=layout_sinks(data)).valid
+    # without the block on the curve's far end the curve tips
+    stripped = [s for s in layout.supports if not s.name.startswith("ce")]
+    bare = layout_from_dict({**data, "supports": [s for s in data["supports"] if not s["name"].startswith("ce")]})
+    assert len(stripped) < len(layout.supports)
+    assert any(r.startswith("curve_needs_load_above:") for r in validate_layout(bare, CATALOG).assembly.reasons)
+
+
+def test_a_split_branch_merges_through_a_hole_below():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(strategy="bottom_up", max_height_units=30, max_rails=14,
+                             exclude_parts=("red_right_angle",))
+    found = generate(CATALOG, budget, config=config, attempts=40, seed=1, keep=10)
+    merged = [c for c in found if c.metrics["merges"] >= 1]
+    assert merged
+    for c in merged:
+        assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid

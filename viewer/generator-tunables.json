@@ -65,6 +65,14 @@
       "source": "user review (annealing, 2026-10-26)"
     },
     {
+      "key": "ground_columns",
+      "sign": -1,
+      "weight": 0.0,
+      "label": "Ground columns",
+      "help": "per column standing on the ground (a triangle base's own excepted); 0 = off",
+      "source": "user experiment (2026-10-27)"
+    },
+    {
       "key": "frame_turns",
       "sign": 1,
       "weight": 2.0,
@@ -271,6 +279,18 @@
       "default": true,
       "help": "re-solve the columns the marble never touches for all rails at once (fewer parts, slower)",
       "source": "two-phase design"
+    },
+    {
+      "key": "strategy",
+      "label": "Generation",
+      "type": "choice",
+      "choices": [
+        "top_down",
+        "bottom_up"
+      ],
+      "default": "top_down",
+      "help": "top_down: grow the route down from the input (base drawn by lottery); bottom_up: place the triangle base first and grow the route up from it",
+      "source": "user (2026-10-27)"
     },
     {
       "key": "exit_style",

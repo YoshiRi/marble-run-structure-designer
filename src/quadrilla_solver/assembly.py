@@ -214,12 +214,15 @@ def validate_assembly(
             if rail.hole_states.get(len(spec.holes_cm) - 1, "open") == "covered":
                 reasons.append(f"twist_center_hole_covered:{rail.id}")
 
-    # Curved rails tip on their own: they are stable only with load above,
-    # i.e. at least one column standing on them (user-confirmed).
-    loaded = {s.lower_rail_id for s in layout.supports if s.lower_rail_id and s.stack_part_ids}
+    # Curved rails tip on their own: they are stable only with a block
+    # standing on each end hole (user-confirmed 2026-10-27; one is not enough).
+    loaded = {(s.lower_rail_id, s.lower_hole_index) for s in layout.supports
+              if s.lower_rail_id and s.stack_part_ids}
     for rail in layout.rails:
         spec = catalog.rails.get(rail.rail_type)
-        if spec is not None and spec.needs_load_above and rail.id not in loaded:
+        if spec is None or not spec.needs_load_above:
+            continue
+        if not all((rail.id, h) in loaded for h in (0, len(spec.holes_cm) - 1)):
             reasons.append(f"curve_needs_load_above:{rail.id}")
 
     # Foundation is ground-only. A placed foundation that is not used as the
