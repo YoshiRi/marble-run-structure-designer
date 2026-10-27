@@ -213,10 +213,16 @@ class GeneratorConfig:
     # extra cost per ground column; up_within_base keeps every rail grown
     # bottom-up inside the base's top-view box (plus a margin).
     ground_column_penalty: float = 0.0
-    up_within_base: bool = False
+    up_within_base: bool = True
     # bottom_up: also try any angle that puts a rail's hole over a base hole
     # (experiment 2026-10-27: did not help; off).
     up_free_angles: bool = False
+    # bottom_up: a 2D map of hole sites kept for the whole build (user,
+    # 2026-10-27): the base's free holes first, then every hole of a rail
+    # placed above. Rails whose other holes land on sites come first, and a
+    # plain support on a site stands on the hole below instead of the ground.
+    up_sites: bool = True
+    up_site_weight: float = 6.0
     up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
@@ -448,7 +454,37 @@ class CascadeGenerator:
 
     def _plain_column(self, state: _State, rail: PlacedRail, hole: int) -> Column:
         x, y = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[hole])
-        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, self._level(rail, hole))
+        top = self._level(rail, hole)
+        if self.config.up_sites and self.config.strategy == "bottom_up":
+            base = self._hole_below(state, x, y, top, exclude=rail.id)
+            if base is not None:
+                lower, k, z = base
+                return Column(state.new_id("c"), x, y, lower, k, z, rail.id, hole, top)
+        return Column(state.new_id("c"), x, y, None, None, 0, rail.id, hole, top)
+
+    def _hole_below(self, state: _State, x: float, y: float, top: int, exclude: str):
+        """The highest free rail hole right under (x, y) below level `top`:
+        (rail, hole, level of its top), or None. A hole the marble rolls over,
+        drops through or that already holds a column is not free."""
+        best = None
+        for r in state.rails.values():
+            if r.id == exclude:
+                continue
+            spec = self.catalog.rails[r.rail_type]
+            for k, h in enumerate(spec.holes_cm):
+                hx, hy = self._point(r, h)
+                if (hx - x) ** 2 + (hy - y) ** 2 > 0.35 ** 2:
+                    continue
+                z = int(r.z_units) + spec.hole_level(k) + spec.height_units
+                if z > top or r.hole_states.get(k, "open") in ("covered", "block_connected"):
+                    continue
+                if any(c.base_rail == r.id and c.base_hole == k for c in state.columns.values()):
+                    continue
+                if f"{r.id}:hole:{k}" in state.leaves:
+                    continue
+                if best is None or z > best[2]:
+                    best = (r.id, k, z)
+        return best
 
     def _split_crossed_columns(self, state: _State, rail: PlacedRail,
                                corridor: Solid | None) -> list[int] | None:
@@ -1234,6 +1270,7 @@ class CascadeGenerator:
         round: a column joins rails at any angle)."""
         px, py = point
         spots = self._spots(state)
+        state_sites = self._sites(state) if self.config.up_sites else []
         targets = [self._point(state.rails[rid], h)
                    for rid in state.fixed for h in self.catalog.rails[state.rails[rid].rail_type].holes_cm]
         options = []
@@ -1257,11 +1294,19 @@ class CascadeGenerator:
                             continue
                         sx, sy = px - holes[stop] * ux, py - holes[stop] * uy
                         pull = self.config.up_align_weight * self._alignment(spots, kind, sx, sy, ang)
+                        on_sites = ()
+                        if self.config.up_sites:
+                            on_sites = tuple(
+                                h for h in range(len(holes)) if h not in (stop, entry)
+                                and any((sx + holes[h] * ux - a) ** 2 + (sy + holes[h] * uy - b) ** 2 < 0.35 ** 2
+                                        for a, b in state_sites))
+                            pull += self.config.up_site_weight * len(on_sites)
                         if abs(((ang - flow - 180) + 180) % 360 - 180) < 1.0:
                             pull += self.config.up_switchback_weight
-                        options.append((-(pull + 2.0 * self.rng.random()), kind, ang, stop, entry, sx, sy))
+                        options.append((-(pull + 2.0 * self.rng.random()), kind, ang, stop, entry, sx, sy,
+                                        on_sites))
         options.sort()
-        for _, kind, ang, stop, entry, sx, sy in options[:80]:
+        for _, kind, ang, stop, entry, sx, sy, on_sites in options[:80]:
             block = self.rng.choice(blocks)
             passes = ("purple_drop",) * (1 if self.rng.random() < 0.25 else 0)
             z = block_z + self.heights[block] + sum(self.heights[p] for p in passes)
@@ -1273,7 +1318,7 @@ class CascadeGenerator:
                 continue
             direction = int(round(ang / 90)) % 4 if abs(ang / 90 - round(ang / 90)) < 1e-9 else ang
             upper = self._place_rail(trial, kind, sx, sy, z, direction, spec.holes_cm[entry] + self.half, stop,
-                                     keep_free=(entry,))
+                                     keep_free=(entry,) + on_sites)
             if upper is None:
                 continue
             column = Column(trial.new_id("c"), round(px, 6), round(py, 6), lower.id, lower_hole, block_z,
@@ -1291,6 +1336,18 @@ class CascadeGenerator:
             trial.max_depth += 1
             return (trial, upper, entry, ang, z + 1, self._point(upper, spec.holes_cm[entry]))
         return None
+
+    def _sites(self, state: _State) -> list[tuple[float, float]]:
+        """Top-view spots a column may join: free holes of the base and of
+        the rails above, and existing columns."""
+        out = [(c.x, c.y) for c in state.columns.values()]
+        for r in state.rails.values():
+            spec = self.catalog.rails[r.rail_type]
+            for k, h in enumerate(spec.holes_cm):
+                if r.id in state.fixed and r.hole_states.get(k, "open") in ("covered", "block_connected"):
+                    continue
+                out.append(self._point(r, h))
+        return out
 
     def _over_base(self, state: _State, kind: str, sx: float, sy: float, d: int) -> bool:
         """Both ends of a rail inside the top-view box of the placed base."""
