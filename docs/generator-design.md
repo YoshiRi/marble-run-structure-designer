@@ -700,6 +700,26 @@ on the way: the generator placed hole positions of angled rails (the
 triangle's sides) as if on the grid, which mattered for their dive corridors
 and alignment spots.
 
+**Review of mr-6cd8d488 (2026-10-27).**
+- *Curves need a block on each end* (user-confirmed; one is not enough).
+  Assembly and the browser check both end holes. `load_curve_ends` (in the
+  curve pass) puts one there: on the hole the marble drops through, the
+  natural-wood merge with its notches along the rail (the marble rolls in
+  and drops through it, so clearance lets it be); elsewhere a standard
+  block. Fillers now take the natural-wood block last, keeping it for this.
+  Two old examples whose curve ends are covered holes were removed.
+- *Hole to hole* (user): a marble dropping through a free hole falls through
+  the hole right under it on a lower rail, then goes on as that hole does
+  (a block under it, or out); a covered hole or a block standing on it stops
+  it. Hole onto a rail's groove does not work. Routing (Python and browser)
+  adds these edges.
+- *Split and merge in the tower*: bottom-up drop blocks may be red
+  splitters (`up_split_probability` 1). The second branch rolls back along
+  the lower rail and drops through its first free hole, into the hole of
+  the rail below where the main route drops (a merge), or to the ground if
+  an exit is still allowed. 3 seeds: 30 levels score 138.8 → 156.3 (merges
+  0.97, parts 23 → 19), 45 levels 189.6 → 198.4 (merges 0.7).
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

@@ -432,6 +432,38 @@
       }
     }
 
+    // Mirror of _add_hole_falls: a marble dropping through a free hole falls
+    // through the hole right under it on a lower rail (not a covered one).
+    {
+      const held = new Set(), stood = new Set();
+      for (const s of layout.supports || []) {
+        if (!(s.stack_part_ids || []).length) continue;
+        held.add(s.upper_rail_id + ":" + s.upper_hole_index);
+        stood.add(s.lower_rail_id + ":" + s.lower_hole_index);
+      }
+      const all = [];
+      for (const rail of layout.rails || []) {
+        const geo = railGeometry(catalog, rail.rail_type);
+        if (!geo) continue;
+        (geo.hole_positions_cm || []).forEach((h, k) => {
+          const [x, y] = railPose(catalog, rail, Number(h));
+          const level = Number(rail.z_units) + holeLevel(geo, k);
+          all.push({ rail, k, x, y, level, top: level + Number(geo.height ?? 1) });
+        });
+      }
+      const stateOf = (rail, k) => rail.hole_states?.[k] ?? rail.hole_states?.[String(k)] ?? "open";
+      for (const h of all) {
+        if (stateOf(h.rail, h.k) !== "open" || held.has(h.rail.id + ":" + h.k) || stood.has(h.rail.id + ":" + h.k)) continue;
+        if (railGeometry(catalog, h.rail.rail_type)?.shape === "plate") continue;
+        const below = all.filter(o => o.rail.id !== h.rail.id && Math.hypot(o.x - h.x, o.y - h.y) <= 0.35 &&
+          o.top <= h.level + 1e-9);
+        if (!below.length) continue;
+        const lower = below.reduce((a, b) => (b.top > a.top ? b : a));
+        if (stateOf(lower.rail, lower.k) === "covered" || stood.has(lower.rail.id + ":" + lower.k)) continue;
+        edge(h.rail.id + ":hole:" + h.k, lower.rail.id + ":hole:" + lower.k);
+      }
+    }
+
     // Mirror of _landing_edges: a side outlet of a block standing directly on
     // a rail, facing along it in its flow direction, lands on that rail.
     const explicitSources = new Set((layout.route_links || []).map(link => refKey(link.source)));
