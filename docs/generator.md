@@ -249,3 +249,19 @@ Reviews reported by ID feed the scoring and future pattern weights.
   Taste. Led to shortening with column moves (`move_columns`), idle rail
   excluding braces at 0.2 per cm, and replacing the viewer's default examples
   (all from the v2 generator) with current gallery layouts.
+
+- Annealing reviews, 2026-10-26 (triangle base builds, `examples/anneal/`):
+  - mr-00051d41: the input column could stand on the triangle (over the red
+    splitter, held by rails) instead of on the ground.
+  - mr-a5c66ca1: turn the four-corner frame above by 90 degrees to share
+    columns and add a switchback.
+  - mr-7e0a3f49: lay the beam (rail3) over the median line; the column c6
+    can sit on the base center, and the twist's hole on the base's end.
+  - mr-5119dc15 (the reworked build): "columns can stand on the triangle's
+    corners and beams" in general. Put a ground column on a triangle end;
+    extend toward the apex for area efficiency; make the base-center pass
+    block a natural-wood merge taking marbles from above and the side; route
+    through the apex column and switch back there.
+  Led to: a score term for columns standing on a pattern, layout-level
+  moves in the annealer (turn above a drop; next: snap a hole onto a
+  pattern hole, merge at the base center, switchback through the apex).

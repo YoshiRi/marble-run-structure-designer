@@ -569,6 +569,56 @@ row. A frame takes over the drops, so merges and switchbacks almost vanish.
 A twist breaks the run. Default (user, 2026-10-25): on (p 1) only in tall
 builds, `max_height_units` ≥ `frame_min_height_units` (45).
 
+### 6.5 Annealing (polish a build)
+
+User idea (2026-10-26): improve a random build by local changes, as in
+simulated annealing: move columns, swap blocks, re-attach rails, add a
+switchback. First version (`anneal.py`, `scripts/anneal_layout.py`): the
+generator's random decisions are recorded as a tape; a neighbour re-rolls the
+tape from a point (re-grows everything after it), changes one decision, or
+nudges one. Every neighbour is grown by the generator and goes through the
+same validation and post-passes, so each step is buildable; the score is the
+generator's. Worse neighbours are accepted with exp(Δ/T).
+
+Measured (triangle base, 45 levels, 300 neighbours, 4 seeds):
+
+| start | start score | after annealing |
+| --- | --- | --- |
+| first valid random build | 131.0 | 143.8–146.1 (T from 3–8 down) |
+| best of 150 random builds | 153.7 | 157.9 (+15.9 on one seed, +0.7 on one, 0 on two) |
+| (best of 300 random builds, no annealing) | | 158.4 |
+
+So far the tape is a weak neighbourhood: a change early in the tape reshapes
+everything after it, so annealing behaves much like re-sampling the lower
+part. It helps a weak start, barely a good one. Next: layout-level moves
+that keep the rest in place (move a column onto an aligned hole, swap a
+drop block for the merge block where a rail ends against it, re-attach a
+rail end, insert a switchback), with the tape re-roll kept as the large
+move.
+
+**Layout-level move: turn the part above a drop** (user review of
+mr-a5c66ca1, 2026-10-26: "turn this four-corner frame by 90 degrees; columns
+would be shared and a switchback could be added"). `rotate_above` turns
+every rail upstream of a drop column, with their drop columns and marble
+corridors, by 90/180/270 degrees about that column's axis; the column stays
+and its lower rail does not move. Plain supports of the turned part are
+dropped and solved again. The footprint is checked as a size, not a place.
+On mr-a5c66ca1 (165.6 through the same passes): of the 9 turns, 5 hit the
+rest of the build, 2 had no valid supports, and the valid ones scored lower
+(upper part 180° about the drop onto the median: 159.2, larger footprint,
+the frame's same-way turns broken; the twist 90°: 150.6). The turn that
+opens a switchback needs the switchback inserted too: a move to combine.
+
+**Score term `pattern_columns`** (+4, user review of mr-5119dc15): columns
+of the build that stand on a triangle base's rails (corners, beams) rather
+than on the ground. **Annealing with moves** (`anneal_with_moves`): the
+state is (tape, list of turns); a step changes the tape (the turns are
+dropped) or adds, removes or changes a turn. On mr-a5c66ca1 no turn improves
+the score: what the reviews ask for (a merge block at the base center fed
+from above and the side, a switchback through the apex column, ground
+columns moved onto the triangle's ends) changes the route, not just its
+orientation. Those route-level moves are next.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A
