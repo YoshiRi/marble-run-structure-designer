@@ -47,6 +47,8 @@ CONFIGS = [
     ("triangles", {"triangle_probability": 1.0, "max_height_units": 45, "max_rails": 14}),
     # Triangle base first, route grown upward from it (§6.6).
     ("bottom-up", {"strategy": "bottom_up", "max_height_units": 45, "max_rails": 14}),
+    # A ladder between two towers, grown bottom-up (§6.7).
+    ("ladder", {"strategy": "bottom_up", "up_base": "ladder", "max_height_units": 60, "max_rails": 16}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.

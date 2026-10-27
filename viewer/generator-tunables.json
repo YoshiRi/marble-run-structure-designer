@@ -293,6 +293,18 @@
       "source": "user (2026-10-27)"
     },
     {
+      "key": "up_base",
+      "label": "Bottom-up base",
+      "type": "choice",
+      "choices": [
+        "triangle",
+        "ladder"
+      ],
+      "default": "triangle",
+      "help": "what a bottom-up build grows from: the triangle base, or a ladder between two towers",
+      "source": "user (2026-10-28)"
+    },
+    {
       "key": "exit_style",
       "label": "Exits",
       "type": "choice",
