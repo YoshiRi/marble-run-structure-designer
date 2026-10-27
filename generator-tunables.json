@@ -57,6 +57,14 @@
       "source": "official builds; user (efficient structure, 2026-10-26)"
     },
     {
+      "key": "pattern_columns",
+      "sign": 1,
+      "weight": 4.0,
+      "label": "Columns on the base",
+      "help": "per column of the build standing on the triangle base's rails",
+      "source": "user review (annealing, 2026-10-26)"
+    },
+    {
       "key": "frame_turns",
       "sign": 1,
       "weight": 2.0,
