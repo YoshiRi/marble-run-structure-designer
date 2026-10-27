@@ -57,8 +57,10 @@ def _dir_vec(direction) -> tuple[float, float]:
 # Rotation that points a block's side port toward world direction index d:
 # rotation = 90 * d + offset.
 _PORT_ROTATION_OFFSET = {"right": 0, "front": -90, "rear": 90, "left": 180}
+# Filler blocks inside columns, first choice first. The natural-wood merge
+# comes late: it is kept for curve ends and merges (user, 2026-10-27).
 _FILLER_PREFERENCE = (
-    "natural_drop", "orange_vertical", "cyan", "green", "blue", "yellow",
+    "orange_vertical", "cyan", "green", "blue", "yellow", "natural_drop",
     "red_right_angle", "red_random_split",
 )
 _RAIL_KINDS = ("straight_short", "straight_long", "straight_long_center")
@@ -226,7 +228,7 @@ class GeneratorConfig:
     # bottom_up: chance that a drop block is a red splitter (user review of
     # mr-6cd8d488): the second branch rolls back along the lower rail and
     # leaves through its first free hole.
-    up_split_probability: float = 0.5
+    up_split_probability: float = 1.0
     up_base_margin_cm: float = 5.0
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
@@ -1326,7 +1328,6 @@ class CascadeGenerator:
             if upper is None:
                 continue
             split = (self.rng.random() < self.config.up_split_probability
-                     and self._branches(trial) < self.config.max_exits
                      and self.budget.counts.get("red_random_split", 0) > sum(
                          1 for c in trial.columns.values() if c.top_types[:1] == ("red_random_split",))
                      and self._split_back(trial, lower, lower_hole))
@@ -1369,10 +1370,35 @@ class CascadeGenerator:
             return False
         x, y = self._point(rail, holes[exit_hole])
         r = _MARBLE_DIAMETER_CM / 2.0
-        fall = Solid(f"{rail.id}#back#dive#marble", (x, y), (r, r), 0.0, 0.0, rail.z_units * _UNIT_CM)
+        # Hole to hole (user): right under the exit hole may be a lower rail's
+        # hole the main route drops through (a block under it): the second
+        # branch merges there. Otherwise it falls to the ground and leaves.
+        below = None
+        for other in state.rails.values():
+            if other.id == rail.id:
+                continue
+            ospec = self.catalog.rails[other.rail_type]
+            for k, h in enumerate(ospec.holes_cm):
+                ox, oy = self._point(other, h)
+                top = int(other.z_units) + ospec.hole_level(k) + ospec.height_units
+                if (ox - x) ** 2 + (oy - y) ** 2 <= 0.35 ** 2 and top <= rail.z_units and \
+                        (below is None or top > below[2]):
+                    below = (other, k, top)
+        floor = 0.0
+        merge = False
+        if below is None and len(state.leaves) + len(state.dangling) >= self.config.max_exits:
+            return False      # a new exit would exceed max_exits; only a merge fits
+        if below is not None:
+            other, k, top = below
+            if other.hole_states.get(k, "open") != "block_connected" or \
+                    any(c.base_rail == other.id and c.base_hole == k for c in state.columns.values()):
+                return False
+            floor, merge = top * _UNIT_CM, True
+        fall = Solid(f"{rail.id}#back#dive#marble", (x, y), (r, r), 0.0, floor, rail.z_units * _UNIT_CM)
         roll = replace(self._corridor(rail, holes[exit_hole], holes[hole] - self.half),
                        id=f"{rail.id}#roll_back#marble")
-        if self._hits(state, [fall, roll], ignore={rail.id}):
+        ignore = {rail.id} | ({below[0].id} if merge else set())
+        if self._hits(state, [fall, roll], ignore=ignore):
             return False
         states = dict(rail.hole_states)
         for j in between:
@@ -1381,7 +1407,8 @@ class CascadeGenerator:
         state.rails[rail.id] = replace(rail, flow_direction="from_hole", flow_hole=hole, hole_states=states)
         state.corridors[fall.id] = fall
         state.corridors[roll.id] = roll
-        state.leaves.append(f"{rail.id}:hole:{exit_hole}")
+        if not merge:
+            state.leaves.append(f"{rail.id}:hole:{exit_hole}")
         return True
 
     def _sites(self, state: _State) -> list[tuple[float, float]]:
@@ -1629,13 +1656,56 @@ def add_curves(layout: Layout, catalog: PartCatalog, budget: Budget, rng: random
     rng.shuffle(candidates)
     for rail_id in candidates:
         for turn in rng.sample(("left", "right"), 2):
-            trial = substitute(layout, catalog, rail_id, turn)
+            trial = load_curve_ends(substitute(layout, catalog, rail_id, turn), catalog, budget)
+            if trial is None:
+                continue
             if not _within_budget(layout_usage(trial), budget.counts):
                 break
             if validate_layout(trial, catalog, source=source, sinks=sinks).valid:
                 layout = trial
                 break
     return layout
+
+
+def load_curve_ends(layout: Layout, catalog: PartCatalog, budget: Budget) -> Layout | None:
+    """Put a block on every end hole of a curve that has none (a curve stands
+    only with a block on each end, user 2026-10-27). On the hole the marble
+    drops through, the block is the natural-wood merge with its notches
+    along the rail (the marble rolls in and drops through); elsewhere any
+    standard block. None if an end cannot take one (the marble rolls over
+    it, or no block is left)."""
+    from .model import rail_pose
+    usage = Counter(layout_usage(layout))
+    parts = list(layout.parts)
+    supports = list(layout.supports)
+    weights = [t for t in _FILLER_PREFERENCE if (catalog.height_units(t) or 0) >= 4]
+    n = 0
+    for rail in layout.rails:
+        spec = catalog.rails[rail.rail_type]
+        if not spec.needs_load_above:
+            continue
+        for hole in (0, len(spec.holes_cm) - 1):
+            if any(s.lower_rail_id == rail.id and s.lower_hole_index == hole and s.stack_part_ids
+                   for s in supports):
+                continue
+            state = rail.hole_states.get(hole, "open")
+            if state == "block_connected":
+                block = "natural_drop"
+            elif state == "open":
+                block = next((t for t in weights if budget.counts[t] - usage[t] > 0), None)
+            else:
+                return None
+            if block is None or budget.counts[block] - usage[block] <= 0:
+                return None
+            x, y, angle = rail_pose(rail, spec, spec.holes_cm[hole])
+            rotation = int(round(degrees(angle) - 90)) % 360   # notches (front/rear) along the rail
+            pid = f"ce{n}_{rail.id}_{block}"
+            parts.append(PlacedPart(pid, block, round(x, 6), round(y, 6),
+                                    rail.z_units + spec.hole_level(hole) + spec.height_units, rotation))
+            supports.append(SupportLink(None, None, (pid,), rail.id, hole, name=f"ce{n}"))
+            usage[block] += 1
+            n += 1
+    return replace(layout, parts=tuple(parts), supports=tuple(supports)) if n else layout
 
 
 # Rough rolling distance inside a twist: down the chute and about 1.75 turns

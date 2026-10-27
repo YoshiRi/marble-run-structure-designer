@@ -323,6 +323,22 @@
     }
     const solids = componentSolids(layout, catalog);
     const unit = geometry(catalog, "height_unit", 1.5);
+    // A notched entry block (natural wood) on a rail's drop hole takes the
+    // marble in (mirror of collision.py).
+    const partsById = new Map((layout.parts || []).map(p => [p.id, p]));
+    const entries = new Map();
+    for (const s of layout.supports || []) {
+      if (s.upper_rail_id != null || !rails.has(s.lower_rail_id) || !(s.stack_part_ids || []).length) continue;
+      const lower = rails.get(s.lower_rail_id);
+      const st = lower.hole_states?.[s.lower_hole_index] ?? lower.hole_states?.[String(s.lower_hole_index)];
+      if (st !== "block_connected") continue;
+      const first = partsById.get(s.stack_part_ids[0]);
+      const found = first ? findPart(catalog, first.part_type) : null;
+      if (found && (found[1].port_visualization?.side_entry_notches || []).length) {
+        if (!entries.has(lower.id)) entries.set(lower.id, new Set());
+        entries.get(lower.id).add(first.id);
+      }
+    }
     const reasons = [];
     // Python sorts (rail_id, side) tuples.
     const keys = [...reached.keys()].sort((a, b) => {
@@ -339,7 +355,7 @@
       const top = (Number(rail.z_units) + spec.height_units) * unit;
       const corridor = stripSolids(catalog, rail, spec, start, end, marble / 2, top, top + marble, railId + "#marble");
       for (const s of solids) {
-        if (s.id === railId) continue;
+        if (s.id === railId || entries.get(railId)?.has(s.id)) continue;
         if (corridor.some(piece => penetration(piece, s) > tolerance)) {
           reasons.push("marble_path_blocked:" + railId + ":" + s.id);
         }
@@ -511,11 +527,16 @@
       }
     }
 
+    // A block on each end hole of a curve (mirror of assembly.py).
     const loaded = new Set((layout.supports || [])
-      .filter(s => s.lower_rail_id && (s.stack_part_ids || []).length).map(s => s.lower_rail_id));
+      .filter(s => s.lower_rail_id && (s.stack_part_ids || []).length)
+      .map(s => s.lower_rail_id + ":" + Number(s.lower_hole_index)));
     for (const rail of railsList) {
       const spec = railSpec(catalog, rail.rail_type);
-      if (spec && spec.needs_load_above && !loaded.has(rail.id)) reasons.push("curve_needs_load_above:" + rail.id);
+      if (spec && spec.needs_load_above &&
+          ![0, spec.holes_cm.length - 1].every(h => loaded.has(rail.id + ":" + h))) {
+        reasons.push("curve_needs_load_above:" + rail.id);
+      }
     }
 
     for (const part of partsList) {

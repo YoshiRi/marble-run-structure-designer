@@ -1,6 +1,6 @@
 schema_version: '0.1'
-layout_id: mr-cd3b74a8
-name: mr-cd3b74a8
+layout_id: mr-5af6029a
+name: mr-5af6029a
 description: Gallery candidate (switchbacks, seed 2).
 generator:
   sets:
@@ -42,9 +42,8 @@ metrics:
   frame_turns: 0.0
 inventory_used:
   cover: 5
-  cyan: 1
-  natural_drop: 6
-  orange_vertical: 6
+  cyan: 3
+  orange_vertical: 10
   purple_drop: 12
   seesaw: 1
   straight_long: 1
@@ -55,9 +54,8 @@ inventory_used:
 bill_of_materials:
   used:
     cover: 5
-    cyan: 1
-    natural_drop: 6
-    orange_vertical: 6
+    cyan: 3
+    orange_vertical: 10
     purple_drop: 12
     seesaw: 1
     straight_long: 1
@@ -71,15 +69,11 @@ bill_of_materials:
     available: 9
     short: 0
   - part: cyan
-    needed: 1
+    needed: 3
     available: 13
     short: 0
-  - part: natural_drop
-    needed: 6
-    available: 6
-    short: 0
   - part: orange_vertical
-    needed: 6
+    needed: 10
     available: 10
     short: 0
   - part: purple_drop
@@ -165,23 +159,23 @@ parts:
   x_cm: 0
   y_cm: 23
   z_units: 0
-- id: c1_1_natural_drop
-  part_type: natural_drop
+- id: c1_1_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: 23
   z_units: 1
-- id: c1_2_natural_drop
-  part_type: natural_drop
+- id: c1_2_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: 23
   z_units: 6
-- id: c1_3_natural_drop
-  part_type: natural_drop
+- id: c1_3_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: 23
   z_units: 11
-- id: c1_4_natural_drop
-  part_type: natural_drop
+- id: c1_4_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: 23
   z_units: 16
@@ -200,13 +194,13 @@ parts:
   x_cm: 0
   y_cm: -23
   z_units: 0
-- id: c12_1_natural_drop
-  part_type: natural_drop
+- id: c12_1_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: -23
   z_units: 1
-- id: c12_2_natural_drop
-  part_type: natural_drop
+- id: c12_2_orange_vertical
+  part_type: orange_vertical
   x_cm: 0
   y_cm: -23
   z_units: 6
@@ -286,13 +280,13 @@ parts:
   y_cm: 18
   z_units: 2
   rotation_deg: 270
-- id: c6_0_orange_vertical
-  part_type: orange_vertical
+- id: c6_0_cyan
+  part_type: cyan
   x_cm: 23
   y_cm: 18
   z_units: 2
-- id: c7_0_orange_vertical
-  part_type: orange_vertical
+- id: c7_0_cyan
+  part_type: cyan
   x_cm: -23
   y_cm: 18
   z_units: 2
@@ -340,10 +334,10 @@ supports:
   upper_hole_index: 3
   stack_part_ids:
   - c1_0_wooden_foundation
-  - c1_1_natural_drop
-  - c1_2_natural_drop
-  - c1_3_natural_drop
-  - c1_4_natural_drop
+  - c1_1_orange_vertical
+  - c1_2_orange_vertical
+  - c1_3_orange_vertical
+  - c1_4_orange_vertical
   - c1_5_purple_drop
 - name: c10
   upper_rail_id: rail4
@@ -355,8 +349,8 @@ supports:
   upper_hole_index: 0
   stack_part_ids:
   - c12_0_wooden_foundation
-  - c12_1_natural_drop
-  - c12_2_natural_drop
+  - c12_1_orange_vertical
+  - c12_2_orange_vertical
   - c12_3_orange_vertical
   - c12_4_purple_drop
   - c12_5_purple_drop
@@ -390,14 +384,14 @@ supports:
   upper_rail_id: rail3
   upper_hole_index: 0
   stack_part_ids:
-  - c6_0_orange_vertical
+  - c6_0_cyan
   lower_rail_id: rail4
   lower_hole_index: 4
 - name: c7
   upper_rail_id: rail3
   upper_hole_index: 4
   stack_part_ids:
-  - c7_0_orange_vertical
+  - c7_0_cyan
   lower_rail_id: rail4
   lower_hole_index: 0
 - name: c4

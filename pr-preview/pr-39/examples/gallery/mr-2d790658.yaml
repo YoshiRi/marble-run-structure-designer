@@ -1,6 +1,6 @@
 schema_version: '0.1'
-layout_id: mr-fd0c16c1
-name: mr-fd0c16c1
+layout_id: mr-2d790658
+name: mr-2d790658
 description: Gallery candidate (balanced, seed 2).
 generator:
   sets:
@@ -45,8 +45,9 @@ metrics:
 inventory_used:
   blue: 1
   cover: 4
+  cyan: 4
   natural_drop: 4
-  orange_vertical: 6
+  orange_vertical: 2
   plate_three_holes: 1
   purple_drop: 3
   red_random_split: 1
@@ -59,8 +60,9 @@ bill_of_materials:
   used:
     blue: 1
     cover: 4
+    cyan: 4
     natural_drop: 4
-    orange_vertical: 6
+    orange_vertical: 2
     plate_three_holes: 1
     purple_drop: 3
     red_random_split: 1
@@ -78,12 +80,16 @@ bill_of_materials:
     needed: 4
     available: 9
     short: 0
+  - part: cyan
+    needed: 4
+    available: 13
+    short: 0
   - part: natural_drop
     needed: 4
     available: 6
     short: 0
   - part: orange_vertical
-    needed: 6
+    needed: 2
     available: 10
     short: 0
   - part: plate_three_holes
@@ -199,8 +205,8 @@ parts:
   x_cm: 5
   y_cm: -34.7945
   z_units: 0
-- id: c7_1_orange_vertical
-  part_type: orange_vertical
+- id: c7_1_cyan
+  part_type: cyan
   x_cm: 5
   y_cm: -34.7945
   z_units: 1
@@ -209,8 +215,8 @@ parts:
   x_cm: -13.5
   y_cm: 1.7945
   z_units: 0
-- id: c8_1_orange_vertical
-  part_type: orange_vertical
+- id: c8_1_cyan
+  part_type: cyan
   x_cm: -13.5
   y_cm: 1.7945
   z_units: 1
@@ -226,13 +232,13 @@ parts:
   y_cm: -34.7945
   z_units: 7
   rotation_deg: 27
-- id: c12_0_orange_vertical
-  part_type: orange_vertical
+- id: c12_0_cyan
+  part_type: cyan
   x_cm: -18
   y_cm: 1.5
   z_units: 8
-- id: c12_1_orange_vertical
-  part_type: orange_vertical
+- id: c12_1_cyan
+  part_type: cyan
   x_cm: -18
   y_cm: 1.5
   z_units: 13
@@ -312,13 +318,13 @@ supports:
   upper_hole_index: 1
   stack_part_ids:
   - c7_0_wooden_foundation
-  - c7_1_orange_vertical
+  - c7_1_cyan
 - name: c8
   upper_rail_id: rail3
   upper_hole_index: 3
   stack_part_ids:
   - c8_0_wooden_foundation
-  - c8_1_orange_vertical
+  - c8_1_cyan
 - name: c10
   upper_rail_id: rail5
   upper_hole_index: 2
@@ -349,8 +355,8 @@ supports:
   upper_rail_id: rail6
   upper_hole_index: 2
   stack_part_ids:
-  - c12_0_orange_vertical
-  - c12_1_orange_vertical
+  - c12_0_cyan
+  - c12_1_cyan
   lower_rail_id: rail5
   lower_hole_index: 1
   play_cm: 0.3
