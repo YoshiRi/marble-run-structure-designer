@@ -682,6 +682,24 @@ ordering, then dead-end. Not kept. User's next idea: keep a 2D map of hole
 sites for the whole build (the base's holes first) and make columns stand
 only on those sites, a new site costing extra.
 
+**2D hole-site map** (user, 2026-10-27; `up_sites`, on for bottom-up, with
+`up_within_base`). Bottom-up growth keeps a top-view map of sites for the
+whole build: the base's free holes (not ones the marble rolls over or drops
+through), every hole of the rails placed above, and the columns. A new rail
+whose other holes land on sites comes first (`up_site_weight` 6 per hole),
+those holes are its preferred supports, and a plain support on a site
+stands on the free hole below instead of the ground. 45 levels, 3 seeds:
+
+| | valid | score | ground columns | columns on the base | towers | parts | footprint cm² |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| grid, within base | 100 % | 163.3 | 4.0 | 1.0 | 4.3 | 55.6 | 3096 |
+| **site map** | 80 % | **190.8** | **0.1** | 2.0 | 5.2 | **24.3** | 2866 |
+
+The builds become a switchback tower standing on the triangle. Also fixed
+on the way: the generator placed hole positions of angled rails (the
+triangle's sides) as if on the grid, which mattered for their dive corridors
+and alignment spots.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

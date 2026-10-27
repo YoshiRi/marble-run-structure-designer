@@ -114,3 +114,14 @@ def test_bottom_up_grows_a_valid_route_up_from_the_triangle():
         assert c.metrics["triangles"] == 1
         assert c.metrics["rails"] >= 7          # the base's five and at least two above
         assert c.source.port == "top"
+
+
+def test_the_site_map_keeps_bottom_up_columns_off_the_ground():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    base = dict(strategy="bottom_up", max_height_units=45, max_rails=14, exclude_parts=("red_right_angle",))
+    with_sites = generate(CATALOG, budget, config=GeneratorConfig(**base), attempts=30, seed=1, keep=5)
+    without = generate(CATALOG, budget, config=GeneratorConfig(**base, up_sites=False), attempts=30, seed=1, keep=5)
+    mean = lambda cs, k: sum(c.metrics[k] for c in cs) / len(cs)
+    assert mean(with_sites, "ground_columns") < mean(without, "ground_columns")
+    assert mean(with_sites, "parts") < mean(without, "parts")

@@ -9,7 +9,7 @@ generator:
   - red_right_angle
   config: no-twists
   seed: 2
-  score: 106.0
+  score: 110.0
 metrics:
   levels: 6
   rails: 6
@@ -39,6 +39,8 @@ metrics:
   shared_towers: 2.0
   switchbacks: 0.0
   triangles: 1.0
+  pattern_columns: 1.0
+  ground_columns: 1.0
   frame_turns: 1.0
 inventory_used:
   blue: 1
