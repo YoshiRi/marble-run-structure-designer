@@ -149,3 +149,18 @@ def test_a_split_branch_merges_through_a_hole_below():
     assert merged
     for c in merged:
         assert validate_layout(c.layout, CATALOG, source=c.source, sinks=c.sinks).valid
+
+
+def test_the_ladder_base_climbs_between_two_towers():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(strategy="bottom_up", up_base="ladder", max_height_units=45, max_rails=16,
+                             exclude_parts=("red_right_angle",))
+    found = generate(CATALOG, budget, config=config, attempts=40, seed=1, keep=10)
+    assert found
+    best = max(found, key=lambda c: c.metrics["switchbacks"])
+    assert best.metrics["switchbacks"] >= 2
+    result = validate_layout(best.layout, CATALOG, source=best.source, sinks=best.sinks)
+    assert result.valid
+    # the cross feet give it width: it must not stand on a line (one rail deep)
+    assert result.global_stability.margin_cm > 10

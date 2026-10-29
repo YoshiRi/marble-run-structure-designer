@@ -720,6 +720,34 @@ and alignment spots.
   an exit is still allowed. 3 seeds: 30 levels score 138.8 → 156.3 (merges
   0.97, parts 23 → 19), 45 levels 189.6 → 198.4 (merges 0.7).
 
+### 6.7 Ladder base (two towers, many splits)
+
+Asked for structures with many splits and merges (2026-10-28), the user
+picked the twin-tower ladder. `up_base: ladder` (bottom-up only) starts from
+a long rail between two tower feet 36 cm apart (its holes 1 and 2). Every
+rail above can span the same two towers (a long rail's holes 1 and 2), so
+the site map keeps the build in one plane; each turn is a switchback, and
+each drop block may be a red splitter whose second marble rolls back and
+merges through the hole below.
+
+One rail deep, the first version stood on a line (global stability margin
+0 cm, center of mass 30 cm up): it tips sideways. Each tower now stands on a
+**cross foot**: a center-hole long rail lying across on two foundations, the
+tower block on its center hole (`ladder_feet`, needs two center-hole rails).
+The feet are fixed and are not sites, so the ladder still climbs between
+the towers. 3 seeds, owned inventory:
+
+| | score | merges | switchbacks | margin cm | footprint cm² |
+| --- | --- | --- | --- | --- | --- |
+| 45 levels, on a line | 149 | 0.8 | 3.2 | 0.0 | ~270 |
+| **45 levels, cross feet** | **171.5** | 0.67 | 4.0 | **17.4** | 2550 |
+| 60 levels, on a line | 176 | 1.07 | 4.5 | 0.0 | ~270 |
+| **60 levels, cross feet** | **196.3** | 1.67 | 6.0 | **17.3** | 2550 |
+
+Examples: `examples/ladder/`. Gallery config `ladder`. Open: more merges per
+level (the splitter's back branch needs a free hole behind it), and whether
+the global check should reject a support polygon that is a line.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

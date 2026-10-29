@@ -229,7 +229,12 @@ class GeneratorConfig:
     # mr-6cd8d488): the second branch rolls back along the lower rail and
     # leaves through its first free hole.
     up_split_probability: float = 1.0
+    # bottom_up: what the build grows from. "triangle": the triangle base;
+    # "ladder": one long rail on two ground columns, so the route climbs as a
+    # ladder between two towers above it (user, 2026-10-28: pattern 2).
+    up_base: str = "triangle"
     up_base_margin_cm: float = 5.0
+    ladder_feet: bool = True          # cross feet under the ladder's towers (sideways stability)
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
@@ -473,8 +478,9 @@ class CascadeGenerator:
         (rail, hole, level of its top), or None. A hole the marble rolls over,
         drops through or that already holds a column is not free."""
         best = None
+        feet = self.__dict__.get("_feet", ())
         for r in state.rails.values():
-            if r.id == exclude:
+            if r.id == exclude or r.id in feet:
                 continue
             spec = self.catalog.rails[r.rail_type]
             for k, h in enumerate(spec.holes_cm):
@@ -1228,6 +1234,13 @@ class CascadeGenerator:
         free-standing input block stands on the last rail."""
         from .patterns import isosceles_triangle
         self.work = work
+        if self.config.up_base == "ladder":
+            start = self._ladder_base()
+            if start is None:
+                return None
+            state, lower, lower_hole, flow, block_z, point = start
+            return self._grow_up_from(state, lower, lower_hole, flow, block_z, point)
+        self._feet = set()
         tri = isosceles_triangle(self.catalog)
         dm = self.rng.randrange(4)
         dx, dy = _DIRS[dm]
@@ -1242,7 +1255,62 @@ class CascadeGenerator:
         state.max_depth = 4
         lower = state.rails[self._last_triangle_ids["median"]]
         lower_hole, flow, block_z = tri["feed_hole"], 90.0 * dm, tri["feed_z"]
-        point = (hx, hy)
+        return self._grow_up_from(state, lower, lower_hole, flow, block_z, (hx, hy))
+
+    def _ladder_base(self):
+        """A long rail on two ground columns at holes 1 and 2: the feet of
+        the two towers, 36 cm apart, so a long rail's holes 1 and 2 span them
+        at every level above. The marble lands on hole 1 and rolls out over
+        the end to hole 0, where it leaves; hole 2 stays free for a tower."""
+        state = _State()
+        d = self.rng.randrange(4)
+        kind = "straight_long"
+        spec = self.catalog.rails[kind]
+        sx, sy = -spec.length_cm / 2 * _DIRS[d][0], -spec.length_cm / 2 * _DIRS[d][1]
+        # A cross foot under each tower: a center-hole long rail lying across
+        # on two foundations, the tower standing on its center hole. Without
+        # it the ladder stands on a line and tips sideways (one rail deep).
+        foot = "straight_long_center"
+        feet = self.config.ladder_feet and self.budget.counts[foot] >= 2
+        z = 1 + (1 if feet else 0) + self.block_units   # (foot rail +) foundation + one block
+        rail = PlacedRail(state.new_id("rail"), kind, sx, sy, z, yaw_deg=90.0 * d, flow_direction="b_to_a")
+        state.rails[rail.id] = rail
+        self._feet = set()
+        if feet:
+            fspec = self.catalog.rails[foot]
+            fyaw = 90.0 * ((d + 1) % 4)
+            fd = _DIRS[(d + 1) % 4]
+            for h in (1, 2):
+                tx, ty = self._point(rail, spec.holes_cm[h])
+                c = fspec.holes_cm[2]
+                cross = PlacedRail(state.new_id("rail"), foot, tx - c * fd[0], ty - c * fd[1], 1, yaw_deg=fyaw,
+                                   )
+                if self._hits(state, self._rail_solids(cross)):
+                    return None
+                state.rails[cross.id] = cross
+                state.fixed.append(cross.id)
+                self._feet.add(cross.id)      # not a site: the ladder climbs between the towers
+                for k in (0, 4):
+                    fx, fy = self._point(cross, fspec.holes_cm[k])
+                    col = Column(state.new_id("c"), fx, fy, None, None, 0, cross.id, k, 1)
+                    state.columns[col.id] = col
+                col = Column(state.new_id("c"), tx, ty, cross.id, 2, 2, rail.id, h, z)
+                state.columns[col.id] = col
+        else:
+            for h in (1, 2):
+                col = self._plain_column(state, rail, h)
+                state.columns[col.id] = col
+        x, y = self._point(rail, spec.holes_cm[0])
+        r = _MARBLE_DIAMETER_CM / 2.0
+        state.corridors[rail.id] = self._corridor(rail, spec.holes_cm[0], spec.holes_cm[1] - self.half)
+        state.corridors[f"{rail.id}#dive#marble"] = Solid(f"{rail.id}#dive#marble", (x, y), (r, r), 0.0, 0.0,
+                                                         z * _UNIT_CM)
+        state.leaves.append(f"{rail.id}:hole:0")
+        state.fixed.append(rail.id)
+        state.max_depth = 1
+        return state, rail, 1, (90.0 * d + 180.0) % 360, z + 1, self._point(rail, spec.holes_cm[1])
+
+    def _grow_up_from(self, state, lower, lower_hole, flow, block_z, point):
         top_level = self.config.max_height_units
         blocks = [b for b, outs in self.drop_blocks.items() if outs == ("front",) and self.budget.counts[b] > 0]
         while True:
@@ -1415,7 +1483,10 @@ class CascadeGenerator:
         """Top-view spots a column may join: free holes of the base and of
         the rails above, and existing columns."""
         out = [(c.x, c.y) for c in state.columns.values()]
+        feet = self.__dict__.get("_feet", ())
         for r in state.rails.values():
+            if r.id in feet:
+                continue
             spec = self.catalog.rails[r.rail_type]
             for k, h in enumerate(spec.holes_cm):
                 if r.id in state.fixed and r.hole_states.get(k, "open") in ("covered", "block_connected"):
@@ -1427,6 +1498,8 @@ class CascadeGenerator:
         """Both ends of a rail inside the top-view box of the placed base."""
         xs, ys = [], []
         for rid in state.fixed:
+            if rid in self.__dict__.get("_feet", ()):
+                continue
             for piece in self._rail_solids(state.rails[rid]):
                 (cx, cy), (hx, hy), a = piece.center_xy, piece.half_extents_xy, piece.angle_rad
                 ex, ey = abs(hx * cos(a)) + abs(hy * sin(a)), abs(hx * sin(a)) + abs(hy * cos(a))
