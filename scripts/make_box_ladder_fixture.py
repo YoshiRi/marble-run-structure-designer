@@ -23,7 +23,9 @@ L2's end holes; an M's hole beyond its entry on the M below's hole beyond
 its stop. The bottom module has no L1: its lowest M rails drop to the ground
 (two exits).
 
---modules lists n per module, top first. Each module but the bottom one
+--modules lists n per module, top first; "3/1" gives the left side three
+y-rails and the right side one, which then drops down a hollow tower (same
+parity). --crown spiral puts a twist on top as the input. Each module but the bottom one
 takes two center-hole rails (the bottom one takes one).
 """
 from __future__ import annotations
@@ -67,7 +69,16 @@ def filler(units: int) -> list[str]:
     return kinds + ["purple_drop"] * (units % 5)
 
 
-def build(modules: list[int]) -> dict:
+def parse_modules(text: str) -> list[tuple[int, int]]:
+    """"3,1" -> [(3, 3), (1, 1)]; "3/1,1" -> [(3, 1), (1, 1)] (left/right)."""
+    out = []
+    for item in text.split(","):
+        left, _, right = item.partition("/")
+        out.append((int(left), int(right or left)))
+    return out
+
+
+def build(modules: list[tuple[int, int]], crown: str = "red") -> dict:
     rails, parts, supports = [], [], []
     count = Counter()
 
@@ -90,17 +101,23 @@ def build(modules: list[int]) -> dict:
             s.update({"lower_rail_id": lower, "lower_hole_index": lower_hole})
         supports.append(s)
 
-    # Sequence top down: (kind, line, module); M rails stand for both sides.
+    SIDES = ((-1, "l"), (1, "r"))
+    # Sequence top down: (kind, entry line, sides present). A side with fewer
+    # y-rails than the other drops its marble down a hollow tower to L1.
     seq, line = [], 0.0
-    for k, n in enumerate(modules):
-        seq.append(("L2", line, k))
-        for _ in range(n):
-            seq.append(("M", line, k))          # entry line
+    for k, (nl, nr) in enumerate(modules):
+        if (nl - nr) % 2:
+            raise ValueError(f"module {k}: {nl}/{nr}: both sides must end on the same line (same parity)")
+        if k == len(modules) - 1 and nl != nr:
+            raise ValueError("the bottom module must be symmetric (its y-rails exit)")
+        seq.append(("L2", line, ()))
+        for j in range(max(nl, nr)):
+            seq.append(("M", line, tuple(side for sx, side in SIDES if j < (nl if side == "l" else nr))))
             line = D - line
         if k < len(modules) - 1:
-            seq.append(("L1", line, k))
+            seq.append(("L1", line, ()))
     top_z = 6 + STEP * (len(seq) - 1)
-    rows = [(kind, line, k, top_z - STEP * i) for i, (kind, line, k) in enumerate(seq)]
+    rows = [(kind, line, sides, top_z - STEP * i) for i, (kind, line, sides) in enumerate(seq)]
 
     drop_i = 0
 
@@ -109,26 +126,44 @@ def build(modules: list[int]) -> dict:
         drop_i += 1
         return DROP[drop_i % len(DROP)]
 
-    for i, (kind, line, k, z) in enumerate(rows):
-        below = rows[i + 1] if i + 1 < len(rows) else None
+    def next_with(i, side=None, kind="M"):
+        return next((j for j in range(i + 1, len(rows)) if rows[j][0] == kind
+                     and (side is None or side in rows[j][2])), None)
+
+    for i, (kind, line, sides, z) in enumerate(rows):
         if kind == "L2":
             rid = f"l2_{i}"
             rails.append({"id": rid, "rail_type": "straight_long_center", "x_cm": -25.0, "y_cm": line, "z_units": z,
                           "yaw_deg": 0.0, "flow_direction": "from_hole", "flow_hole": 2,
                           "hole_states": {1: "block_connected", 3: "block_connected"}})
             # drop columns onto the M rails below (their entry)
-            for sx, side, hole in ((-1, "l", 1), (1, "r", 3)):
+            for sx, side in SIDES:
                 b = part("drop", drop_block(), sx * X, line, z - 5, rot("+y" if line == 0.0 else "-y"))
-                support(rid, hole, [b], f"m{i + 1}{side}", 1)
+                support(rid, 1 if sx < 0 else 3, [b], f"m{i + 1}{side}", 1)
             red = part("red", "red_random_split", 0.0, line, z + 1, 90)
-            if i == 0:
-                supports.append({"name": "input", "upper_rail_id": None, "upper_hole_index": None,
-                                 "stack_part_ids": [red], "lower_rail_id": rid, "lower_hole_index": 2})
-            else:
+            if i > 0:
                 support(f"l1_{i - 1}", 2, [red], rid, 2)
                 for hole, sx in ((0, -1), (4, 1)):     # L1's end holes on L2's
                     support(f"l1_{i - 1}", hole, stack("col", ["orange_vertical"], sx * 23.0, line, z + 1),
                             rid, hole)
+            elif crown == "spiral":
+                # A twist on top: its funnel center on the red splitter, its
+                # chute holes over L2's holes 4 and 3 (23 and 18 cm from the
+                # funnel, as on a short rail). The input block stands on the
+                # chute's tip hole; the hole over L2's drop hole is covered.
+                sid = "spiral_top"
+                rails.append({"id": sid, "rail_type": "spiral", "x_cm": 24.5, "y_cm": line, "z_units": z + 6,
+                              "yaw_deg": 180.0, "flow_direction": "a_to_b",
+                              "hole_states": {1: "covered", 2: "block_connected"}})
+                support(sid, 2, [red], rid, 2)
+                support(sid, 0, stack("col", ["orange_vertical", "purple_drop", "purple_drop", "purple_drop"],
+                                      23.0, line, z + 1), rid, 4)
+                top = part("input", "yellow", 23.0, line, z + 10, rot("-x"))
+                supports.append({"name": "input", "upper_rail_id": None, "upper_hole_index": None,
+                                 "stack_part_ids": [top], "lower_rail_id": sid, "lower_hole_index": 0})
+            else:
+                supports.append({"name": "input", "upper_rail_id": None, "upper_hole_index": None,
+                                 "stack_part_ids": [red], "lower_rail_id": rid, "lower_hole_index": 2})
         elif kind == "L1":
             rid = f"l1_{i}"
             rails.append({"id": rid, "rail_type": "straight_long_center", "x_cm": -25.0, "y_cm": line, "z_units": z,
@@ -136,44 +171,51 @@ def build(modules: list[int]) -> dict:
                           "hole_states": {2: "block_connected"}})
         else:
             ys = m_holes(line)
-            last = below is None
-            for sx, side in ((-1, "l"), (1, "r")):
+            for sx, side in SIDES:
+                if side not in sides:
+                    continue
                 rid = f"m{i}{side}"
-                yaw = 90.0 if line == 0.0 else 270.0
-                a_end = -7.0 if line == 0.0 else D + 7
-                rails.append({"id": rid, "rail_type": "straight_long", "x_cm": sx * X, "y_cm": a_end, "z_units": z,
-                              "yaw_deg": yaw, "flow_direction": "a_to_b",
-                              "hole_states": {} if last else {2: "block_connected"}})
                 x = sx * X
-                if last:
+                exit_ = next_with(i) is None
+                rails.append({"id": rid, "rail_type": "straight_long", "x_cm": x,
+                              "y_cm": -7.0 if line == 0.0 else D + 7, "z_units": z,
+                              "yaw_deg": 90.0 if line == 0.0 else 270.0, "flow_direction": "a_to_b",
+                              "hole_states": {} if exit_ else {2: "block_connected"}})
+                if exit_:
                     # exits: ground columns at both outer holes
                     for hole in (0, 3):
                         support(rid, hole, stack("ground", ["wooden_foundation", "green"], x, ys[hole], 0))
                     continue
-                bkind, bline, _, bz = below
-                if bkind == "M":
-                    b = part("drop", drop_block(), x, ys[2], bz + 1, rot("+y" if bline == 0.0 else "-y"))
+                below = rows[i + 1]
+                if below[0] == "M" and side in below[2]:
+                    b = part("drop", drop_block(), x, ys[2], below[3] + 1, rot("+y" if below[1] == 0.0 else "-y"))
                     support(rid, 2, [b], f"m{i + 1}{side}", 1)
-                else:                                   # onto L1, inward
-                    b = part("drop", drop_block(), x, ys[2], bz + 1, rot("+x" if sx < 0 else "-x"))
-                    support(rid, 2, [b], f"l1_{i + 1}", 1 if sx < 0 else 3)
-            # the hole beyond the entry stands on the next M down (beyond its stop)
-            nxt = next((j for j in range(i + 1, len(rows)) if rows[j][0] == "M"), None)
-            for sx, side in ((-1, "l"), (1, "r")):
-                rid = f"m{i}{side}"
+                else:                                   # down to L1, inward
+                    j = next_with(i, kind="L1")
+                    units = z - (rows[j][3] + 1)
+                    # a hollow tower: the marble falls through, the bottom block turns it inward
+                    hollow = ["orange_vertical"] * ((units - 5) // 5) + ["purple_drop"] * ((units - 5) % 5)
+                    ids = stack("drop", [drop_block()] + hollow, x, ys[2], rows[j][3] + 1)
+                    parts[[p["id"] for p in parts].index(ids[0])]["rotation_deg"] = rot("+x" if sx < 0 else "-x")
+                    support(rid, 2, ids, f"l1_{j}", 1 if sx < 0 else 3)
+            # the hole beyond the entry stands on the next M down on that side
+            for sx, side in SIDES:
+                if side not in sides:
+                    continue
+                nxt = next_with(i, side)
                 if nxt is None:
                     continue
                 units = z - (rows[nxt][3] + 1)
-                support(rid, 0, stack("col", filler(units), sx * X, ys[0], rows[nxt][3] + 1),
+                support(f"m{i}{side}", 0, stack("col", filler(units), sx * X, ys[0], rows[nxt][3] + 1),
                         f"m{nxt}{side}", 3)
 
-    bottom = rows[-1][0]
-    assert bottom == "M"
     last = len(rows) - 1
+    source = "input" if crown == "spiral" else "red_1"
     return {
         "schema_version": "0.1",
         "rails": rails, "parts": parts, "supports": supports,
-        "routing_query": {"source": {"component_id": "red_1", "port": "top"},
+        "routing_query": {"source": {"component_id": f"{source}_1" if crown == "spiral" else source,
+                                     "port": "top"},
                           "sinks": [{"component_id": f"m{last}l", "port": "hole:2"},
                                     {"component_id": f"m{last}r", "port": "hole:2"}]},
     }
@@ -184,9 +226,10 @@ def main() -> None:
     ap.add_argument("--modules", default="1,1", help="M rails per side in each module, top first")
     ap.add_argument("--out", type=Path, default=ROOT / "tests" / "fixtures" / "box-ladder.yaml")
     ap.add_argument("--name", default="box-ladder")
+    ap.add_argument("--crown", choices=("red", "spiral"), default="red", help="the input: a red splitter or a twist")
     args = ap.parse_args()
-    modules = [int(n) for n in args.modules.split(",")]
-    data = build(modules)
+    modules = parse_modules(args.modules)
+    data = build(modules, args.crown)
     levels = max(r["z_units"] for r in data["rails"]) + 6
     used = Counter(r["rail_type"] for r in data["rails"])
     data = {"schema_version": "0.1", "name": args.name,
