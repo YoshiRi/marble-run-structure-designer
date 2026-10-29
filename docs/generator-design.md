@@ -770,6 +770,17 @@ Fixture (`scripts/make_box_ladder_fixture.py`, `tests/fixtures/box-ladder.yaml`,
 and one merge, global margin 18 cm (the ladder on a line: 0). The bottom
 module has no L1 (three center-hole rails owned): its M rails exit.
 
+Taller (the script takes `--modules`, y-rails per side in each module, top
+first; a module with n > 1 runs a switchback on each side, the ladder's way,
+which adds height without center-hole rails). All valid, margin 18 cm:
+
+| example | modules | levels | center-hole rails | long rails | owned? |
+| --- | --- | --- | --- | --- | --- |
+| box-ladder-2 | 1,1 | 36 | 3 | 4 | yes |
+| **box-ladder-owned** | 3,1 | **48** | 3 | 8 | **yes (the owned maximum)** |
+| box-ladder-4x | 1,1,1,1 | 72 | 7 (owned 3) | 8 | no |
+| box-ladder-switchback | 3,3,1 | 78 | 5 (owned 3) | 14 (owned 8) | no |
+
 Budget: each module takes two center-hole rails. Next: long curves as L1
 (both end holes carry a block on top, which a curve needs; six owned), then
 a generator stacking modules.
