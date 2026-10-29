@@ -748,6 +748,32 @@ Examples: `examples/ladder/`. Gallery config `ladder`. Open: more merges per
 level (the splitter's back branch needs a free hole behind it), and whether
 the global check should reject a support polygon that is a line.
 
+### 6.8 Box ladder (T joints and merges, braced both ways)
+
+The ladder is one rail deep (a flat wall). Bending it (user, 2026-10-29:
+くの字, triangles) fails at a shared corner tower: a column there stands on a
+lower rail's drop hole and blocks it. The user's T joint does not: a rail
+drops onto a red splitter standing on a center-hole rail's center hole,
+which sends the marble both ways (as in the triangle base).
+
+A module, top down, 18 levels: **L2** (x-rail, center-hole long rail, red on
+hole 2, drops at holes 1 and 3) → **M** (two y-rails at x = ±18, long rails,
+holes 1 → 2 = 36 cm) → **L1** (x-rail, center-hole long rail, both branches
+in at holes 1 and 3, merging at hole 2) → the next module's L2 red below.
+Modules alternate between the lines y = 0 and y = 36, so rails one above the
+other at a tower are always collinear and the ladder's 5 cm trick works both
+ways: L1's end holes stand on L2's end holes, an M's hole beyond its entry
+on the M below's hole beyond its stop.
+
+Fixture (`scripts/make_box_ladder_fixture.py`, `tests/fixtures/box-ladder.yaml`,
+`examples/box_ladder/`): two modules, 36 levels, 7 rails, valid, two splits
+and one merge, global margin 18 cm (the ladder on a line: 0). The bottom
+module has no L1 (three center-hole rails owned): its M rails exit.
+
+Budget: each module takes two center-hole rails. Next: long curves as L1
+(both end holes carry a block on top, which a curve needs; six owned), then
+a generator stacking modules.
+
 ### 6.4 Order of work
 
 1. The join move and the `merges` term, in the current generator. A

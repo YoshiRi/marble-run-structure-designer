@@ -164,3 +164,19 @@ def test_the_ladder_base_climbs_between_two_towers():
     assert result.valid
     # the cross feet give it width: it must not stand on a line (one rail deep)
     assert result.global_stability.margin_cm > 10
+
+
+def test_the_box_ladder_fixture_stands_splits_and_merges():
+    from quadrilla_solver.model import PortRef
+    data = yaml.safe_load((ROOT / "tests" / "fixtures" / "box-ladder.yaml").read_text())
+    layout = layout_from_dict(data)
+    q = data["routing_query"]
+    source = PortRef(q["source"]["component_id"], q["source"]["port"])
+    sinks = tuple(PortRef(s["component_id"], s["port"]) for s in q["sinks"])
+    result = validate_layout(layout, CATALOG, source=source, sinks=sinks)
+    assert result.valid
+    assert set(result.connectivity.reached_sinks) == {s.key for s in sinks}
+    # x- and y-rails brace each other: a wide support polygon
+    assert result.global_stability.margin_cm > 15
+    yaws = {round(r.yaw_deg) % 180 for r in layout.rails}
+    assert yaws == {0, 90}
