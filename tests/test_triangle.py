@@ -180,3 +180,15 @@ def test_the_box_ladder_fixture_stands_splits_and_merges():
     assert result.global_stability.margin_cm > 15
     yaws = {round(r.yaw_deg) % 180 for r in layout.rails}
     assert yaws == {0, 90}
+
+
+def test_box_ladder_examples_are_valid():
+    from quadrilla_solver.model import PortRef
+    for path in sorted((ROOT / "examples" / "box_ladder").glob("*.yaml")):
+        data = yaml.safe_load(path.read_text())
+        q = data["routing_query"]
+        source = PortRef(q["source"]["component_id"], q["source"]["port"])
+        sinks = tuple(PortRef(s["component_id"], s["port"]) for s in q["sinks"])
+        result = validate_layout(layout_from_dict(data), CATALOG, source=source, sinks=sinks)
+        assert result.valid, path.name
+        assert set(result.connectivity.reached_sinks) == {s.key for s in sinks}, path.name

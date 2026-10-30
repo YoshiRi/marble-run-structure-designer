@@ -781,9 +781,20 @@ which adds height without center-hole rails). All valid, margin 18 cm:
 | box-ladder-4x | 1,1,1,1 | 72 | 7 (owned 3) | 8 | no |
 | box-ladder-switchback | 3,3,1 | 78 | 5 (owned 3) | 14 (owned 8) | no |
 
-Budget: each module takes two center-hole rails. Next: long curves as L1
-(both end holes carry a block on top, which a curve needs; six owned), then
-a generator stacking modules.
+Variety (user, 2026-10-30: one pattern repeated looks monotonous):
+- *Uneven sides* (`--modules 3/1,...`): one side switchbacks, the other
+  falls down a hollow tower (orange and purple blocks) to its L1 hole; the
+  bottom block turns it inward. Same parity, so both end on L1's line.
+- *Twist crown* (`--crown spiral`): the twist's chute holes are 23 and 18 cm
+  from its funnel, exactly L2's holes 4 and 3 from its center. The funnel
+  sits on the top red splitter, the tip hole on a column from L2's hole 4,
+  the hole over L2's drop hole is covered; the input block stands on the tip.
+- `box-ladder-spiral` (3/1,1, twist crown): owned, valid, margin 18 cm.
+- Not yet: short rails (27 cm; holes 0 -> 3 = 23 cm and 1 -> 3 = 18 cm, so
+  they also fit L's hole offsets).
+
+Long curves do not fit as L1: their end holes are 39.84 cm apart, the M
+lines 36. Next: a generator stacking modules with these variations drawn at random.
 
 ### 6.4 Order of work
 
