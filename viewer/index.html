@@ -46,6 +46,11 @@
         </label>
         <button id="generateOpen" type="button" class="menu-item">自動生成</button>
         <button id="buildToggle" type="button" class="menu-item" aria-pressed="false">組み立て手順</button>
+        <hr class="menu-sep">
+        <button id="mineSave" type="button" class="menu-item">マイレイアウトに保存</button>
+        <button id="shareLink" type="button" class="menu-item">共有リンクを送る</button>
+        <button id="mineDelete" type="button" class="menu-item danger" hidden>このマイレイアウトを削除</button>
+        <hr class="menu-sep">
         <label class="menu-item menu-check"><input id="debugToggle" type="checkbox"> デバッグ表示</label>
       </nav>
     </header>
@@ -185,6 +190,18 @@
       </aside>
     </main>
   </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="shareDialog" class="gen-dialog share-dialog" aria-labelledby="shareTitle">
+    <form method="dialog">
+      <h2 id="shareTitle">共有リンク</h2>
+      <p class="muted small-note">このリンクにレイアウト全体が入っています（サーバーには保存されません）。開いた人は見る・転がす・自分のマイレイアウトに保存ができます。</p>
+      <textarea id="shareUrl" class="share-url" rows="4" readonly></textarea>
+      <div class="gen-actions">
+        <button id="shareCopy" type="button" class="primary">コピー</button>
+        <button type="submit">閉じる</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="generateDialog" class="gen-dialog" aria-labelledby="generateTitle">
     <form id="generateForm" method="dialog">
       <h2 id="generateTitle">Generate layouts</h2>

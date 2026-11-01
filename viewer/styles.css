@@ -395,3 +395,16 @@ body.play .viewport-panel { height: auto; }
 .play-exit.holding::before { transform: scaleX(1); transition: transform 1s linear; }
 .play-exit { isolation: isolate; }
 .play-exit-hint { display: block; font-size: 10px; opacity: .7; }
+
+/* My layouts and share links */
+.menu-sep { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
+.menu-item.danger { color: #dc2626; }
+.menu-item[hidden] { display: none; }
+.toast {
+  position: fixed; left: 50%; bottom: max(84px, calc(env(safe-area-inset-bottom) + 84px)); z-index: 50;
+  transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 999px;
+  background: rgba(17, 24, 39, .92); color: #f9fafb; font-size: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+}
+.toast[hidden] { display: none; }
+.share-url { width: 100%; box-sizing: border-box; font: 12px ui-monospace, Menlo, monospace; padding: 8px;
+  border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; word-break: break-all; }
