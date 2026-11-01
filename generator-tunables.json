@@ -298,10 +298,11 @@
       "type": "choice",
       "choices": [
         "triangle",
-        "ladder"
+        "ladder",
+        "box"
       ],
       "default": "triangle",
-      "help": "what a bottom-up build grows from: the triangle base, or a ladder between two towers",
+      "help": "what a bottom-up build grows from: the triangle base, a ladder between two towers, or a box ladder",
       "source": "user (2026-10-28)"
     },
     {

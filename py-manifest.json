@@ -4,6 +4,7 @@
     "src/quadrilla_solver/anneal.py",
     "src/quadrilla_solver/assembly.py",
     "src/quadrilla_solver/assembly_plan.py",
+    "src/quadrilla_solver/box_ladder.py",
     "src/quadrilla_solver/catalog.py",
     "src/quadrilla_solver/collision.py",
     "src/quadrilla_solver/connectivity.py",
