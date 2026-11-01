@@ -1700,7 +1700,13 @@
     const center = min.add(max).scale(0.5);
     const size = max.subtract(min).length();
     camera.setTarget(center);
-    camera.radius = Math.max(25, size * 1.25);
+    camera.radius = Math.max(25, size * 1.25) * portraitFactor();
+  }
+
+  // A tall narrow view (a phone held upright) sees less sideways: back off.
+  function portraitFactor() {
+    const aspect = engine.getAspectRatio(camera) || 1;
+    return aspect < 1 ? Math.min(2.2, 1 / aspect) * 0.85 : 1;
   }
 
   // ---- Build mode (docs/assembly-assist.md) --------------------------------
@@ -1759,7 +1765,7 @@
       max.maximizeInPlace(bb.maximumWorld);
     }
     camera.setTarget(min.add(max).scale(0.5));
-    camera.radius = Math.max(35, max.subtract(min).length() * 1.6);
+    camera.radius = Math.max(35, max.subtract(min).length() * 1.6) * portraitFactor();
   }
 
   // Outline the current step, ghost later steps, and draw facing arrows.
@@ -2044,8 +2050,12 @@
 
   function renderBuildPanel() {
     const panel = document.getElementById("buildPanel");
-    document.getElementById("buildToggle").textContent = build.on ? "Exit build" : "Build";
+    document.getElementById("buildToggle").textContent = build.on ? "組み立て手順を閉じる" : "組み立て手順";
     document.getElementById("buildToggle").setAttribute("aria-pressed", String(build.on));
+    if (document.body.classList.contains("building") !== build.on) {
+      document.body.classList.toggle("building", build.on);
+      setTimeout(() => engine.resize(), 30);   // the side panel came or went
+    }
     panel.hidden = !build.on;
     document.getElementById("buildBar").hidden = !build.on;
     document.getElementById("partsBoard").hidden = !build.on || build.step !== 0;
@@ -2318,6 +2328,10 @@
         select.value = requested;
       }
       const params = new URLSearchParams(window.location.search);
+      let debugOn = false;
+      try { debugOn = localStorage.getItem(DEBUG_STORE) === "on"; } catch (error) { /* private mode */ }
+      if (params.has("debug")) debugOn = params.get("debug") !== "0";
+      setDebugMode(debugOn, { persist: false });
       if (params.get("mode") === "build") {
         build.on = true;
         build.reframe = true;
@@ -3577,6 +3591,44 @@
   }
 
   document.getElementById("playToggle").addEventListener("click", () => setPlayMode(true));
+
+  // ---- Debug mode: the inspection panels, overlays and the review/edit
+  // tools. Off, the screen shows only the 3D view, a layout picker, a menu
+  // and the bottom bar (made for phones).
+  const DEBUG_STORE = "marble-run-debug-v1";
+  const OVERLAYS = ["toggleHoles", "toggleSupports", "toggleRoute", "toggleCom", "togglePolygon"];
+
+  function setDebugMode(on, opts = {}) {
+    document.body.classList.toggle("debug", on);
+    document.getElementById("debugToggle").checked = on;
+    if (!on && edit.on) setEditMode(false);
+    if (!on && review.on) setReviewMode(false);
+    // Clean view: no hole, support, route, center-of-mass or polygon markers.
+    for (const id of OVERLAYS) {
+      document.getElementById(id).checked = on && !(build.on && (id === "toggleCom" || id === "togglePolygon"));
+    }
+    document.getElementById("toggleGroundLevel").checked = true;
+    applyVisibility();
+    if (opts.persist !== false) {
+      try { localStorage.setItem(DEBUG_STORE, on ? "on" : "off"); } catch (error) { /* ignore */ }
+    }
+    setTimeout(() => engine.resize(), 30);
+  }
+  document.getElementById("debugToggle").addEventListener("change", event => setDebugMode(event.target.checked));
+
+  // ---- Menu (☰)
+  const menu = document.getElementById("menu");
+  const menuToggle = document.getElementById("menuToggle");
+  const setMenu = open => { menu.hidden = !open; menuToggle.setAttribute("aria-expanded", String(open)); };
+  menuToggle.addEventListener("click", event => { event.stopPropagation(); setMenu(menu.hidden); });
+  document.addEventListener("click", event => {
+    if (!menu.hidden && !menu.contains(event.target) && event.target !== menuToggle) setMenu(false);
+  });
+  menu.addEventListener("click", event => {
+    if (event.target.closest("button, a")) setMenu(false);
+  });
+  document.getElementById("layoutFile").addEventListener("change", () => setMenu(false));
+  window.addEventListener("keydown", event => { if (event.key === "Escape") setMenu(false); });
   for (const name of ["fullscreenchange", "webkitfullscreenchange"]) {
     document.addEventListener(name, () => {
       if (!fullscreenElement() && play.on) setPlayMode(false);
