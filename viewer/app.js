@@ -2338,7 +2338,11 @@
         for (const id of ["toggleCom", "togglePolygon"]) document.getElementById(id).checked = false;
         build.step = Math.max(0, Number(params.get("step")) || 0);
       }
-      await loadExample(select.value);
+      renderMineOptions();
+      const shared = await readSharedHash();
+      if (shared) openShared(shared);
+      else await loadExample(select.value);
+      updateMineMenu();
       // ?play=1 opens in play mode (the home-screen app starts this way).
       if (params.get("play") === "1") setTimeout(() => setPlayMode(true), 0);
     } catch (error) {
@@ -2348,6 +2352,10 @@
   }
 
   document.getElementById("exampleSelect").addEventListener("change", event => {
+    updateMineMenu();
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+    const mineEntry = event.target.value.startsWith("mine:") ? loadMine().find(m => "mine:" + m.id === event.target.value) : null;
+    if (mineEntry) { build.step = 0; layoutOrigin = "my layout " + mineEntry.name; setLayout(structuredClone(mineEntry.data)); return; }
     const generated = generatedLayouts.get(event.target.value);
     if (generated) { build.step = 0; layoutOrigin = "generated in the browser"; setLayout(structuredClone(generated)); return; }
     loadExample(event.target.value).catch(console.error);
@@ -3615,6 +3623,171 @@
     setTimeout(() => engine.resize(), 30);
   }
   document.getElementById("debugToggle").addEventListener("change", event => setDebugMode(event.target.checked));
+
+  // ---- My layouts (this browser) and share links (the layout in the URL)
+  const MINE_STORE = "marble-run-my-layouts-v1";
+  const SHARE_KEYS = ["schema_version", "layout_id", "name", "description", "rails", "parts", "supports",
+    "route_links", "routing_query", "routing_options"];
+
+  function toast(text) {
+    const el = document.getElementById("toast");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { el.hidden = true; }, 2600);
+  }
+
+  function loadMine() {
+    try { return JSON.parse(localStorage.getItem(MINE_STORE) || "[]"); } catch (error) { return []; }
+  }
+
+  function storeMine(list) {
+    try { localStorage.setItem(MINE_STORE, JSON.stringify(list)); return true; }
+    catch (error) { toast("保存できませんでした（ブラウザの保存領域）"); return false; }
+  }
+
+  // Only what draws and rolls the layout; metrics and the like are recomputed.
+  function shareable(data) {
+    const out = {};
+    for (const key of SHARE_KEYS) if (data[key] !== undefined) out[key] = data[key];
+    return out;
+  }
+
+  function renderMineOptions() {
+    const select = document.getElementById("exampleSelect");
+    select.querySelector("optgroup[data-mine]")?.remove();
+    const mine = loadMine();
+    if (!mine.length) return;
+    const group = document.createElement("optgroup");
+    group.label = "マイレイアウト";
+    group.dataset.mine = "1";
+    for (const entry of mine) {
+      const option = document.createElement("option");
+      option.value = "mine:" + entry.id;
+      option.textContent = entry.name;
+      group.appendChild(option);
+    }
+    select.prepend(group);
+  }
+
+  function updateMineMenu() {
+    document.getElementById("mineDelete").hidden =
+      !document.getElementById("exampleSelect").value.startsWith("mine:");
+  }
+
+  function saveMine() {
+    if (!fullLayout) return;
+    const select = document.getElementById("exampleSelect");
+    const mine = loadMine();
+    const current = select.value.startsWith("mine:") ? mine.find(m => "mine:" + m.id === select.value) : null;
+    const name = (prompt("マイレイアウトの名前", current?.name || fullLayout.name || fullLayout.layout_id || "マイレイアウト") || "").trim();
+    if (!name) return;
+    const data = shareable(fullLayout);
+    data.name = name;
+    let entry = mine.find(m => m.name === name);
+    if (entry && !confirm(`「${name}」を上書きしますか？`)) return;
+    if (entry) Object.assign(entry, { data, savedAt: new Date().toISOString() });
+    else {
+      entry = { id: Date.now().toString(36), name, savedAt: new Date().toISOString(), data };
+      mine.unshift(entry);
+    }
+    if (!storeMine(mine)) return;
+    fullLayout.name = name;
+    renderMineOptions();
+    select.value = "mine:" + entry.id;
+    layoutOrigin = "my layout " + name;
+    updateMineMenu();
+    toast(`「${name}」を保存しました`);
+  }
+
+  function deleteMine() {
+    const select = document.getElementById("exampleSelect");
+    const mine = loadMine();
+    const entry = mine.find(m => "mine:" + m.id === select.value);
+    if (!entry || !confirm(`「${entry.name}」を削除しますか？`)) return;
+    storeMine(mine.filter(m => m !== entry));
+    renderMineOptions();
+    toast(`「${entry.name}」を削除しました`);
+    // stay on the layout that is open (now unsaved)
+    const option = document.createElement("option");
+    option.value = "unsaved";
+    option.textContent = entry.name + "（未保存）";
+    select.appendChild(option);
+    select.value = "unsaved";
+    updateMineMenu();
+  }
+
+  // URL-safe base64 of deflate-raw(JSON) ("z") or of plain JSON ("j") where
+  // the browser lacks CompressionStream.
+  const toB64 = bytes => {
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+  const fromB64 = text => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+  const pipe = async (bytes, stream) =>
+    new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+
+  async function encodeShare(data) {
+    const json = new TextEncoder().encode(JSON.stringify(shareable(data)));
+    if (typeof CompressionStream === "function") return "z" + toB64(await pipe(json, new CompressionStream("deflate-raw")));
+    return "j" + toB64(json);
+  }
+
+  async function decodeShare(code) {
+    const kind = code[0];
+    let bytes = fromB64(code.slice(1));
+    if (kind === "z") bytes = await pipe(bytes, new DecompressionStream("deflate-raw"));
+    else if (kind !== "j") throw new Error("unknown share format");
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  async function readSharedHash() {
+    const match = window.location.hash.match(/^#v1=([A-Za-z0-9_-]+)$/);
+    if (!match) return null;
+    try { return await decodeShare(match[1]); }
+    catch (error) { console.warn("share link unreadable", error); toast("共有リンクを読めませんでした"); return null; }
+  }
+
+  function openShared(data) {
+    const select = document.getElementById("exampleSelect");
+    const option = document.createElement("option");
+    option.value = "shared";
+    option.textContent = "共有 · " + (data.name || data.layout_id || "layout");
+    select.appendChild(option);
+    select.value = "shared";
+    generatedLayouts.set("shared", data);
+    build.step = 0;
+    layoutOrigin = "share link";
+    setLayout(structuredClone(data));
+    toast("共有されたレイアウトです。メニューから保存できます");
+  }
+
+  async function shareLink() {
+    if (!fullLayout) return;
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "v1=" + await encodeShare(fullLayout);
+    const link = url.toString();
+    const title = fullLayout.name || fullLayout.layout_id || "Marble Run";
+    if (navigator.share) {
+      try { await navigator.share({ title, url: link }); return; }
+      catch (error) { if (error?.name === "AbortError") return; }
+    }
+    document.getElementById("shareUrl").value = link;
+    document.getElementById("shareDialog").showModal();
+  }
+
+  document.getElementById("mineSave").addEventListener("click", saveMine);
+  document.getElementById("mineDelete").addEventListener("click", deleteMine);
+  document.getElementById("shareLink").addEventListener("click", () => shareLink().catch(error => {
+    console.error(error); toast("リンクを作れませんでした");
+  }));
+  document.getElementById("shareCopy").addEventListener("click", async () => {
+    const field = document.getElementById("shareUrl");
+    try { await navigator.clipboard.writeText(field.value); toast("コピーしました"); }
+    catch (error) { field.select(); document.execCommand?.("copy"); toast("コピーしました"); }
+  });
 
   // ---- Menu (☰)
   const menu = document.getElementById("menu");
