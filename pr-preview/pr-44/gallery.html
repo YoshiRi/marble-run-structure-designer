@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Marble Run Layout Gallery</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    .gallery-page { max-width: 1200px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-left)) 48px; }
+    .gallery-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+    .gallery-head h1 { margin: 0 0 4px; font-size: 20px; }
+    .gallery-head p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 62ch; }
+    .gallery-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .gallery-actions a, .gallery-actions button {
+      min-height: 36px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+      background: Canvas; color: CanvasText; font-size: 13px; text-decoration: none; cursor: pointer;
+    }
+    .gallery-actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 18px; }
+    .card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); min-width: 0; }
+    .card.reviewed { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+    .thumb { display: block; width: 100%; aspect-ratio: 480 / 430; object-fit: cover; border-radius: 8px; background: #111827; }
+    .id-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .layout-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px; font-weight: 600; }
+    .copy-id { border: 1px solid var(--border); border-radius: 7px; background: Canvas; color: CanvasText; font-size: 12px; padding: 4px 8px; cursor: pointer; }
+    .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .metrics { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 8px; font-size: 12px; }
+    .metrics div { display: grid; }
+    .metrics dt { color: var(--muted); font-size: 11px; }
+    .metrics dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .marks { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mark { min-height: 32px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 7px; background: Canvas; color: CanvasText; font-size: 12px; cursor: pointer; }
+    .mark[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, Canvas); border-color: var(--accent); }
+    .mark:focus-visible, .copy-id:focus-visible, .gallery-actions button:focus-visible, .gallery-actions a:focus-visible, .open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .note { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 7px; background: Canvas; color: CanvasText; padding: 7px 8px; font: inherit; font-size: 13px; }
+    .open { justify-self: start; font-size: 13px; color: var(--accent); }
+    .card-links { display: flex; gap: 16px; }
+    .summary { margin-top: 24px; display: grid; gap: 8px; }
+    .summary h2 { margin: 0; font-size: 15px; }
+    .summary textarea { width: 100%; min-height: 110px; border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; padding: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .status { min-height: 1.4em; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="gallery-page">
+    <header class="gallery-head">
+      <div>
+        <h1>Layout Gallery</h1>
+        <p>Generated candidates to review. Each layout has a stable ID derived from its build: quote it when reporting.
+          Marks and notes stay in this browser; <strong>Copy review summary</strong> gives lines to paste into chat.</p>
+      </div>
+      <div class="gallery-actions">
+        <a href="./index.html">Viewer</a>
+        <button id="copySummary" type="button" class="primary">Copy review summary</button>
+      </div>
+    </header>
+    <p id="status" class="status" aria-live="polite"></p>
+    <main id="grid" class="grid" aria-label="Generated layouts">
+      <p class="status">Loading layouts…</p>
+    </main>
+    <section class="summary">
+      <h2>Review summary</h2>
+      <textarea id="summary" readonly aria-label="Review summary"></textarea>
+    </section>
+  </div>
+  <script src="./gallery.js"></script>
+</body>
+</html>
