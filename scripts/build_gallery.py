@@ -49,6 +49,8 @@ CONFIGS = [
     ("bottom-up", {"strategy": "bottom_up", "max_height_units": 45, "max_rails": 14}),
     # A ladder between two towers, grown bottom-up (§6.7).
     ("ladder", {"strategy": "bottom_up", "up_base": "ladder", "max_height_units": 60, "max_rails": 16}),
+    # A box ladder base (T joints and merges), grown bottom-up above (§6.8).
+    ("box", {"strategy": "bottom_up", "up_base": "box", "max_height_units": 66, "max_rails": 18}),
 ]
 
 # Feature buckets the selection tries to cover before filling by score.

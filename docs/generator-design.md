@@ -794,7 +794,18 @@ Variety (user, 2026-10-30: one pattern repeated looks monotonous):
   they also fit L's hole offsets).
 
 Long curves do not fit as L1: their end holes are 39.84 cm apart, the M
-lines 36. Next: a generator stacking modules with these variations drawn at random.
+lines 36. Drawn at random within the owned parts there are only 28 stacks
+(1 or 2 modules; sides up to 5/1; red or twist crown; 18 to 69 levels), most
+differing only in height, so the box is a base rather than a build:
+
+**Box base** (`up_base: box`, bottom-up): a stack from `box_modules` that
+fits the budget and leaves two rails of room above is drawn, turned to one
+of four headings and placed fixed; its top red splitter is the first drop
+block, and the build grows above it as on the other bases. 3 seeds, owned
+parts, 60 levels: score 263.6, merges 2.0, switchbacks 4.3, margin 15.5 cm,
+48 parts, 13 rails; 80 % of attempts valid. Seen in the renders: the part
+above the box is again a flat ladder, sometimes on tall single columns
+standing on the box (examples/box_base/).
 
 ### 6.4 Order of work
 

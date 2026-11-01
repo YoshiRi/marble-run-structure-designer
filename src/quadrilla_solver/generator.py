@@ -234,7 +234,11 @@ class GeneratorConfig:
     # ladder between two towers above it (user, 2026-10-28: pattern 2).
     up_base: str = "triangle"
     up_base_margin_cm: float = 5.0
-    ladder_feet: bool = True          # cross feet under the ladder's towers (sideways stability)
+    ladder_feet: bool = True
+    # bottom_up, up_base "box": box ladder stacks to draw from (design doc §6.8;
+    # y-rails per side in each module, top first); those that fit the budget
+    # and leave room above are drawn at random
+    box_modules: tuple[str, ...] = ("1", "2", "3", "1/1,1", "2/2,1", "3/1,1", "1/3,1", "3/3,1", "1/1,2")          # cross feet under the ladder's towers (sideways stability)
     bases: Mapping[str, float] | None = field(
         default_factory=lambda: {"triangle": 1.0, "diamond": 1.0, "free": 1.0})
     frame_sides: int = 6
@@ -1234,6 +1238,13 @@ class CascadeGenerator:
         free-standing input block stands on the last rail."""
         from .patterns import isosceles_triangle
         self.work = work
+        if self.config.up_base == "box":
+            start = self._box_base()
+            if start is None:
+                return None
+            state, lower, lower_hole, flow, block_z, point = start
+            return self._grow_up_from(state, lower, lower_hole, flow, block_z, point,
+                                      first_block="red_random_split")
         if self.config.up_base == "ladder":
             start = self._ladder_base()
             if start is None:
@@ -1310,11 +1321,99 @@ class CascadeGenerator:
         state.max_depth = 1
         return state, rail, 1, (90.0 * d + 180.0) % 360, z + 1, self._point(rail, spec.holes_cm[1])
 
-    def _grow_up_from(self, state, lower, lower_hole, flow, block_z, point):
+    def _box_base(self):
+        """A box ladder (design doc §6.8) as the base: a random module stack
+        that fits the budget and leaves room above, its top red splitter (on
+        the top L2's center hole) the first drop block the build grows from.
+        The box's rails are fixed; its two exits are the build's leaves."""
+        from .box_ladder import build, parse_modules
+        counts = self.budget.counts
+        room = self.config.max_height_units - 2 * 6        # at least two rails above
+        options = []
+        for spec in self.config.box_modules:
+            data = build(parse_modules(spec), "red")
+            used = Counter([r["rail_type"] for r in data["rails"]] + [p["part_type"] for p in data["parts"]])
+            if any(n > counts[k] for k, n in used.items()):
+                continue
+            top = max(r["z_units"] for r in data["rails"])
+            if top + 6 <= room:
+                options.append(data)
+        if not options:
+            return None
+        data = self.rng.choice(options)
+        state = _State()
+        turn = self.rng.randrange(4) * 90.0             # any of four headings
+        c, s_ = round(cos(radians(turn))), round(sin(radians(turn)))
+        cy = 18.0                                       # center the box (lines y = 0 and 36)
+
+        def place(x, y):
+            y -= cy
+            return c * x - s_ * y, s_ * x + c * y
+
+        ids = {}
+        for r in data["rails"]:
+            rid = state.new_id("rail")
+            ids[r["id"]] = rid
+            x, y = place(r["x_cm"], r["y_cm"])
+            state.rails[rid] = PlacedRail(rid, r["rail_type"], x, y, r["z_units"],
+                                          yaw_deg=(r["yaw_deg"] + turn) % 360,
+                                          flow_direction=r["flow_direction"],
+                                          hole_states=dict(r.get("hole_states", {})),
+                                          flow_hole=r.get("flow_hole"))
+            state.fixed.append(rid)
+        parts = {p["id"]: p for p in data["parts"]}
+        top_red = None
+        for sup in data["supports"]:
+            stack = [parts[pid] for pid in sup["stack_part_ids"]]
+            ground = sup.get("lower_rail_id") is None
+            kinds = tuple(p["part_type"] for p in stack if p["part_type"] != "wooden_foundation")
+            first = next((p for p in stack if p["part_type"] != "wooden_foundation"), stack[0])
+            x, y = place(first["x_cm"], first["y_cm"])
+            base_z = 0 if ground else stack[0]["z_units"]
+            top_z = base_z + sum(self.heights[p["part_type"]] for p in stack)
+            if sup["upper_rail_id"] is None:              # the input red: grow from here
+                top_red = (ids[sup["lower_rail_id"]], sup["lower_hole_index"], first["z_units"], (x, y))
+                continue
+            col = Column(state.new_id("c"), round(x, 6), round(y, 6),
+                         None if ground else ids[sup["lower_rail_id"]],
+                         None if ground else sup["lower_hole_index"], base_z,
+                         ids[sup["upper_rail_id"]], sup["upper_hole_index"], top_z, kinds,
+                         int(round(first.get("rotation_deg", 0) + turn)) % 360)
+            state.columns[col.id] = col
+        # where the marble rolls (kept clear of the growth) and the exits
+        r_ = _MARBLE_DIAMETER_CM / 2.0
+        for rid in ids.values():
+            rail = state.rails[rid]
+            holes = self.catalog.rails[rail.rail_type].holes_cm
+            if rail.rail_type == "straight_long":
+                state.corridors[rid] = self._corridor(rail, holes[1] + self.half, holes[2])
+            else:   # L rails: clear of the red splitter / merge hole at the center
+                state.corridors[rid] = self._corridor(rail, holes[1], holes[2] - self.half)
+                state.corridors[f"{rid}#2"] = replace(self._corridor(rail, holes[2] + self.half, holes[3]),
+                                                      id=f"{rid}#2#marble")
+        for sink in data["routing_query"]["sinks"]:
+            rid, port = ids[sink["component_id"]], sink["port"]
+            k = int(port.split(":")[1])
+            rail = state.rails[rid]
+            x, y = self._point(rail, self.catalog.rails[rail.rail_type].holes_cm[k])
+            state.corridors[f"{rid}#dive#marble"] = Solid(f"{rid}#dive#marble", (x, y), (r_, r_), 0.0, 0.0,
+                                                         rail.z_units * _UNIT_CM)
+            state.leaves.append(f"{rid}:hole:{k}")
+        state.max_depth = 4
+        self._feet = set()
+        lower, hole, block_z, point = top_red
+        if not self._feasible(state):
+            return None
+        return state, state.rails[lower], hole, (turn + 180.0) % 360, block_z, point
+
+    def _grow_up_from(self, state, lower, lower_hole, flow, block_z, point, first_block=None):
         top_level = self.config.max_height_units
         blocks = [b for b, outs in self.drop_blocks.items() if outs == ("front",) and self.budget.counts[b] > 0]
         while True:
-            grown = self._grow_up(state, lower, lower_hole, flow, block_z, point, blocks, top_level)
+            grown = self._grow_up(state, lower, lower_hole, flow, block_z, point,
+                                  [first_block] if first_block else blocks, top_level,
+                                  no_split=bool(first_block))
+            first_block = None
             if grown is None:
                 break
             state, lower, lower_hole, flow, block_z, point = grown
@@ -1336,7 +1435,7 @@ class CascadeGenerator:
         state.input_column = col.id
         return state if self._feasible(state) else None
 
-    def _grow_up(self, state, lower, lower_hole, flow, block_z, point, blocks, top_level):
+    def _grow_up(self, state, lower, lower_hole, flow, block_z, point, blocks, top_level, no_split=False):
         """One rail above `point`: its stop hole drops the marble into a block
         standing on `lower` at `lower_hole`, whose outlet faces `flow`
         (degrees). Directions: the four grid ones, plus every angle that puts
@@ -1395,7 +1494,7 @@ class CascadeGenerator:
                                      keep_free=(entry,) + on_sites)
             if upper is None:
                 continue
-            split = (self.rng.random() < self.config.up_split_probability
+            split = (not no_split and self.rng.random() < self.config.up_split_probability
                      and self.budget.counts.get("red_random_split", 0) > sum(
                          1 for c in trial.columns.values() if c.top_types[:1] == ("red_random_split",))
                      and self._split_back(trial, lower, lower_hole))

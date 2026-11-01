@@ -192,3 +192,17 @@ def test_box_ladder_examples_are_valid():
         result = validate_layout(layout_from_dict(data), CATALOG, source=source, sinks=sinks)
         assert result.valid, path.name
         assert set(result.connectivity.reached_sinks) == {s.key for s in sinks}, path.name
+
+
+def test_the_box_base_grows_above_a_box_ladder():
+    from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
+    budget = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
+    config = GeneratorConfig(strategy="bottom_up", up_base="box", max_height_units=60, max_rails=18)
+    found = generate(CATALOG, budget, config=config, attempts=20, seed=3, keep=5)
+    assert found
+    best = found[0]
+    assert best.metrics["merges"] >= 1
+    yaws = {round(r.yaw_deg) % 180 for r in best.layout.rails}
+    assert len(yaws) >= 2                     # x- and y-rails
+    result = validate_layout(best.layout, CATALOG, source=best.source, sinks=best.sinks)
+    assert result.valid and result.global_stability.margin_cm > 10

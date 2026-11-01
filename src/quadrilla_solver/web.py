@@ -66,9 +66,9 @@ STYLE_TUNABLES: tuple[dict[str, Any], ...] = (
      "help": "top_down: grow the route down from the input (base drawn by lottery); "
              "bottom_up: place the triangle base first and grow the route up from it",
      "source": "user (2026-10-27)"},
-    {"key": "up_base", "label": "Bottom-up base", "type": "choice", "choices": ["triangle", "ladder"],
+    {"key": "up_base", "label": "Bottom-up base", "type": "choice", "choices": ["triangle", "ladder", "box"],
      "default": GeneratorConfig().up_base,
-     "help": "what a bottom-up build grows from: the triangle base, or a ladder between two towers",
+     "help": "what a bottom-up build grows from: the triangle base, a ladder between two towers, or a box ladder",
      "source": "user (2026-10-28)"},
     {"key": "exit_style", "label": "Exits", "type": "choice", "choices": ["contained", "any"],
      "default": GeneratorConfig().exit_style,
