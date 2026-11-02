@@ -46,24 +46,25 @@
   <div class="gallery-page">
     <header class="gallery-head">
       <div>
-        <h1>Layout Gallery</h1>
-        <p>Generated candidates to review. Each layout has a stable ID derived from its build: quote it when reporting.
+        <h1 data-i18n="gal.title">Layout Gallery</h1>
+        <p data-i18n-html="gal.intro">Generated candidates to review. Each layout has a stable ID derived from its build: quote it when reporting.
           Marks and notes stay in this browser; <strong>Copy review summary</strong> gives lines to paste into chat.</p>
       </div>
       <div class="gallery-actions">
-        <a href="./index.html">Viewer</a>
-        <button id="copySummary" type="button" class="primary">Copy review summary</button>
+        <a href="./index.html" data-i18n="gal.viewer">Viewer</a>
+        <button id="copySummary" type="button" class="primary" data-i18n="gal.copySummary">Copy review summary</button>
       </div>
     </header>
     <p id="status" class="status" aria-live="polite"></p>
     <main id="grid" class="grid" aria-label="Generated layouts">
-      <p class="status">Loading layouts…</p>
+      <p class="status" data-i18n="gal.loading">Loading layouts…</p>
     </main>
     <section class="summary">
-      <h2>Review summary</h2>
+      <h2 data-i18n="gal.summary">Review summary</h2>
       <textarea id="summary" readonly aria-label="Review summary"></textarea>
     </section>
   </div>
+  <script src="./i18n.js"></script>
   <script src="./gallery.js"></script>
 </body>
 </html>

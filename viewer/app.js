@@ -1,5 +1,6 @@
 (() => {
   "use strict";
+  const T = (key, vars) => window.MarbleI18n.t(key, vars);
 
   const DATA_ROOT = window.location.pathname.includes("/viewer/") ? "../" : "./";
   // Defaults mirror catalog/parts.yaml; loaded catalog geometry is authoritative.
@@ -1711,15 +1712,14 @@
 
   // ---- Build mode (docs/assembly-assist.md) --------------------------------
   const BUILD_STORE = "marble-run-build-v1:";
-  const PART_NAMES = {
-    wooden_foundation: "foundation", natural_drop: "natural", purple_drop: "purple 1u",
-    orange_vertical: "orange", red_random_split: "red splitter", red_right_angle: "red right-angle",
-    blue: "blue", green: "green", cyan: "cyan", yellow: "yellow",
-    straight_short: "short straight", straight_long: "long straight",
-    straight_long_center: "long straight (center hole)", curved_short: "short curve",
-    curved_long: "long curve", s_curve: "S-curve", spiral: "twist", cover: "cover", seesaw: "seesaw",
+  const partName = type => {
+    const name = T("part." + type);
+    return name === "part." + type ? type : name;
   };
-  const partName = type => PART_NAMES[type] || type;
+  const portName = port => {
+    const name = T("port." + port);
+    return name === "port." + port ? port : name;
+  };
 
   function stepIds(step) { return new Set(build.plan[step]?.components || []); }
 
@@ -1882,7 +1882,7 @@
     const sided = outlets.length || (partSpec(part.part_type)?.routes || []).some(r =>
       ["front", "rear", "left", "right"].includes(r.from));
     if (!sided) return "";  // vertical-only parts look the same any way round
-    if (!build.onRoute.has(part.id)) return "structure, any way round";
+    if (!build.onRoute.has(part.id)) return T("build.structure");
     if (!outlets.length && !inlets.length) return "";
     const spec = railSpec(rail.rail_type);
     const ref = MarbleRouting.railPose(catalog, rail, Number(spec.length_cm) / 2)[2];
@@ -1892,19 +1892,19 @@
       if (!pose) return "";
       const a = Math.atan2(pose.normal[1], pose.normal[0]) - ref;
       const c = Math.cos(a), s = Math.sin(a);
-      return Math.abs(c) >= Math.abs(s) ? (c > 0 ? "along " : "back along ") + rail.id
-        : (s > 0 ? "left of " : "right of ") + rail.id;
+      return Math.abs(c) >= Math.abs(s) ? T(c > 0 ? "build.along" : "build.backAlong", { rail: rail.id })
+        : T(s > 0 ? "build.leftOf" : "build.rightOf", { rail: rail.id });
     };
     for (const port of outlets) {
       const to = routeTargets(part.id, port);
-      words.push("out " + port + ": " + relative(port) + (to.length ? " → " + to.join(", ") : ""));
+      words.push(T("build.out", { port: portName(port) }) + relative(port) + (to.length ? " → " + to.join(", ") : ""));
     }
     for (const port of inlets) {
       const key = part.id + ":" + port;
       const from = Object.entries(build.graph.edges)
         .filter(([src, targets]) => targets.includes(key) && !src.startsWith(part.id + ":"))
         .map(([src]) => src.slice(0, src.indexOf(":")));
-      words.push("in " + port + " notch: " + relative(port) + (from.length ? " ← " + from.join(", ") : ""));
+      words.push(T("build.in", { port: portName(port) }) + relative(port) + (from.length ? " ← " + from.join(", ") : ""));
     }
     return words.join("; ");
   }
@@ -1939,10 +1939,10 @@
   }
 
   function stepTitle(step, i) {
-    if (step.kind === "parts") return "Parts";
-    if (step.kind === "check") return "Roll the marble";
-    return partName(step.rail_type) + " " + step.rail + " · level " + step.z_units +
-      (step.brace ? " · brace (no marble)" : "");
+    if (step.kind === "parts") return T("build.parts");
+    if (step.kind === "check") return T("build.roll");
+    return T("build.railTitle", { part: partName(step.rail_type), rail: step.rail, z: step.z_units }) +
+      (step.brace ? T("build.brace") : "");
   }
 
   // Simple top-view-ish icons for the parts board (step 0).
@@ -1979,11 +1979,11 @@
       const wide = order(type) <= 1 ? " is-wide" : "";
       return '<div class="part-tile' + wide + (short ? " is-short" : "") + '"><div class="part-icon">' + partIcon(type) +
         '</div><div class="part-count">×' + n + '</div><div class="part-name">' + esc(partName(type)) +
-        (short ? ' <b class="short">short ' + short + "</b>" : "") + "</div></div>";
+        (short ? ' <b class="short">' + T("build.short", { n: short }) + "</b>" : "") + "</div></div>";
     }).join("");
     const total = Object.values(used).reduce((a, b) => a + b, 0);
-    document.getElementById("partsBoard").innerHTML = '<div class="parts-board-head"><h2>Parts for this build</h2>' +
-      '<span class="muted">' + total + " pieces · press → to start</span></div>" +
+    document.getElementById("partsBoard").innerHTML = '<div class="parts-board-head"><h2>' + T("build.boardTitle") + "</h2>" +
+      '<span class="muted">' + T("build.boardNote", { n: total }) + "</span></div>" +
       '<div class="parts-grid">' + tiles + "</div>";
   }
 
@@ -1996,18 +1996,19 @@
       const row = check?.get(pooled[type] || type);
       let status = "";
       if (row) {
-        status = row.short ? '<span class="short">short ' + row.short + "</span>"
-          : '<span class="ok">ok</span>' + (row.wildcard ? " (" + row.wildcard + " any straight)" : "");
+        status = row.short ? '<span class="short">' + T("build.short", { n: row.short }) + "</span>"
+          : '<span class="ok">' + T("build.ok") + "</span>" + (row.wildcard ? T("build.wildcard", { n: row.wildcard }) : "");
       }
       return "<tr><td>" + swatch(type) + esc(partName(type)) + "</td><td>" + n + "</td><td>" +
-        (row ? row.available + (pooled[type] ? " (shared)" : "") : "—") + "</td><td>" + status + "</td></tr>";
+        (row ? row.available + (pooled[type] ? T("build.shared") : "") : "—") + "</td><td>" + status + "</td></tr>";
     }).join("");
     const sets = fullLayout.generator?.sets;
     return '<p class="muted small-note">' + (sets
-      ? "Checked against sets " + esc(sets.join(", ")) +
-        (fullLayout.generator.exclude?.length ? " without " + esc(fullLayout.generator.exclude.map(partName).join(", ")) : "")
-      : "No set list in this layout: counts only.") + "</p>" +
-      '<table class="bom"><thead><tr><th>Part</th><th>Need</th><th>Have</th><th></th></tr></thead><tbody>' +
+      ? esc(T("build.checkedSets", { sets: sets.join(", ") })) +
+        (fullLayout.generator.exclude?.length ? esc(T("build.without", { parts: fullLayout.generator.exclude.map(partName).join(", ") })) : "")
+      : esc(T("build.noSets"))) + "</p>" +
+      '<table class="bom"><thead><tr><th>' + T("build.colPart") + "</th><th>" + T("build.colNeed") + "</th><th>" +
+      T("build.colHave") + "</th><th></th></tr></thead><tbody>" +
       rows + "</tbody></table>";
   }
 
@@ -2016,41 +2017,43 @@
     const parts = new Map((fullLayout.parts || []).map(p => [p.id, p]));
     const items = [];
     for (const column of step.columns) {
-      const base = column.base === "ground" ? "on the ground" : "on " + column.base.rail + " hole " + column.base.hole;
+      const base = column.base === "ground" ? T("build.onGround")
+        : T("build.onHole", { rail: column.base.rail, hole: column.base.hole });
       const runs = groupParts(column.parts).map(run => {
         const part = parts.get(run.ids[0]);
         const facing = facingText(part, rail);
         return swatch(run.type) + esc(partName(run.type)) + (run.ids.length > 1 ? " ×" + run.ids.length : "") +
           (facing ? ' <span class="facing">(' + esc(facing) + ")</span>" : "");
       });
-      items.push({ ids: column.parts, html: "<b>Column under hole " + column.hole + "</b>, " + esc(base) +
-        ", bottom to top: " + runs.join(" · ") });
+      items.push({ ids: column.parts, html: "<b>" + esc(T("build.column", { hole: column.hole })) + "</b>" +
+        esc(T("build.bottomToTop", { base })) + runs.join(" · ") });
     }
     const fit = [];
-    fit.push("rests on " + step.rests.map(([h, c]) => "hole " + h).join(" and "));
-    if (step.covers.length) fit.push("covers on holes " + step.covers.join(", "));
-    if (step.open.length) fit.push("hole " + step.open.join(", ") + " stays open: the marble dives through; keep below clear");
-    if (step.drops.length) fit.push("hole " + step.drops.join(", ") + " drops into the block below");
-    items.push({ ids: [step.rail], html: "<b>Lay " + swatch(rail.rail_type) + esc(partName(rail.rail_type)) + " " +
-      esc(rail.id) + "</b>" + (railSpec(rail.rail_type)?.shape === "arc" && rail.turn
-        ? " (turns " + esc(rail.turn) + ")" : "") + ": " + esc(fit.join("; ")) });
+    fit.push(T("build.rests", { holes: step.rests.map(([h]) => h).join(T("build.and")) }));
+    if (step.covers.length) fit.push(T("build.covers", { holes: step.covers.join(", ") }));
+    if (step.open.length) fit.push(T("build.open", { holes: step.open.join(", ") }));
+    if (step.drops.length) fit.push(T("build.drops", { holes: step.drops.join(", ") }));
+    items.push({ ids: [step.rail], html: "<b>" + swatch(rail.rail_type) +
+      esc(T("build.lay", { part: partName(rail.rail_type), rail: rail.id })) + "</b>" +
+      (railSpec(rail.rail_type)?.shape === "arc" && rail.turn
+        ? esc(T("build.turns", { turn: T("build.turn." + rail.turn) })) : "") + ": " + esc(fit.join("; ")) });
     for (const free of step.free) {
       const part = parts.get(free.parts[0]);
       const facing = facingText(part, rail);
-      const what = free.support.startsWith("cw") ? "Counterweight" : "Stand";
-      items.push({ ids: free.parts, html: "<b>" + what + " on hole " + free.hole + "</b>: " +
+      const what = T(free.support.startsWith("cw") ? "build.counterweight" : "build.stand", { hole: free.hole });
+      items.push({ ids: free.parts, html: "<b>" + esc(what) + "</b>: " +
         groupParts(free.parts).map(run => swatch(run.type) + esc(partName(run.type)) +
           (run.ids.length > 1 ? " ×" + run.ids.length : "")).join(" · ") +
         (facing ? ' <span class="facing">(' + esc(facing) + ")</span>" : "") });
     }
     return '<ol class="build-items">' + items.map(item =>
       '<li data-ids="' + esc(item.ids.join(" ")) + '">' + item.html + "</li>").join("") + "</ol>" +
-      '<p class="muted small-note">Green arrows: where the marble leaves a block. Blue arrows: side notches it enters.</p>';
+      '<p class="muted small-note">' + T("build.arrows") + "</p>";
   }
 
   function renderBuildPanel() {
     const panel = document.getElementById("buildPanel");
-    document.getElementById("buildToggle").textContent = build.on ? "組み立て手順を閉じる" : "組み立て手順";
+    document.getElementById("buildToggle").textContent = T(build.on ? "menu.buildClose" : "menu.build");
     document.getElementById("buildToggle").setAttribute("aria-pressed", String(build.on));
     if (document.body.classList.contains("building") !== build.on) {
       document.body.classList.toggle("building", build.on);
@@ -2064,18 +2067,18 @@
     const done = loadDone();
     const last = build.plan.length - 1;
     document.getElementById("buildStepTitle").textContent =
-      "Step " + build.step + " / " + last + " · " + stepTitle(step, build.step);
-    document.getElementById("buildBarStep").textContent = "Step " + build.step + " / " + last;
+      T("build.stepTitle", { n: build.step, m: last, title: stepTitle(step, build.step) });
+    document.getElementById("buildBarStep").textContent = T("build.step", { n: build.step, m: last });
     if (build.step === 0) renderPartsBoard();
     document.getElementById("buildPrev").disabled = build.step === 0;
     document.getElementById("buildNext").disabled = build.step === last;
     const doneBox = document.getElementById("buildDone");
     doneBox.checked = done.has(build.step);
-    document.getElementById("buildProgress").textContent = done.size + " of " + (last + 1) + " steps done";
+    document.getElementById("buildProgress").textContent = T("build.progress", { n: done.size, m: last + 1 });
     const body = document.getElementById("buildBody");
     if (step.kind === "parts") body.innerHTML = bomHtml();
     else if (step.kind === "check") {
-      body.innerHTML = '<p>Everything is placed. Roll a marble from the input (toolbar <b>Roll a marble</b> or the buttons below) and compare the exits.</p>';
+      body.innerHTML = "<p>" + T("build.check") + "</p>";
     } else body.innerHTML = railStepHtml(step);
     for (const li of body.querySelectorAll("li[data-ids]")) {
       const ids = new Set(li.dataset.ids.split(" "));
@@ -3216,7 +3219,7 @@
     try {
       index = jsyaml.load(await (await fetch(DATA_ROOT + "catalog/sets/index.yaml")).text());
     } catch (error) {
-      box.textContent = "Could not load the set list.";
+      box.textContent = T("gen.setsFailed");
       return;
     }
     const preset = new Set(["OWNED"]);  // the user's counted collection
@@ -3437,7 +3440,7 @@
     if (![...select.options].some(o => o.value === key)) {
       const option = document.createElement("option");
       option.value = key;
-      option.textContent = "browser · " + data.layout_id;
+      option.textContent = T("gen.option", { id: data.layout_id });
       select.appendChild(option);
     }
     select.value = key;
@@ -3452,13 +3455,13 @@
       const m = data.metrics || {};
       const li = document.createElement("li");
       const text = document.createElement("span");
-      text.innerHTML = "<b>" + data.layout_id + "</b> · score " + data.generator.score +
-        ' <span class="muted">· ' + m.levels + " levels, " + m.rails + " rails, " + m.exits + (m.exits === 1 ? " exit" : " exits") +
-        (m.twists ? ", " + m.twists + " twist" + (m.twists > 1 ? "s" : "") : "") +
-        (m.curved_rails ? ", " + m.curved_rails + " curve" + (m.curved_rails > 1 ? "s" : "") : "") + "</span>";
+      text.innerHTML = "<b>" + data.layout_id + "</b> · " + T("gen.score") + " " + data.generator.score +
+        ' <span class="muted">· ' + T("gen.summary", { levels: m.levels, rails: m.rails, exits: m.exits }) +
+        (m.twists ? T("gen.twistCount", { n: m.twists }) : "") +
+        (m.curved_rails ? T("gen.curveCount", { n: m.curved_rails }) : "") + "</span>";
       const open = document.createElement("button");
       open.type = "button";
-      open.textContent = "Open";
+      open.textContent = T("gen.open");
       open.addEventListener("click", () => {
         openGenerated(data);
         document.getElementById("generateDialog").close();
@@ -3466,37 +3469,43 @@
       const save = document.createElement("button");
       save.type = "button";
       save.textContent = "YAML";
-      save.title = "Download this layout as YAML";
+      save.title = T("gen.yamlTitle");
       save.addEventListener("click", () => downloadYaml(data));
       li.append(text, open, save);
       return li;
     }));
   }
 
+  const WORKER_STATUS = {
+    "Loading Python (first time only)…": "gen.loadingPython",
+    "Loading the solver…": "gen.loadingSolver",
+    "Generating…": "gen.generating",
+  };
+
   function runGenerator() {
     const options = generateOptions();
     const status = document.getElementById("genStatus");
     const progress = document.getElementById("genProgress");
     const run = document.getElementById("genRun");
-    if (!options.sets.length) { status.textContent = "Pick at least one set."; return; }
+    if (!options.sets.length) { status.textContent = T("gen.pickSet"); return; }
     if (!generatorListening) {
       generatorListening = true;
       pyWorker(message => {
         if (message.type === "edited" || (message.id !== undefined && message.id !== generationId)) return;
-        if (message.type === "status") status.textContent = message.text;
+        if (message.type === "status") status.textContent = WORKER_STATUS[message.text] ? T(WORKER_STATUS[message.text]) : message.text;
         else if (message.type === "progress") {
           progress.max = message.total;
           progress.value = message.done;
-          status.textContent = "Generating… " + message.done + " / " + message.total + " tries";
+          status.textContent = T("gen.progress", { done: message.done, total: message.total });
         } else if (message.type === "result") {
           run.disabled = false;
           status.textContent = message.layouts.length
-            ? message.layouts.length + " layouts. Open one to view, build or roll it."
-            : "No valid layout found: try more effort, a larger area or more sets.";
+            ? T("gen.found", { n: message.layouts.length })
+            : T("gen.noneFound");
           showGenerated(message.layouts);
         } else if (message.type === "error") {
           run.disabled = false;
-          status.textContent = "Error: " + message.message;
+          status.textContent = T("gen.error", { message: message.message });
         }
       });
     }
@@ -3529,7 +3538,7 @@
         layoutOrigin = "file " + file.name;
         setLayout(jsyaml.load(String(reader.result)));
       } catch (error) {
-        alert("YAML parse error: " + error);
+        alert(T("file.parseError", { error }));
       }
     };
     reader.readAsText(file);
@@ -3623,6 +3632,14 @@
     setTimeout(() => engine.resize(), 30);
   }
   document.getElementById("debugToggle").addEventListener("change", event => setDebugMode(event.target.checked));
+  document.getElementById("langToggle").addEventListener("click", () => {
+    window.MarbleI18n.setLang(window.MarbleI18n.lang === "ja" ? "en" : "ja");
+  });
+  window.MarbleI18n.onChange(() => {
+    renderMineOptions();
+    showSound();
+    if (fullLayout) renderAll();
+  });
 
   // ---- My layouts (this browser) and share links (the layout in the URL)
   const MINE_STORE = "marble-run-my-layouts-v1";
@@ -3643,7 +3660,7 @@
 
   function storeMine(list) {
     try { localStorage.setItem(MINE_STORE, JSON.stringify(list)); return true; }
-    catch (error) { toast("保存できませんでした（ブラウザの保存領域）"); return false; }
+    catch (error) { toast(T("mine.storeFailed")); return false; }
   }
 
   // Only what draws and rolls the layout; metrics and the like are recomputed.
@@ -3655,11 +3672,12 @@
 
   function renderMineOptions() {
     const select = document.getElementById("exampleSelect");
+    const keep = select.value;
     select.querySelector("optgroup[data-mine]")?.remove();
     const mine = loadMine();
     if (!mine.length) return;
     const group = document.createElement("optgroup");
-    group.label = "マイレイアウト";
+    group.label = T("mine.group");
     group.dataset.mine = "1";
     for (const entry of mine) {
       const option = document.createElement("option");
@@ -3668,6 +3686,7 @@
       group.appendChild(option);
     }
     select.prepend(group);
+    if ([...select.options].some(o => o.value === keep)) select.value = keep;
   }
 
   function updateMineMenu() {
@@ -3680,12 +3699,12 @@
     const select = document.getElementById("exampleSelect");
     const mine = loadMine();
     const current = select.value.startsWith("mine:") ? mine.find(m => "mine:" + m.id === select.value) : null;
-    const name = (prompt("マイレイアウトの名前", current?.name || fullLayout.name || fullLayout.layout_id || "マイレイアウト") || "").trim();
+    const name = (prompt(T("mine.prompt"), current?.name || fullLayout.name || fullLayout.layout_id || T("mine.default")) || "").trim();
     if (!name) return;
     const data = shareable(fullLayout);
     data.name = name;
     let entry = mine.find(m => m.name === name);
-    if (entry && !confirm(`「${name}」を上書きしますか？`)) return;
+    if (entry && !confirm(T("mine.overwrite", { name }))) return;
     if (entry) Object.assign(entry, { data, savedAt: new Date().toISOString() });
     else {
       entry = { id: Date.now().toString(36), name, savedAt: new Date().toISOString(), data };
@@ -3697,21 +3716,21 @@
     select.value = "mine:" + entry.id;
     layoutOrigin = "my layout " + name;
     updateMineMenu();
-    toast(`「${name}」を保存しました`);
+    toast(T("mine.saved", { name }));
   }
 
   function deleteMine() {
     const select = document.getElementById("exampleSelect");
     const mine = loadMine();
     const entry = mine.find(m => "mine:" + m.id === select.value);
-    if (!entry || !confirm(`「${entry.name}」を削除しますか？`)) return;
+    if (!entry || !confirm(T("mine.deleteConfirm", { name: entry.name }))) return;
     storeMine(mine.filter(m => m !== entry));
     renderMineOptions();
-    toast(`「${entry.name}」を削除しました`);
+    toast(T("mine.deleted", { name: entry.name }));
     // stay on the layout that is open (now unsaved)
     const option = document.createElement("option");
     option.value = "unsaved";
-    option.textContent = entry.name + "（未保存）";
+    option.textContent = T("mine.unsaved", { name: entry.name });
     select.appendChild(option);
     select.value = "unsaved";
     updateMineMenu();
@@ -3746,21 +3765,21 @@
     const match = window.location.hash.match(/^#v1=([A-Za-z0-9_-]+)$/);
     if (!match) return null;
     try { return await decodeShare(match[1]); }
-    catch (error) { console.warn("share link unreadable", error); toast("共有リンクを読めませんでした"); return null; }
+    catch (error) { console.warn("share link unreadable", error); toast(T("share.unreadable")); return null; }
   }
 
   function openShared(data) {
     const select = document.getElementById("exampleSelect");
     const option = document.createElement("option");
     option.value = "shared";
-    option.textContent = "共有 · " + (data.name || data.layout_id || "layout");
+    option.textContent = T("share.option", { name: data.name || data.layout_id || "layout" });
     select.appendChild(option);
     select.value = "shared";
     generatedLayouts.set("shared", data);
     build.step = 0;
     layoutOrigin = "share link";
     setLayout(structuredClone(data));
-    toast("共有されたレイアウトです。メニューから保存できます");
+    toast(T("share.opened"));
   }
 
   async function shareLink() {
@@ -3781,12 +3800,12 @@
   document.getElementById("mineSave").addEventListener("click", saveMine);
   document.getElementById("mineDelete").addEventListener("click", deleteMine);
   document.getElementById("shareLink").addEventListener("click", () => shareLink().catch(error => {
-    console.error(error); toast("リンクを作れませんでした");
+    console.error(error); toast(T("share.failed"));
   }));
   document.getElementById("shareCopy").addEventListener("click", async () => {
     const field = document.getElementById("shareUrl");
-    try { await navigator.clipboard.writeText(field.value); toast("コピーしました"); }
-    catch (error) { field.select(); document.execCommand?.("copy"); toast("コピーしました"); }
+    try { await navigator.clipboard.writeText(field.value); toast(T("share.copied")); }
+    catch (error) { field.select(); document.execCommand?.("copy"); toast(T("share.copied")); }
   });
 
   // ---- Menu (☰)
@@ -3828,7 +3847,8 @@
   const showSound = () => {
     soundToggle.textContent = sound.enabled ? "🔊" : "🔇";
     soundToggle.setAttribute("aria-pressed", String(sound.enabled));
-    soundToggle.title = sound.enabled ? "Sound on (click to mute)" : "Sound off (click to turn on)";
+    soundToggle.title = T(sound.enabled ? "act.soundOn" : "act.soundOff");
+    soundToggle.setAttribute("aria-label", T("act.sound"));
   };
   soundToggle.addEventListener("click", () => { sound.setEnabled(!sound.enabled); showSound(); });
   showSound();
