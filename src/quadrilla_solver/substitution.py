@@ -29,6 +29,12 @@ CURVE_FOR_STRAIGHT = {
     "straight_long_center": ("s_curve", {0: 0, 2: 1, 4: 2}),
 }
 
+# The editor also offers an S-curve for a long rail without the center hole:
+# its holes 0 and 3 are 46 cm apart, like the S-curve's end holes (user,
+# 2026-11-03: "a long rail can become an S-curve, sometimes"). Only when the
+# rail uses no other hole. The generator keeps CURVE_FOR_STRAIGHT.
+EDIT_CURVES = {**CURVE_FOR_STRAIGHT, "straight_long": ("s_curve", {0: 0, 3: 2})}
+
 
 def _used_holes(layout: Layout, rail: PlacedRail) -> set[int]:
     used = {s.upper_hole_index for s in layout.supports if s.upper_rail_id == rail.id}
@@ -37,17 +43,17 @@ def _used_holes(layout: Layout, rail: PlacedRail) -> set[int]:
     return used
 
 
-def eligible_rails(layout: Layout) -> list[str]:
+def eligible_rails(layout: Layout, table: dict = CURVE_FOR_STRAIGHT) -> list[str]:
     """Rails whose swap to a curve keeps every connection intact."""
     linked = {link.source.component_id for link in layout.route_links}
     linked |= {link.target.component_id for link in layout.route_links}
     out = []
     for rail in layout.rails:
-        if rail.rail_type not in CURVE_FOR_STRAIGHT or rail.id in linked:
+        if rail.rail_type not in table or rail.id in linked:
             continue
         if rail.flow_direction not in ("a_to_b", "b_to_a"):
             continue  # pivot rails (collector, under a seesaw) stay straight
-        _, hole_map = CURVE_FOR_STRAIGHT[rail.rail_type]
+        _, hole_map = table[rail.rail_type]
         if not _used_holes(layout, rail) <= set(hole_map):
             continue
         standing = [s.stack_part_ids[0] for s in layout.supports
@@ -58,10 +64,11 @@ def eligible_rails(layout: Layout) -> list[str]:
     return out
 
 
-def substitute(layout: Layout, catalog: PartCatalog, rail_id: str, turn: str) -> Layout:
+def substitute(layout: Layout, catalog: PartCatalog, rail_id: str, turn: str,
+               table: dict = CURVE_FOR_STRAIGHT) -> Layout:
     """Layout with `rail_id` replaced by its curve bending toward `turn`."""
     rail = layout.rail_map()[rail_id]
-    curve_type, hole_map = CURVE_FOR_STRAIGHT[rail.rail_type]
+    curve_type, hole_map = table[rail.rail_type]
     curve = catalog.rails[curve_type]
     keys = sorted(hole_map)
     first = rail_hole_world(rail, catalog, keys[0])
