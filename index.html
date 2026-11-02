@@ -125,7 +125,11 @@
             Rail rewrites run the generator's own Python passes (loaded once).</p>
         </section>
         <section id="buildPanel" class="build-panel" hidden>
-          <h2 id="buildStepTitle" data-i18n="build.title">Build</h2>
+          <div class="build-head">
+            <h2 id="buildStepTitle" data-i18n="build.title">Build</h2>
+            <button id="buildSheetToggle" type="button" class="sheet-toggle" aria-expanded="true"
+              data-i18n-aria="build.sheet" aria-label="Show or hide the step">▾</button>
+          </div>
           <div class="build-nav">
             <label class="build-done"><input id="buildDone" type="checkbox"> <span data-i18n="build.done">Done (go to next step)</span></label>
           </div>

@@ -211,6 +211,9 @@ body.play .action-bar { display: none; }
 .toolbar button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, Canvas); border-color: var(--accent); }
 .build-panel { border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); border-radius: 10px; padding: 10px 12px; }
 .build-panel h2 { margin-top: 0; }
+.build-head { display: flex; align-items: flex-start; gap: 8px; }
+.build-head h2 { flex: 1; min-width: 0; }
+.sheet-toggle { display: none; }
 .build-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0 10px; }
 .build-nav button {
   min-height: 34px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
@@ -408,3 +411,32 @@ body.play .viewport-panel { height: auto; }
 .toast[hidden] { display: none; }
 .share-url { width: 100%; box-sizing: border-box; font: 12px ui-monospace, Menlo, monospace; padding: 8px;
   border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; word-break: break-all; }
+
+/* Phone, build steps: the step is a sheet over the bottom of the 3D view
+   (above the step buttons), so the view keeps the whole screen. The header
+   button folds it to one line. On step 0 the parts board shows the parts,
+   so the sheet shows only its header. */
+@media (max-width: 820px) {
+  body.building:not(.debug) .main-grid { grid-template-rows: minmax(0, 1fr); }
+  body.building:not(.debug) .sidebar {
+    position: fixed; z-index: 6; left: 8px; right: 8px;
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px);
+    max-height: 38dvh; padding: 0; border: 0; border-radius: 14px; overflow: auto;
+    background: color-mix(in srgb, Canvas 94%, transparent); backdrop-filter: blur(8px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+  }
+  body.building:not(.debug) .build-panel { border: 0; padding: 10px 12px; }
+  body.building:not(.debug) .build-head { position: sticky; top: -10px; margin: -10px -12px 0; padding: 10px 12px 6px;
+    background: inherit; }
+  body.building:not(.debug) .build-head h2 { font-size: 13px; margin: 0; line-height: 1.4; }
+  body.building:not(.debug) .sheet-toggle {
+    display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 30px;
+    border: 1px solid var(--border); border-radius: 8px; background: Canvas; color: CanvasText; font-size: 16px; cursor: pointer;
+  }
+  body.building.sheet-min:not(.debug) .sheet-toggle { transform: rotate(180deg); }
+  body.building.sheet-min:not(.debug) .build-panel > :not(.build-head),
+  body.building.step0:not(.debug) .build-panel > :not(.build-head) { display: none; }
+  body.building:not(.debug) .build-items { font-size: 13px; gap: 4px; }
+  body.building:not(.debug) .parts-board { inset: 8px 8px calc(max(12px, env(safe-area-inset-bottom)) + 120px) 8px; }
+  body.building:not(.debug) .parts-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+}
