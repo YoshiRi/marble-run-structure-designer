@@ -1,5 +1,6 @@
 (() => {
   "use strict";
+  const T = (key, vars) => window.MarbleI18n.t(key, vars);
 
   const DATA_ROOT = window.location.pathname.includes("/viewer/") ? "../" : "./";
   const STORE_KEY = "marble-run-gallery-review-v1";
@@ -41,8 +42,8 @@
     const lines = summaryLines(layouts);
     document.getElementById("summary").value = lines.join("\n");
     document.getElementById("status").textContent = lines.length
-      ? lines.length + " of " + layouts.length + " reviewed"
-      : "No reviews yet: mark a layout or add a note.";
+      ? T("gal.reviewed", { n: lines.length, m: layouts.length })
+      : T("gal.noReviews");
   }
 
   async function copyText(text, fallback) {
@@ -80,11 +81,11 @@
     const copy = document.createElement("button");
     copy.type = "button";
     copy.className = "copy-id";
-    copy.textContent = "Copy ID";
+    copy.textContent = T("gal.copyId");
     copy.addEventListener("click", async () => {
       const ok = await copyText(entry.id);
-      copy.textContent = ok ? "Copied" : "Select ID";
-      setTimeout(() => { copy.textContent = "Copy ID"; }, 1400);
+      copy.textContent = T(ok ? "gal.copiedId" : "gal.selectId");
+      setTimeout(() => { copy.textContent = T("gal.copyId"); }, 1400);
     });
     idRow.append(id, copy);
 
@@ -102,7 +103,7 @@
     for (const [key, label] of METRICS) {
       const wrap = document.createElement("div");
       const dt = document.createElement("dt");
-      dt.textContent = label;
+      dt.textContent = T("gal.m." + key);
       const dd = document.createElement("dd");
       dd.textContent = entry.metrics?.[key] ?? "—";
       wrap.append(dt, dd);
@@ -118,7 +119,7 @@
       b.type = "button";
       b.className = "mark";
       b.id = entry.id + "-" + mark.key;
-      b.textContent = mark.label;
+      b.textContent = T("gal.mark." + mark.key);
       b.setAttribute("aria-pressed", String(r.marks.includes(mark.key)));
       b.addEventListener("click", () => {
         const current = review(entry.id);
@@ -137,7 +138,7 @@
     note.className = "note";
     note.id = entry.id + "-note";
     note.type = "text";
-    note.placeholder = "Note (e.g. what looks wrong or fun)";
+    note.placeholder = T("gal.note");
     note.setAttribute("aria-label", "Note for " + entry.id);
     note.value = r.note;
     note.addEventListener("input", () => {
@@ -150,11 +151,11 @@
     const open = document.createElement("a");
     open.className = "open";
     open.href = link;
-    open.textContent = "Open in viewer";
+    open.textContent = T("gal.open");
     const buildLink = document.createElement("a");
     buildLink.className = "open";
     buildLink.href = link + "&mode=build&step=0";
-    buildLink.textContent = "Build";
+    buildLink.textContent = T("gal.build");
     const links = document.createElement("div");
     links.className = "card-links";
     links.append(open, buildLink);
@@ -175,19 +176,19 @@
       document.getElementById("copySummary").addEventListener("click", async () => {
         const text = document.getElementById("summary").value;
         if (!text) {
-          document.getElementById("status").textContent = "Nothing to copy yet: mark a layout or add a note first.";
+          document.getElementById("status").textContent = T("gal.nothing");
           return;
         }
         const ok = await copyText(text, document.getElementById("summary"));
         document.getElementById("status").textContent = ok
-          ? "Copied " + text.split("\n").length + " lines. Paste them into the chat."
-          : "Copy was blocked: the summary is selected, copy it manually.";
+          ? T("gal.copied", { n: text.split("\n").length })
+          : T("gal.blocked");
       });
       if (window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
     } catch (error) {
       grid.replaceChildren(Object.assign(document.createElement("p"), {
         className: "status",
-        textContent: "Could not load the gallery index (" + error.message + "). Run scripts/build_gallery.py.",
+        textContent: T("gal.indexFailed", { error: error.message }),
       }));
     }
   }
