@@ -1778,7 +1778,8 @@
   // sheet instead of under it (camera-space offset; no change to the orbit).
   function sheetOffset() {
     const sheet = document.querySelector(".sidebar");
-    const covering = document.body.classList.contains("building") && !document.body.classList.contains("debug") &&
+    const covering = (document.body.classList.contains("building") || document.body.classList.contains("editing")) &&
+      !document.body.classList.contains("debug") &&
       window.matchMedia("(max-width: 820px)").matches && sheet && getComputedStyle(sheet).position === "fixed";
     let shift = 0;
     if (covering) {
@@ -2492,14 +2493,14 @@
   function undoEdit() {
     if (!edit.undo.length || edit.busy) return;
     edit.redo.push(fullLayout);
-    edit.note = "Undone.";
+    edit.note = T("edit.undone");
     showEdited(edit.undo.pop());
   }
 
   function redoEdit() {
     if (!edit.redo.length || edit.busy) return;
     edit.undo.push(fullLayout);
-    edit.note = "Redone.";
+    edit.note = T("edit.redone");
     showEdited(edit.redo.pop());
   }
 
@@ -2529,7 +2530,7 @@
     if (!part) return;
     part.rotation_deg = (((Number(part.rotation_deg) || 0) + delta) % 360 + 360) % 360;
     if (!part.rotation_deg) delete part.rotation_deg;
-    commitEdit(data, "Rotated " + id + " by " + delta + "°.");
+    commitEdit(data, T("edit.rotated", { id, deg: delta }));
   }
 
   function retypePart(id, type) {
@@ -2538,7 +2539,7 @@
     if (!part) return;
     const was = part.part_type;
     part.part_type = type;
-    commitEdit(data, id + ": " + partName(was) + " → " + partName(type) + ".");
+    commitEdit(data, T("edit.retyped", { id, from: partName(was), to: partName(type) }));
   }
 
   // A free-standing stack (counterweight) that does not hold the input.
@@ -2558,7 +2559,7 @@
     data.parts = data.parts.filter(p => !gone.has(p.id));
     data.supports = data.supports.filter(s => !(s.upper_rail_id == null && (s.stack_part_ids || []).includes(id)));
     edit.selected = null;
-    commitEdit(data, "Removed the free-standing stack " + [...gone].join(", ") + ".");
+    commitEdit(data, T("edit.removedStack", { ids: [...gone].join(", ") }));
   }
 
   function toggleCover(railId, index) {
@@ -2570,7 +2571,7 @@
     else if (state === "covered") delete states[index];
     else return;
     rail.hole_states = states;
-    commitEdit(data, railId + " hole " + index + ": " + (state === "open" ? "cover added" : "cover removed") + ".");
+    commitEdit(data, T(state === "open" ? "edit.coverAdded" : "edit.coverRemoved", { rail: railId, hole: index }));
   }
 
   // ---- rail rewrites (Python, in the worker)
@@ -2600,10 +2601,10 @@
   async function railEdit(op, railId, turn) {
     if (edit.busy) return;
     edit.busy = true;
-    edit.note = "Working…";
+    edit.note = T("edit.working");
     renderEditPanel();
     try {
-      if (!edit.pyReady) edit.note = "Loading Python for rail rewrites (first time only, ~10 s)…";
+      if (!edit.pyReady) edit.note = T("edit.loadingPy");
       renderEditPanel();
       const response = await pyEdit({ op, rail: railId, turn });
       edit.pyReady = true;
@@ -2612,8 +2613,8 @@
       const trials = response.candidates.map(c => withCurrentExits({ ...structuredClone(base), ...c }));
       const chosen = trials.find(validateData) || trials[0];
       edit.busy = false;
-      commitEdit(chosen, railId + ": " + (op === "curve" ? "curve to the " + turn : "shortened") +
-        (trials.length > 1 ? " (" + trials.length + " placements tried)" : "") + ".");
+      commitEdit(chosen, T(op === "curve" ? "edit.curved" : "edit.shortened",
+        { rail: railId, turn: T("build.turn." + turn) }) + (trials.length > 1 ? T("edit.tries", { n: trials.length }) : ""));
     } catch (error) {
       edit.busy = false;
       edit.note = error.message;
@@ -2652,17 +2653,17 @@
   function editChecksHtml() {
     const lines = [];
     const valid = lastValidation?.valid;
-    lines.push(valid ? "<b>Valid</b>: stands, routes and clears."
-      : "<b>Not valid</b>:<br>" + (lastValidation?.reasons || []).slice(0, 6).map(esc).join("<br>"));
+    lines.push(valid ? T("edit.valid")
+      : T("edit.invalid") + "<br>" + (lastValidation?.reasons || []).slice(0, 6).map(esc).join("<br>"));
     const exits = exitsFrom(fullLayout) || [];
     const open = exits.filter(e => e.kind === "rail_end");
-    lines.push("Exits: " + exits.length + (exits.length > 2 ? ' <span class="edit-warn">(more than 2)</span>' : "") +
-      (open.length ? ' <span class="edit-warn">· ' + open.length + " roll off a rail end</span>" : ""));
+    lines.push(T("edit.exits", { n: exits.length }) + (exits.length > 2 ? ' <span class="edit-warn">' + T("edit.moreThan2") + "</span>" : "") +
+      (open.length ? ' <span class="edit-warn">· ' + T("edit.rollOff", { n: open.length }) + "</span>" : ""));
     const short = shortages();
     if (edit.available) {
       lines.push(short.length
-        ? '<span class="edit-short">Short: ' + short.map(r => esc(partName(r.part)) + " " + r.needed + "/" + r.available).join(", ") + "</span>"
-        : "Parts: within the sets.");
+        ? '<span class="edit-short">' + T("edit.short") + short.map(r => esc(partName(r.part)) + " " + r.needed + "/" + r.available).join(", ") + "</span>"
+        : T("edit.withinSets"));
     }
     return { html: lines.join("<br>"), ok: valid && exits.length <= 2 && !open.length && !short.length };
   }
@@ -2692,6 +2693,13 @@
     const toggle = document.getElementById("editToggle");
     toggle.textContent = edit.on ? "Exit edit" : "Edit";
     toggle.setAttribute("aria-pressed", String(edit.on));
+    const menuEdit = document.getElementById("menuEdit");
+    menuEdit.textContent = T(edit.on ? "menu.editClose" : "menu.edit");
+    menuEdit.setAttribute("aria-pressed", String(edit.on));
+    if (document.body.classList.contains("editing") !== edit.on) {
+      document.body.classList.toggle("editing", edit.on);
+      setTimeout(() => engine.resize(), 30);
+    }
     document.getElementById("editPanel").hidden = !edit.on;
     document.getElementById("editBar").hidden = !edit.on;
     if (!edit.on || !fullLayout) { renderEditPopup(); return; }
@@ -2700,16 +2708,16 @@
     const checks = editChecksHtml();
     const box = document.getElementById("editCheck");
     box.className = "validation-status " + (checks.ok ? "ok" : lastValidation?.valid ? "warn" : "bad");
-    box.innerHTML = (edit.undo.length ? edit.undo.length + " change" + (edit.undo.length > 1 ? "s" : "") + " · " : "") + checks.html;
+    box.innerHTML = (edit.undo.length ? T("edit.changes", { n: edit.undo.length }) : "") + checks.html;
     document.getElementById("editNote").textContent = edit.note;
     const body = document.getElementById("editBody");
     body.replaceChildren();
     const pick = document.createElement("select");
-    pick.setAttribute("aria-label", "Select a rail or block");
-    pick.innerHTML = '<option value="">Select a rail or block…</option>' +
-      '<optgroup label="Rails">' + (fullLayout.rails || []).map(r =>
+    pick.setAttribute("aria-label", T("edit.pick"));
+    pick.innerHTML = '<option value="">' + esc(T("edit.pick")) + "</option>" +
+      '<optgroup label="' + esc(T("edit.groupRails")) + '">' + (fullLayout.rails || []).map(r =>
         '<option value="' + esc(r.id) + '">' + esc(r.id + " · " + partName(r.rail_type) + " · z" + r.z_units) + "</option>").join("") + "</optgroup>" +
-      '<optgroup label="Blocks">' + (fullLayout.parts || []).map(p =>
+      '<optgroup label="' + esc(T("edit.groupBlocks")) + '">' + (fullLayout.parts || []).map(p =>
         '<option value="' + esc(p.id) + '">' + esc(p.id + " · " + partName(p.part_type) + " · z" + p.z_units) + "</option>").join("") + "</optgroup>";
     pick.value = edit.selected || "";
     pick.addEventListener("change", () => { edit.popupAt = null; selectEdit(pick.value || null); });
@@ -2717,7 +2725,7 @@
     const found = edit.selected && componentOf(edit.selected);
     if (!found) {
       body.append(Object.assign(document.createElement("p"), { className: "muted",
-        textContent: "Click a rail or block in the 3D view, or pick one above." }));
+        textContent: T("edit.hint") }));
       renderEditPopup();
       return;
     }
@@ -2737,42 +2745,41 @@
       const special = catalog.special_parts?.[type] || catalog.special_rails?.[type];
       if (special) {
         out.push(row("", Object.assign(document.createElement("span"), {
-          className: "muted", textContent: "Special part: no edits yet." })));
+          className: "muted", textContent: T("edit.special") })));
       } else {
-        out.push(row("Rotate",
-          button("↺ 90°", { title: "Rotate counter-clockwise (Shift+R)" }, () => rotatePart(item.id, -90)),
-          button("↻ 90°", { title: "Rotate clockwise (R)" }, () => rotatePart(item.id, 90)),
+        out.push(row(T("edit.rotate"),
+          button("↺ 90°", { title: T("edit.rotL") }, () => rotatePart(item.id, -90)),
+          button("↻ 90°", { title: T("edit.rotR") }, () => rotatePart(item.id, 90)),
           Object.assign(document.createElement("span"), { className: "muted", textContent: (item.rotation_deg || 0) + "°" })));
         const choices = swapChoices(type);
         if (choices.length) {
-          out.push(row("Swap to", ...choices.map(t =>
-            button(swatch(t) + esc(partName(t)), { title: "Same height: the stack stays closed" }, () => retypePart(item.id, t)))));
+          out.push(row(T("edit.swap"), ...choices.map(t =>
+            button(swatch(t) + esc(partName(t)), { title: T("edit.swapTitle") }, () => retypePart(item.id, t)))));
         }
         if (freeStackOf(item.id)) {
-          out.push(row("Stack", button("Remove free-standing stack", {}, () => removeFreeStack(item.id))));
+          out.push(row(T("edit.stack"), button(esc(T("edit.removeStack")), {}, () => removeFreeStack(item.id))));
         }
       }
     } else {
       const straight = /^straight_/.test(item.rail_type);
       const can = op => !edit.busy && straight && (op === "curve" || item.rail_type !== "straight_short");
-      out.push(row("Rewrite",
-        button("Curve left", { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
-        button("Curve right", { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
-        button("Shorten", { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
+      out.push(row(T("edit.rewrite"),
+        button(esc(T("edit.curveLeft")), { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
+        button(esc(T("edit.curveRight")), { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
+        button(esc(T("edit.shorten")), { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
       out.push(Object.assign(document.createElement("p"), {
         className: "muted small-note",
-        textContent: straight ? "Rewrites keep every hole in use; if one cannot, the note below says why. The first rewrite loads Python (~10 s)."
-          : "Only straight rails can be rewritten." }));
+        textContent: T(straight ? "edit.rewriteNote" : "edit.onlyStraight") }));
       const spec = railSpec(item.rail_type);
       const chips = (spec?.hole_positions_cm || []).map((_, i) => {
         const state = (item.hole_states || {})[i] ?? "open";
         const editable = state === "open" || state === "covered";
         return button(String(i), {
           class: "hole-chip", "data-state": state, disabled: !editable || edit.busy,
-          title: "hole " + i + ": " + state + (editable ? " (click to " + (state === "open" ? "cover" : "uncover") + ")" : ""),
+          title: T("edit.holeTitle", { hole: i, state: T("edit.state." + state) }),
         }, () => toggleCover(item.id, i));
       });
-      if (chips.length) out.push(row("Covers", ...chips));
+      if (chips.length) out.push(row(T("edit.covers"), ...chips));
     }
     return out;
   }
@@ -2783,10 +2790,10 @@
     const found = edit.on && edit.popupAt && edit.selected && componentOf(edit.selected);
     popup.hidden = !found;
     if (!found) return;
-    const close = button("✕", { class: "popup-close", "aria-label": "Close" }, () => { edit.popupAt = null; renderEditPopup(); });
+    const close = button("✕", { class: "popup-close", "aria-label": T("gen.close") }, () => { edit.popupAt = null; renderEditPopup(); });
     const status = document.createElement("div");
     status.className = "popup-status " + (lastValidation?.valid ? "ok" : "bad");
-    status.textContent = (lastValidation?.valid ? "✓ valid" : "✗ " + (lastValidation?.reasons?.[0] || "not valid")) +
+    status.textContent = (lastValidation?.valid ? "✓ " + T("edit.ok") : "✗ " + (lastValidation?.reasons?.[0] || T("edit.ng"))) +
       (edit.note ? " · " + edit.note : "");
     popup.replaceChildren(close, ...editActions(found), status);
     placeEditPopup();
@@ -3577,6 +3584,14 @@
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
   document.getElementById("buildToggle").addEventListener("click", () => setBuildMode(!build.on));
+  document.getElementById("menuEdit").addEventListener("click", () => setEditMode(!edit.on));
+  document.getElementById("editDone").addEventListener("click", () => setEditMode(false));
+  document.getElementById("editSaveMine").addEventListener("click", () => saveMine());
+  document.getElementById("editSheetToggle").addEventListener("click", () => {
+    const min = document.body.classList.toggle("sheet-min");
+    document.getElementById("editSheetToggle").setAttribute("aria-expanded", String(!min));
+    requestAnimationFrame(sheetOffset);
+  });
   document.getElementById("buildSheetToggle").addEventListener("click", () => {
     const min = document.body.classList.toggle("sheet-min");
     document.getElementById("buildSheetToggle").setAttribute("aria-expanded", String(!min));
@@ -3654,7 +3669,6 @@
   function setDebugMode(on, opts = {}) {
     document.body.classList.toggle("debug", on);
     document.getElementById("debugToggle").checked = on;
-    if (!on && edit.on) setEditMode(false);
     if (!on && review.on) setReviewMode(false);
     // Clean view: no hole, support, route, center-of-mass or polygon markers.
     for (const id of OVERLAYS) {
