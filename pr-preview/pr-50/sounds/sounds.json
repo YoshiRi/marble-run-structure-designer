@@ -1,7 +1,0 @@
-{
-  "_comment": "Sound files for the viewer. Put audio files (mp3, m4a, ogg or wav) in this folder and list them here; several files for one event are picked at random. An empty or missing entry uses the built-in synthesized sound. Keys: land (a marble lands after a fall), roll (loop while rolling), seesaw, exit.",
-  "land": [],
-  "roll": [],
-  "seesaw": [],
-  "exit": []
-}
