@@ -18,7 +18,7 @@ from .generator import (
     resolve_set_paths,
 )
 from .model import PortRef, layout_from_dict
-from .substitution import eligible_rails, shorten, substitute
+from .substitution import EDIT_CURVES, eligible_rails, shorten, substitute
 
 # Style rules (generator-design.md, layer 3) the Generate dialog may change,
 # with the GeneratorConfig field each sets. Limits keep the search sane.
@@ -180,7 +180,7 @@ def rail_edits(data: Mapping[str, Any], root: str | Path) -> dict[str, list[str]
     """Which rail rewrites apply to each rail: {"rail id": ["curve", "shorten"]}."""
     catalog = load_catalog(Path(root) / "catalog" / "parts.yaml")
     layout = layout_from_dict(dict(data))
-    curves = set(eligible_rails(layout))
+    curves = set(eligible_rails(layout, EDIT_CURVES))
     out: dict[str, list[str]] = {}
     for rail in layout.rails:
         ops = []
@@ -205,10 +205,10 @@ def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path
         raise ValueError(f"no rail {rail_id}")
     kind = op.get("op")
     if kind == "curve":
-        if rail_id not in eligible_rails(layout):
+        if rail_id not in eligible_rails(layout, EDIT_CURVES):
             raise ValueError(f"{rail_id} cannot become a curve: a linked end or a hole in use has no curve match")
         turn = "right" if op.get("turn") == "right" else "left"
-        candidates = [substitute(layout, catalog, rail_id, turn)]
+        candidates = [substitute(layout, catalog, rail_id, turn, EDIT_CURVES)]
     elif kind == "shorten":
         # In place first; else moving a ground column along the rail.
         candidates = shorten(layout, catalog, rail_id) + shorten(layout, catalog, rail_id, move_columns=True)

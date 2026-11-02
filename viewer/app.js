@@ -2792,6 +2792,27 @@
     renderEditPopup();
   }
 
+  // Whether a straight rail can become its curve (short curve, or S-curve for
+  // a long rail): the same rule as substitution.eligible_rails (EDIT_CURVES).
+  const CURVE_HOLES = { straight_short: [0, 3], straight_long: [0, 3], straight_long_center: [0, 2, 4] };
+  function curvable(rail) {
+    const holes = CURVE_HOLES[rail.rail_type];
+    if (!holes || !["a_to_b", "b_to_a"].includes(rail.flow_direction || "a_to_b")) return false;
+    const links = fullLayout.route_links || [];
+    const linked = new Set(links.flatMap(l => [l.source.component_id, l.target.component_id]));
+    if (linked.has(rail.id)) return false;
+    const used = new Set();
+    for (const s of fullLayout.supports || []) {
+      if (s.upper_rail_id === rail.id) used.add(Number(s.upper_hole_index));
+      if (s.lower_rail_id === rail.id) {
+        used.add(Number(s.lower_hole_index));
+        if (linked.has((s.stack_part_ids || [])[0])) return false;
+      }
+    }
+    for (const [i, state] of Object.entries(rail.hole_states || {})) if (state === "block_connected") used.add(Number(i));
+    return [...used].every(h => holes.includes(h));
+  }
+
   // Title and action buttons for the selected component (panel and popup).
   function editActions(found) {
     const out = [];
@@ -2821,10 +2842,15 @@
       }
     } else {
       const straight = /^straight_/.test(item.rail_type);
-      const can = op => !edit.busy && straight && (op === "curve" || item.rail_type !== "straight_short");
+      const bend = curvable(item);
+      const can = op => !edit.busy && straight && (op === "curve" ? bend : item.rail_type !== "straight_short");
+      const sCurve = item.rail_type !== "straight_short";
+      const noBend = straight && !bend ? T("edit.curveNo") : "";
       out.push(row(T("edit.rewrite"),
-        button(esc(T("edit.curveLeft")), { disabled: !can("curve") }, () => railEdit("curve", item.id, "left")),
-        button(esc(T("edit.curveRight")), { disabled: !can("curve") }, () => railEdit("curve", item.id, "right")),
+        button(esc(T(sCurve ? "edit.sLeft" : "edit.curveLeft")), { disabled: !can("curve"), title: noBend },
+          () => railEdit("curve", item.id, "left")),
+        button(esc(T(sCurve ? "edit.sRight" : "edit.curveRight")), { disabled: !can("curve"), title: noBend },
+          () => railEdit("curve", item.id, "right")),
         button(esc(T("edit.shorten")), { disabled: !can("shorten") }, () => railEdit("shorten", item.id))));
       out.push(Object.assign(document.createElement("p"), {
         className: "muted small-note",
