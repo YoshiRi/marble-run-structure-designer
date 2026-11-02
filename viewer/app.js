@@ -2343,8 +2343,13 @@
       }
       renderMineOptions();
       const shared = await readSharedHash();
+      const mineEntry = params.get("mine") && loadMine().find(m => m.id === params.get("mine"));
       if (shared) openShared(shared);
-      else await loadExample(select.value);
+      else if (mineEntry) {
+        select.value = "mine:" + mineEntry.id;
+        layoutOrigin = "my layout " + mineEntry.name;
+        setLayout(structuredClone(mineEntry.data));
+      } else await loadExample(select.value);
       updateMineMenu();
       // ?play=1 opens in play mode (the home-screen app starts this way).
       if (params.get("play") === "1") setTimeout(() => setPlayMode(true), 0);
