@@ -84,10 +84,12 @@ body:not(.debug):not(.building) .main-grid { grid-template-columns: minmax(0, 1f
   height: 54px; padding: 0 28px; border-radius: 999px; border: 0; font-size: 18px; font-weight: 700;
   background: rgba(245, 158, 11, .95); color: #1f2937; box-shadow: 0 3px 0 #b45309, 0 6px 16px rgba(0, 0, 0, .35);
 }
+.action-bar .roll:disabled { background: rgba(107, 114, 128, .85); color: #d1d5db; box-shadow: none; cursor: not-allowed; }
 .action-bar .roll:active { transform: translateY(2px); box-shadow: 0 1px 0 #b45309, 0 4px 10px rgba(0, 0, 0, .35); }
 .action-bar .build-bar { gap: 6px; padding: 4px; border-radius: 999px; background: rgba(17, 24, 39, .72); }
 .action-bar .build-bar button { height: 44px; min-width: 48px; border-radius: 999px; font-size: 18px; }
 .action-bar .build-bar button.primary { background: var(--accent); border-color: var(--accent); }
+.action-bar button:disabled { opacity: .4; cursor: not-allowed; }
 .action-bar .build-bar-step { color: #f9fafb; }
 body.play .action-bar { display: none; }
 
@@ -158,8 +160,8 @@ body.play .action-bar { display: none; }
   .toolbar { flex-wrap: wrap; }
   .toolbar h1 { font-size: 14px; }
   .toolbar-actions { order: 5; width: 100%; }
-  body.building .action-bar #soundToggle, body.building .action-bar #playToggle,
-  body.building .action-bar #rollOneTop { display: none; }
+  body.building .action-bar #soundToggle, body.building .action-bar #playToggle { display: none; }
+  body.building .action-bar .roll { height: 46px; padding: 0 16px; font-size: 15px; }
   .main-grid { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: minmax(0, 1fr) auto; }
   .sidebar { max-height: 42dvh; border-left: 0; border-top: 1px solid var(--border); }
   .overlay-controls { font-size: 11px; top: 8px; left: 8px; }
