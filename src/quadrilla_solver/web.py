@@ -200,6 +200,8 @@ def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path
     does not apply to that rail."""
     catalog = load_catalog(Path(root) / "catalog" / "parts.yaml")
     layout = layout_from_dict(dict(data))
+    if op.get("op") in ("drop_split", "drop_insert"):
+        return drop_edit(data, layout, catalog, str(op["op"]), str(op.get("part")), op, root)
     rail_id = str(op.get("rail"))
     if rail_id not in layout.rail_map():
         raise ValueError(f"no rail {rail_id}")
@@ -214,11 +216,38 @@ def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path
         candidates = shorten(layout, catalog, rail_id) + shorten(layout, catalog, rail_id, move_columns=True)
         if not candidates:
             raise ValueError(f"{rail_id} cannot be shortened: its holes in use do not fit a short rail")
+    elif kind in ("drop_split", "drop_insert"):
+        return drop_edit(data, layout, catalog, kind, str(op.get("part")), op, root)
     elif kind == "rebuild":
         return rebuild_window(data, layout, catalog, rail_id, str(op.get("intent", "rebuild")), op, root)
     else:
         raise ValueError(f"unknown edit {kind!r}")
     return [{k: v for k, v in layout_to_dict(c).items() if k in _STRUCTURE} for c in candidates]
+
+
+def drop_edit(data, layout, catalog, kind: str, part_id: str, op: Mapping[str, Any],
+              root: str | Path) -> list[dict[str, Any]]:
+    """Edits at a drop point (insert.py): split there, or insert a
+    switchback (everything above lifted 12 levels)."""
+    from .insert import EditRefused, insert_switchback, split_at
+    sets = op.get("sets") or (data.get("generator") or {}).get("sets") or ["OWNED"]
+    counts = Budget.from_sets(resolve_set_paths(Path(root), list(sets))).counts
+    query = data.get("routing_query") or {}
+    if not query.get("source"):
+        raise EditRefused("no_source", "the layout has no input")
+    source = PortRef(query["source"]["component_id"], query["source"]["port"])
+    sinks = tuple(PortRef(s["component_id"], s["port"]) for s in query.get("sinks", []))
+    found = split_at(layout, catalog, source, sinks, part_id) if kind == "drop_split" else \
+        insert_switchback(layout, catalog, counts, source, sinks, part_id)
+    if not found:
+        raise EditRefused("no_candidates", "nothing fits here")
+    out = []
+    for c in found:
+        d = {k: v for k, v in layout_to_dict(c["layout"], c["source"], c["sinks"]).items()
+             if k in _STRUCTURE or k == "routing_query"}
+        d["rebuild"] = {"rails": c.get("rails", []), "shift": [0, 0, c.get("lift", 0)]}
+        out.append(d)
+    return out
 
 
 def rebuild_window(data, layout, catalog, rail_id: str, intent: str, op: Mapping[str, Any],

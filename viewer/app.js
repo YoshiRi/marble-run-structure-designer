@@ -2627,13 +2627,30 @@
   const REBUILD_SETS = ["OWNED", "QD001", "QD003", "QD005", "QD101", "QDE6008AB05"];
 
   async function rebuildEdit(intent, railId) {
+    return searchEdit({ op: "rebuild", rail: railId, intent, seed: 1 + Math.floor(Math.random() * 9999) },
+      intent, railId);
+  }
+
+  // At a drop point (a block the marble falls into): split there, or insert
+  // a switchback (everything above goes up 12 levels).
+  async function dropEdit(kind, partId) {
+    return searchEdit({ op: kind, part: partId }, kind, partId);
+  }
+
+  function isDropPoint(id) {
+    const part = (fullLayout.parts || []).find(p => p.id === id);
+    const spec = part && catalog.routing_blocks?.[part.part_type];
+    if (!spec || !(spec.routes || []).some(r => r.from === "top") || !build.onRoute.has(id)) return false;
+    return (fullLayout.supports || []).some(s => (s.stack_part_ids || [])[0] === id && s.lower_rail_id != null);
+  }
+
+  async function searchEdit(op, intent, target) {
     if (edit.busy) return;
     edit.busy = true;
     edit.alternatives = null;
     edit.note = edit.pyReady ? T("rb.searching") : T("edit.loadingPy");
     renderEditPanel();
     try {
-      const op = { op: "rebuild", rail: railId, intent, seed: 1 + Math.floor(Math.random() * 9999) };
       if (edit.anyParts) op.sets = REBUILD_SETS;
       const response = await pyEdit(op);
       edit.pyReady = true;
@@ -2649,7 +2666,7 @@
       if (!options.length) throw new Error(T("rb.no_candidates"));
       edit.busy = false;
       edit.selected = null;
-      edit.alternatives = { options, index: 0, intent, rail: railId };
+      edit.alternatives = { options, index: 0, intent, rail: target };
       commitEdit(options[0].data, rebuildNote());
     } catch (error) {
       edit.busy = false;
@@ -2664,8 +2681,8 @@
     const [dx, dy, dz] = option.info?.shift || [0, 0, 0];
     return T("rb.done." + alt.intent, { rail: alt.rail }) + " " +
       T("rb.option", { n: alt.index + 1, m: alt.options.length }) +
-      (Math.abs(dx) + Math.abs(dy) > 0.01 || Math.abs(dz) > 0.01
-        ? " · " + T("rb.moved", { dz: Math.round(dz), dxy: Math.round(Math.hypot(dx, dy)) }) : "");
+      (Math.abs(dx) + Math.abs(dy) > 0.01 ? " · " + T("rb.moved", { dz: Math.round(dz), dxy: Math.round(Math.hypot(dx, dy)) })
+        : Math.abs(dz) > 0.01 ? " · " + T("rb.lifted", { dz: Math.round(dz) }) : "");
   }
 
   // Another candidate: replaces the one shown (one undo step for the rebuild).
@@ -2813,6 +2830,17 @@
     return [...used].every(h => holes.includes(h));
   }
 
+  function anyPartsToggle() {
+    const any = document.createElement("label");
+    any.className = "muted small-note rb-any";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = Boolean(edit.anyParts);
+    box.addEventListener("change", () => { edit.anyParts = box.checked; });
+    any.append(box, " " + T("rb.anyParts"));
+    return any;
+  }
+
   // Title and action buttons for the selected component (panel and popup).
   function editActions(found) {
     const out = [];
@@ -2838,6 +2866,14 @@
         }
         if (freeStackOf(item.id)) {
           out.push(row(T("edit.stack"), button(esc(T("edit.removeStack")), {}, () => removeFreeStack(item.id))));
+        }
+        if (isDropPoint(item.id)) {
+          out.push(row(T("drop.title"),
+            button(esc(T("drop.split")), { disabled: edit.busy || type === "red_random_split", title: T("drop.splitTitle") },
+              () => dropEdit("drop_split", item.id)),
+            button(esc(T("drop.insert")), { disabled: edit.busy, title: T("drop.insertTitle") },
+              () => dropEdit("drop_insert", item.id))));
+          out.push(anyPartsToggle());
         }
       }
     } else {
@@ -2869,14 +2905,7 @@
         button(esc(T("rb.rebuild")), { disabled: edit.busy, title: T("rb.rebuildTitle") }, () => rebuildEdit("rebuild", item.id)),
         button(esc(T("rb.split")), { disabled: edit.busy, title: T("rb.splitTitle") }, () => rebuildEdit("split", item.id)),
         button(esc(T("rb.add_rail")), { disabled: edit.busy, title: T("rb.addTitle") }, () => rebuildEdit("add_rail", item.id))));
-      const any = document.createElement("label");
-      any.className = "muted small-note rb-any";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = Boolean(edit.anyParts);
-      box.addEventListener("change", () => { edit.anyParts = box.checked; });
-      any.append(box, " " + T("rb.anyParts"));
-      out.push(any);
+      out.push(anyPartsToggle());
     }
     return out;
   }

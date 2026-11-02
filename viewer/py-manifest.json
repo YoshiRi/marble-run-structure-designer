@@ -10,6 +10,7 @@
     "src/quadrilla_solver/connectivity.py",
     "src/quadrilla_solver/generator.py",
     "src/quadrilla_solver/geometry.py",
+    "src/quadrilla_solver/insert.py",
     "src/quadrilla_solver/inventory.py",
     "src/quadrilla_solver/layout_stability.py",
     "src/quadrilla_solver/model.py",
