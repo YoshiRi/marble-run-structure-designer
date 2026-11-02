@@ -48,6 +48,32 @@ find nothing on this build (it uses all the long rails); with one more
 basic set, 3 candidates each on every rail above the box. Box rails are
 refused (`cross_link`).
 
+## Edits at a drop point (`src/quadrilla_solver/insert.py`)
+
+The window rebuild is refused wherever the part above reaches the part below
+in more than one place, which is most of a build's low levels (user,
+2026-11-03). Edits at a drop point (a block the marble falls into, standing
+on a rail) do not move anything sideways:
+
+- **Split here** (`split_at`): the block becomes a red splitter; the second
+  marble rolls back along the rail and leaves through the first free hole
+  behind (holes between covered). Nothing else changes. Refused when there is
+  no free hole behind (the ladder's supports stand there).
+- **Insert a switchback** (`insert_switchback`): everything from the block's
+  top up is lifted 12 levels; every column crossing that level gets 12 levels
+  of pass-through blocks, so every link and fall above and below stays as it
+  was, however many there are. Two rails go into the gap, one above the other
+  in opposite directions along a heading (long or short rails, 12 headings
+  plus those of the rails around): the upper catches the marble and rolls
+  out, the lower rolls back and drops into the block. The upper's hole
+  beyond its entry stands on the lower's hole beyond its stop (the ladder's
+  way); the support solver adds the lower's far support. Ranked by parts, new
+  ground columns and footprint growth. Works inside the box ladder.
+
+Measured: every drop block of the examples tried (ladder, box base, bottom-up,
+gallery) takes a switchback (3 valid candidates, 0.1–0.4 s); split here works
+where a hole behind is free.
+
 ## Next
 
 - A window of several rails (rebuild a range of levels, not one rail).
