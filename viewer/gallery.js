@@ -56,70 +56,71 @@
     }
   }
 
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  function stat(key, value) {
+    const span = el("span");
+    span.append(T(key) + " ", el("b", "", String(value ?? "—")));
+    return span;
+  }
+
   function card(entry, layouts) {
     const r = review(entry.id);
-    const el = document.createElement("article");
-    el.className = "card" + (r.marks.length || r.note ? " reviewed" : "");
-    el.id = entry.id;
+    const box = el("article", "card" + (r.marks.length || r.note ? " reviewed" : ""));
+    box.id = entry.id;
 
     const link = "./index.html?layout=" + encodeURIComponent(entry.file).replace(/%2F/g, "/");
-    const img = document.createElement("img");
-    img.className = "thumb";
+    const main = el("a", "card-main");
+    main.href = link;
+    const img = el("img", "thumb");
     img.loading = "lazy";
-    img.alt = "3D view of layout " + entry.id;
+    img.alt = entry.id;
     img.src = DATA_ROOT + entry.thumbnail;
-    img.addEventListener("error", () => { img.replaceWith(document.createTextNode("")); });
-    const imgLink = document.createElement("a");
-    imgLink.href = link;
-    imgLink.appendChild(img);
+    img.addEventListener("error", () => { img.replaceWith(el("div", "thumb thumb-empty", "◎")); });
+    const m = entry.metrics || {};
+    const stats = el("div", "card-stats");
+    stats.append(stat("gal.levels", m.levels), stat("gal.exitsShort", m.exits),
+      stat("gal.branchesShort", m.random_branches), stat("gal.partsShort", m.parts));
+    main.append(img, el("div", "card-title layout-id", entry.id), stats);
 
-    const idRow = document.createElement("div");
-    idRow.className = "id-row";
-    const id = document.createElement("span");
-    id.className = "layout-id";
-    id.textContent = entry.id;
-    const copy = document.createElement("button");
+    const links = el("div", "card-links");
+    const open = el("a", "", T("gal.open"));
+    open.href = link;
+    const buildLink = el("a", "", T("gal.build"));
+    buildLink.href = link + "&mode=build&step=0";
+    links.append(open, buildLink);
+
+    // Review tools (debug only): the ID, tags, all metrics, marks and a note.
+    const tools = el("div", "review-tools debug-only");
+    const idRow = el("div", "id-row");
+    const copy = el("button", "copy-id", T("gal.copyId"));
     copy.type = "button";
-    copy.className = "copy-id";
-    copy.textContent = T("gal.copyId");
     copy.addEventListener("click", async () => {
       const ok = await copyText(entry.id);
       copy.textContent = T(ok ? "gal.copiedId" : "gal.selectId");
       setTimeout(() => { copy.textContent = T("gal.copyId"); }, 1400);
     });
-    idRow.append(id, copy);
-
-    const tags = document.createElement("div");
-    tags.className = "tags";
-    for (const tag of [entry.config, ...(entry.tags || [])]) {
-      const t = document.createElement("span");
-      t.className = "tag";
-      t.textContent = tag;
-      tags.appendChild(t);
-    }
-
-    const metrics = document.createElement("dl");
-    metrics.className = "metrics";
-    for (const [key, label] of METRICS) {
-      const wrap = document.createElement("div");
-      const dt = document.createElement("dt");
-      dt.textContent = T("gal.m." + key);
-      const dd = document.createElement("dd");
-      dd.textContent = entry.metrics?.[key] ?? "—";
-      wrap.append(dt, dd);
+    idRow.append(el("span", "layout-id", entry.id), copy);
+    const tags = el("div", "tags");
+    for (const tag of [entry.config, ...(entry.tags || [])]) tags.appendChild(el("span", "tag", tag));
+    const metrics = el("dl", "metrics");
+    for (const [key] of METRICS) {
+      const wrap = el("div");
+      wrap.append(el("dt", "", T("gal.m." + key)), el("dd", "", String(m[key] ?? "—")));
       metrics.appendChild(wrap);
     }
-
-    const marks = document.createElement("div");
-    marks.className = "marks";
+    const marks = el("div", "marks");
     marks.setAttribute("role", "group");
     marks.setAttribute("aria-label", "Review marks for " + entry.id);
     for (const mark of MARKS) {
-      const b = document.createElement("button");
+      const b = el("button", "mark", T("gal.mark." + mark.key));
       b.type = "button";
-      b.className = "mark";
       b.id = entry.id + "-" + mark.key;
-      b.textContent = T("gal.mark." + mark.key);
       b.setAttribute("aria-pressed", String(r.marks.includes(mark.key)));
       b.addEventListener("click", () => {
         const current = review(entry.id);
@@ -127,15 +128,13 @@
           ? current.marks.filter(k => k !== mark.key)
           : [...current.marks, mark.key];
         b.setAttribute("aria-pressed", String(current.marks.includes(mark.key)));
-        el.classList.toggle("reviewed", Boolean(current.marks.length || current.note));
+        box.classList.toggle("reviewed", Boolean(current.marks.length || current.note));
         save();
         refreshSummary(layouts);
       });
       marks.appendChild(b);
     }
-
-    const note = document.createElement("input");
-    note.className = "note";
+    const note = el("input", "note");
     note.id = entry.id + "-note";
     note.type = "text";
     note.placeholder = T("gal.note");
@@ -143,26 +142,61 @@
     note.value = r.note;
     note.addEventListener("input", () => {
       review(entry.id).note = note.value;
-      el.classList.toggle("reviewed", Boolean(review(entry.id).marks.length || note.value));
+      box.classList.toggle("reviewed", Boolean(review(entry.id).marks.length || note.value));
       save();
       refreshSummary(layouts);
     });
+    tools.append(idRow, tags, metrics, marks, note);
 
-    const open = document.createElement("a");
-    open.className = "open";
-    open.href = link;
-    open.textContent = T("gal.open");
-    const buildLink = document.createElement("a");
-    buildLink.className = "open";
-    buildLink.href = link + "&mode=build&step=0";
-    buildLink.textContent = T("gal.build");
-    const links = document.createElement("div");
-    links.className = "card-links";
-    links.append(open, buildLink);
-
-    el.append(imgLink, idRow, tags, metrics, marks, note, links);
-    return el;
+    box.append(main, links, tools);
+    return box;
   }
+
+  // My layouts (saved in the viewer, this browser): open, build or delete.
+  const MINE_STORE = "marble-run-my-layouts-v1";
+
+  function loadMine() {
+    try { return JSON.parse(localStorage.getItem(MINE_STORE) || "[]"); } catch (error) { return []; }
+  }
+
+  function renderMine() {
+    const mine = loadMine();
+    const section = document.getElementById("mineSection");
+    section.hidden = !mine.length;
+    document.getElementById("mineGrid").replaceChildren(...mine.map(entry => {
+      const box = el("article", "card");
+      const link = "./index.html?mine=" + encodeURIComponent(entry.id);
+      const main = el("a", "card-main");
+      main.href = link;
+      const rails = entry.data?.rails || [];
+      const stats = el("div", "card-stats");
+      stats.append(stat("gal.railsShort", rails.length), stat("gal.partsShort", (entry.data?.parts || []).length),
+        stat("gal.saved", new Date(entry.savedAt).toLocaleDateString(window.MarbleI18n.lang)));
+      main.append(el("div", "thumb thumb-empty", "★"), el("div", "card-title", entry.name), stats);
+      const links = el("div", "card-links");
+      const open = el("a", "", T("gal.open"));
+      open.href = link;
+      const buildLink = el("a", "", T("gal.build"));
+      buildLink.href = link + "&mode=build&step=0";
+      const del = el("button", "danger", T("menu.delete"));
+      del.type = "button";
+      del.addEventListener("click", () => {
+        if (!confirm(T("mine.deleteConfirm", { name: entry.name }))) return;
+        try { localStorage.setItem(MINE_STORE, JSON.stringify(loadMine().filter(e => e.id !== entry.id))); } catch (error) { /* ignore */ }
+        renderMine();
+      });
+      links.append(open, buildLink, del);
+      box.append(main, links);
+      return box;
+    }));
+  }
+
+  let debug = false;
+  try { debug = localStorage.getItem("marble-run-debug-v1") === "on"; } catch (error) { /* private mode */ }
+  const asked = new URLSearchParams(window.location.search).get("debug");
+  if (asked !== null) debug = asked !== "0";
+  document.body.classList.toggle("debug", debug);
+  renderMine();
 
   async function init() {
     const grid = document.getElementById("grid");
