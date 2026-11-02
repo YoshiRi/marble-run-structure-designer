@@ -1768,6 +1768,23 @@
     camera.radius = Math.max(35, max.subtract(min).length() * 1.6) * portraitFactor();
   }
 
+  // Phone build sheet: shift the view up so the framed part sits above the
+  // sheet instead of under it (camera-space offset; no change to the orbit).
+  function sheetOffset() {
+    const sheet = document.querySelector(".sidebar");
+    const covering = document.body.classList.contains("building") && !document.body.classList.contains("debug") &&
+      window.matchMedia("(max-width: 820px)").matches && sheet && getComputedStyle(sheet).position === "fixed";
+    let shift = 0;
+    if (covering) {
+      const view = canvas.getBoundingClientRect();
+      const top = sheet.getBoundingClientRect().top;
+      const hidden = Math.max(0, view.bottom - top) / Math.max(1, view.height);   // share of the view under the sheet
+      const visibleHeight = 2 * camera.radius * Math.tan(camera.fov / 2);
+      shift = hidden / 2 * visibleHeight;
+    }
+    camera.targetScreenOffset.y = shift;
+  }
+
   // Outline the current step, ghost later steps, and draw facing arrows.
   // Current step in color (outlined), parts placed in earlier steps dark gray,
   // later steps ghosted. The camera stays where the user put it; it is
@@ -2060,6 +2077,7 @@
       setTimeout(() => engine.resize(), 30);   // the side panel came or went
     }
     panel.hidden = !build.on;
+    document.body.classList.toggle("step0", build.on && build.step === 0);
     document.getElementById("buildBar").hidden = !build.on;
     document.getElementById("partsBoard").hidden = !build.on || build.step !== 0;
     if (!build.on || !fullLayout) return;
@@ -2269,6 +2287,7 @@
     renderBuildPanel();
     renderEditPanel();
     renderReview();
+    requestAnimationFrame(sheetOffset);
   }
 
   function applyVisibility() {
@@ -3546,6 +3565,11 @@
 
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
   document.getElementById("buildToggle").addEventListener("click", () => setBuildMode(!build.on));
+  document.getElementById("buildSheetToggle").addEventListener("click", () => {
+    const min = document.body.classList.toggle("sheet-min");
+    document.getElementById("buildSheetToggle").setAttribute("aria-expanded", String(!min));
+    requestAnimationFrame(sheetOffset);
+  });
   document.getElementById("buildPrev").addEventListener("click", () => goToStep(build.step - 1));
   document.getElementById("buildNext").addEventListener("click", () => goToStep(build.step + 1));
   document.getElementById("buildGhost").addEventListener("change", event => {
