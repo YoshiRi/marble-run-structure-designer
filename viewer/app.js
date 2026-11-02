@@ -2622,6 +2622,61 @@
     }
   }
 
+  // ---- window rebuild (Python, rebuild.py): the rail is grown again under an
+  // intent, the part above moved onto it; candidates to flip through.
+  const REBUILD_SETS = ["OWNED", "QD001", "QD003", "QD005", "QD101", "QDE6008AB05"];
+
+  async function rebuildEdit(intent, railId) {
+    if (edit.busy) return;
+    edit.busy = true;
+    edit.alternatives = null;
+    edit.note = edit.pyReady ? T("rb.searching") : T("edit.loadingPy");
+    renderEditPanel();
+    try {
+      const op = { op: "rebuild", rail: railId, intent, seed: 1 + Math.floor(Math.random() * 9999) };
+      if (edit.anyParts) op.sets = REBUILD_SETS;
+      const response = await pyEdit(op);
+      edit.pyReady = true;
+      if (response.error) {
+        const err = new Error(response.code ? T("rb." + response.code) : response.error);
+        throw err;
+      }
+      const base = editedClone();
+      const options = response.candidates.map(c => {
+        const { rebuild: info, ...structure } = c;
+        return { data: withCurrentExits({ ...structuredClone(base), ...structure }), info };
+      }).filter(o => validateData(o.data));
+      if (!options.length) throw new Error(T("rb.no_candidates"));
+      edit.busy = false;
+      edit.selected = null;
+      edit.alternatives = { options, index: 0, intent, rail: railId };
+      commitEdit(options[0].data, rebuildNote());
+    } catch (error) {
+      edit.busy = false;
+      edit.note = error.message;
+      renderEditPanel();
+    }
+  }
+
+  function rebuildNote() {
+    const alt = edit.alternatives;
+    const option = alt.options[alt.index];
+    const [dx, dy, dz] = option.info?.shift || [0, 0, 0];
+    return T("rb.done." + alt.intent, { rail: alt.rail }) + " " +
+      T("rb.option", { n: alt.index + 1, m: alt.options.length }) +
+      (Math.abs(dx) + Math.abs(dy) > 0.01 || Math.abs(dz) > 0.01
+        ? " · " + T("rb.moved", { dz: Math.round(dz), dxy: Math.round(Math.hypot(dx, dy)) }) : "");
+  }
+
+  // Another candidate: replaces the one shown (one undo step for the rebuild).
+  function nextAlternative() {
+    const alt = edit.alternatives;
+    if (!alt || alt.options.length < 2 || edit.busy) return;
+    alt.index = (alt.index + 1) % alt.options.length;
+    edit.note = rebuildNote();
+    showEdited(alt.options[alt.index].data);
+  }
+
   // ---- panel and highlight
   // Selected component in color with an outline; the rest fades back.
   function decorateEdit() {
@@ -2710,6 +2765,10 @@
     box.className = "validation-status " + (checks.ok ? "ok" : lastValidation?.valid ? "warn" : "bad");
     box.innerHTML = (edit.undo.length ? T("edit.changes", { n: edit.undo.length }) : "") + checks.html;
     document.getElementById("editNote").textContent = edit.note;
+    const altBox = document.getElementById("editAlt");
+    const alt = edit.alternatives;
+    altBox.hidden = !(alt && alt.options.length > 1 && fullLayout === alt.options[alt.index].data);
+    if (!altBox.hidden) altBox.textContent = T("rb.next", { n: alt.index + 1, m: alt.options.length });
     const body = document.getElementById("editBody");
     body.replaceChildren();
     const pick = document.createElement("select");
@@ -2780,6 +2839,18 @@
         }, () => toggleCover(item.id, i));
       });
       if (chips.length) out.push(row(T("edit.covers"), ...chips));
+      out.push(row(T("rb.title"),
+        button(esc(T("rb.rebuild")), { disabled: edit.busy, title: T("rb.rebuildTitle") }, () => rebuildEdit("rebuild", item.id)),
+        button(esc(T("rb.split")), { disabled: edit.busy, title: T("rb.splitTitle") }, () => rebuildEdit("split", item.id)),
+        button(esc(T("rb.add_rail")), { disabled: edit.busy, title: T("rb.addTitle") }, () => rebuildEdit("add_rail", item.id))));
+      const any = document.createElement("label");
+      any.className = "muted small-note rb-any";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = Boolean(edit.anyParts);
+      box.addEventListener("change", () => { edit.anyParts = box.checked; });
+      any.append(box, " " + T("rb.anyParts"));
+      out.push(any);
     }
     return out;
   }
@@ -3586,6 +3657,7 @@
   document.getElementById("buildToggle").addEventListener("click", () => setBuildMode(!build.on));
   document.getElementById("menuEdit").addEventListener("click", () => setEditMode(!edit.on));
   document.getElementById("editDone").addEventListener("click", () => setEditMode(false));
+  document.getElementById("editAlt").addEventListener("click", nextAlternative);
   document.getElementById("editSaveMine").addEventListener("click", () => saveMine());
   document.getElementById("editSheetToggle").addEventListener("click", () => {
     const min = document.body.classList.toggle("sheet-min");

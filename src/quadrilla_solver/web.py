@@ -17,7 +17,7 @@ from .generator import (
     SCORE_TERMS, Budget, GeneratorConfig, generate, layout_id, layout_to_dict, layout_to_yaml_dict,
     resolve_set_paths,
 )
-from .model import layout_from_dict
+from .model import PortRef, layout_from_dict
 from .substitution import eligible_rails, shorten, substitute
 
 # Style rules (generator-design.md, layer 3) the Generate dialog may change,
@@ -214,9 +214,40 @@ def edit_layout(data: Mapping[str, Any], op: Mapping[str, Any], root: str | Path
         candidates = shorten(layout, catalog, rail_id) + shorten(layout, catalog, rail_id, move_columns=True)
         if not candidates:
             raise ValueError(f"{rail_id} cannot be shortened: its holes in use do not fit a short rail")
+    elif kind == "rebuild":
+        return rebuild_window(data, layout, catalog, rail_id, str(op.get("intent", "rebuild")), op, root)
     else:
         raise ValueError(f"unknown edit {kind!r}")
     return [{k: v for k, v in layout_to_dict(c).items() if k in _STRUCTURE} for c in candidates]
+
+
+def rebuild_window(data, layout, catalog, rail_id: str, intent: str, op: Mapping[str, Any],
+                   root: str | Path) -> list[dict[str, Any]]:
+    """Window rebuild (rebuild.py): candidate structures with their routing
+    query, best first. Parts: the sets in the request, else the layout's
+    generator sets, else the owned parts."""
+    from .rebuild import RebuildRefused, rebuild
+    sets = op.get("sets") or (data.get("generator") or {}).get("sets") or ["OWNED"]
+    counts = Budget.from_sets(resolve_set_paths(Path(root), list(sets))).counts
+    query = data.get("routing_query") or {}
+    if not query.get("source"):
+        raise RebuildRefused("no_source", "the layout has no input")
+    source = PortRef(query["source"]["component_id"], query["source"]["port"])
+    sinks = tuple(PortRef(s["component_id"], s["port"]) for s in query.get("sinks", []))
+    stats: dict[str, int] = {}
+    found = rebuild(layout, catalog, counts, source, sinks, rail_id, intent, seed=int(op.get("seed", 1)),
+                    attempts=int(op.get("attempts", 40)), keep=3, stats=stats)
+    if not found:
+        code = "no_parts" if stats.get("budget", 0) + stats.get("grow", 0) >= max(1, sum(stats.values())) * 0.8 \
+            else "no_candidates"
+        raise RebuildRefused(code, f"no rebuild found ({stats})")
+    out = []
+    for c in found:
+        d = {k: v for k, v in layout_to_dict(c["layout"], c["source"], c["sinks"]).items()
+             if k in _STRUCTURE or k == "routing_query"}
+        d["rebuild"] = {"rails": c["rails"], "shift": [round(v, 2) for v in c["shift"]]}
+        out.append(d)
+    return out
 
 
 def edit_json(request_json: str, root: str) -> str:
@@ -228,4 +259,4 @@ def edit_json(request_json: str, root: str) -> str:
             return json.dumps({"options": rail_edits(request["layout"], root)})
         return json.dumps({"candidates": edit_layout(request["layout"], request["op"], root)})
     except ValueError as error:
-        return json.dumps({"error": str(error)})
+        return json.dumps({"error": str(error), "code": getattr(error, "code", None)})
