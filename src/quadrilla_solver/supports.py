@@ -308,7 +308,15 @@ class SupportSolver:
         free = Counter(self.free)
         parts = list(self.layout.parts)
         supports = list(self.layout.supports)
-        for n, c in enumerate(cols):
+        # New names never reuse one the layout keeps (a layout solved before
+        # and only partly stripped, as in a window rebuild, has s0, s1, ...).
+        taken = {s.name for s in supports} | {p.id.split("_", 1)[0] for p in parts}
+        names, n = [], 0
+        while len(names) < len(cols):
+            if f"s{n}" not in taken:
+                names.append(f"s{n}")
+            n += 1
+        for c, name in zip(cols, names):
             f, b, p = self._parts_of(c)
             sequence = ["wooden_foundation"] * f
             for _ in range(b):
@@ -322,12 +330,12 @@ class SupportSolver:
             z = c.base_z
             ids = []
             for k, t in enumerate(sequence):
-                pid = f"s{n}_{k}_{t}"
+                pid = f"{name}_{k}_{t}"
                 # rounded like the YAML writer so a saved layout loads back equal
                 parts.append(PlacedPart(pid, t, round(c.x, 4), round(c.y, 4), z, 0))
                 ids.append(pid)
                 z += self.catalog.height_units(t)
-            supports.append(SupportLink(c.rail_id, c.hole, tuple(ids), c.base_rail, c.base_hole, name=f"s{n}"))
+            supports.append(SupportLink(c.rail_id, c.hole, tuple(ids), c.base_rail, c.base_hole, name=name))
         return replace(self.layout, parts=tuple(parts), supports=tuple(supports))
 
 
