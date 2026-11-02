@@ -452,3 +452,8 @@ body.play .viewport-panel { height: auto; }
   body.editing:not(.debug) .edit-body button { min-height: 38px; font-size: 14px; }
 }
 .edit-panel .validation-status { font-size: 12px; }
+
+.edit-alt { min-height: 38px; padding: 6px 14px; border: 1px solid var(--accent); border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, Canvas); color: CanvasText; font-size: 14px; cursor: pointer; }
+.edit-alt[hidden] { display: none; }
+.rb-any { display: flex; align-items: center; gap: 4px; margin: 0; }
