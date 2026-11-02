@@ -1099,9 +1099,14 @@
     return true;
   }
 
-  function updateRollButtons(enabled) {
+  // Rolling needs a routable input, and in build steps the finished build
+  // (the last step): a half-built run cannot roll (user, 2026-11-02).
+  let routable = false;
+  function buildUnfinished() { return build.on && build.step < build.plan.length - 1; }
+  function updateRollButtons(enabled = routable) {
+    routable = enabled;
     for (const id of ["rollOne", "rollOneTop", "rollMany"]) {
-      document.getElementById(id).disabled = !enabled;
+      document.getElementById(id).disabled = !enabled || buildUnfinished();
     }
   }
 
@@ -1494,6 +1499,7 @@
 
   function rollOne() {
     sound.unlock();
+    if (buildUnfinished()) return;
     const source = document.getElementById("routeSource").value;
     if (!routingGraph || !source || flyingMarbles.length >= 40) return;
     const run = MarbleRouting.sampleRun(layout, catalog, routingGraph, source);
@@ -2078,6 +2084,7 @@
     }
     panel.hidden = !build.on;
     document.body.classList.toggle("step0", build.on && build.step === 0);
+    updateRollButtons();
     document.getElementById("buildBar").hidden = !build.on;
     document.getElementById("partsBoard").hidden = !build.on || build.step !== 0;
     if (!build.on || !fullLayout) return;
