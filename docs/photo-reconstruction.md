@@ -16,9 +16,10 @@ official example image:
   are not separated from the wooden background.
 - A vision-language model reading the photo: levels (~8–9), rails (~10),
   blocks (~30+), special parts present; not exact counts, not which hole.
-- The real build uses things the model cannot express yet: a tilted rail,
-  rails crossing at non-grid angles, the large green chute, catch trays,
-  accelerators on rails. The official examples use the large chutes too.
+- The real build uses things the model cannot express yet: the large green
+  seesaw (a part not in the catalog yet; the user will add it), catch trays,
+  accelerators on rails. (A rail that looked tilted in the photo is level:
+  user, 2026-11-04 — perspective.) The official examples use large chutes.
 
 ## Idea: hints, then a solver
 
@@ -55,8 +56,15 @@ the gap between renders and photos. Runs in the browser (ONNX / WebGPU).
 
 ## Model work needed first
 
-- Tilted rails (a rail resting on columns of different heights).
-- Large chutes (green, red), catch trays, accelerators in the catalog.
+- The large green seesaw (user to describe), large chutes, catch trays,
+  accelerators in the catalog.
+
+## Direction (user, 2026-11-04)
+
+Solving from hints is developed and tested apart from detection: given the
+parts used, the order they stack in, and the base shape (square grid,
+triangle...), can the solver rebuild the same structure? See
+`src/quadrilla_solver/hints.py` and `hint_solver.py`.
 
 ## Discovery steps
 
