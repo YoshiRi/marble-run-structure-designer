@@ -91,8 +91,16 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     ranked = sorted(range(len(towers)), key=lambda i: (-len(towers[i]), towers[i]))
     index_of = {order[i]: n for n, i in enumerate(ranked)}
     towers = [towers[i] for i in ranked]
-    rails = sorted(({"type": r.rail_type, "towers": sorted(index_of[sp] for sp in rail_spots[r.id] if sp in index_of)}
-                    for r in layout.rails), key=lambda x: (x["type"], x["towers"]))
+    # rails lying the same way (parallel) share an axis; 0/1 only says
+    # which rails are parallel and which cross at a right angle
+    yaws = [r.yaw_deg % 180 for r in layout.rails]
+    axis0 = yaws[0] if yaws else 0
+    def axis(y):
+        d = (y - axis0) % 180
+        return 0 if min(d, 180 - d) < 1 else 1 if abs(d - 90) < 1 else None
+    rails = sorted(({"type": r.rail_type, "towers": sorted(index_of[sp] for sp in rail_spots[r.id] if sp in index_of),
+                     "axis": axis(y)}
+                    for r, y in zip(layout.rails, yaws)), key=lambda x: (x["type"], x["towers"]))
     top = max((r.z_units for r in layout.rails), default=0)
     out = {"parts": {k: v for k, v in sorted(usage.items()) if v}, "towers": towers, "base": base,
            "top_level": int(top), "rails": rails}

@@ -52,7 +52,7 @@ for base in sys.argv[1].split(","):
             print(base, seed, "skip (curves/twists)"); continue
         h = extract_hints(L, CAT, base, gt[0].source)
         towers = parse_towers(h["towers"], CAT)
-        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=h["rails"] if WITH_RAILS else None,
+        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=([{k: v for k, v in r.items() if k != "axis"} for r in h["rails"]] if 'noaxis' in OPTS else h["rails"]) if WITH_RAILS else None,
                                 route=h["route"] if WITH_ROUTE else None, covers=h["parts"].get("cover", 0))
         covers = h["parts"].get("cover", 0)
         t = time.time(); gt_pts = gt_holes(L)

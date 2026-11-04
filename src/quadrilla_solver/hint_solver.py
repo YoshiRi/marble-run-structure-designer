@@ -81,11 +81,12 @@ class State:
     rails: list[Rail] = field(default_factory=list)
     left: Counter = field(default_factory=Counter)
     covers: int = 0                                       # covers the route needs so far
+    flip: int | None = None                               # hint axis = rail axis ^ flip
 
     def copy(self) -> "State":
         return State(dict(self.pos), dict(self.base),
                      [Rail(r.kind, r.z, r.holes, r.yaw, dict(r.taken), r.end_tower) for r in self.rails],
-                     Counter(self.left), self.covers)
+                     Counter(self.left), self.covers, self.flip)
 
 
 def _near(a, b) -> bool:
@@ -103,7 +104,10 @@ class GeometrySolver:
         self.covers = covers
         self.rng = None                       # set by `sample`: random branch order
         # optional hint: for each rail, its type and the towers it lies on
-        self.rail_towers = [(r["type"], frozenset(r["towers"])) for r in rail_towers] if rail_towers else None
+        # (and, optionally, "axis": rails with the same axis lie parallel, with
+        # the other one at a right angle: only the grouping matters)
+        self.rail_towers = [(r["type"], frozenset(r["towers"]), r.get("axis")) for r in rail_towers] \
+            if rail_towers else None
         self.counts = Counter({k: v for k, v in rail_counts.items() if k in RAIL_TYPES})
         self.nodes, self.max_nodes = 0, max_nodes
 
@@ -234,25 +238,26 @@ class GeometrySolver:
             held = sum(1 for t in taken.values() if not (self.towers[t].on_rail and z - all_bases[t] == 0))
             if held < 2:
                 return
+            flips = [s.flip]
             if self.rail_towers is not None:
-                mine = frozenset(taken.values()) | ({end_tower} if end_tower is not None else set())
-                used = Counter((r.kind, frozenset(r.taken.values()) | ({r.end_tower} if r.end_tower is not None else set()))
-                               for r in s.rails)
-                want = Counter(self.rail_towers)
-                if want[(kind, mine)] - used[(kind, mine)] <= 0:
+                flips = [f for f in ((0, 1) if s.flip is None else (s.flip,))
+                         if self._rail_fits(s, kind, yaw, taken, end_tower, f)]
+                if not flips:
                     return
             need = self._route_covers(z, len(holes), taken, end_tower, all_bases)
             if need is None or (self.covers is not None and s.covers + need > self.covers):
                 return
-            nxt = s.copy()
-            nxt.covers += need
-            nxt.rails.append(Rail(kind, z, holes, yaw, dict(taken), end_tower))
-            nxt.left[kind] -= 1
-            for hole, t in taken.items():
-                if t not in nxt.pos:
-                    nxt.pos[t] = holes[hole]
-            nxt.base.update(bases)
-            yield from self._dfs(nxt)
+            for f in flips:
+                nxt = s.copy()
+                nxt.flip = f
+                nxt.covers += need
+                nxt.rails.append(Rail(kind, z, holes, yaw, dict(taken), end_tower))
+                nxt.left[kind] -= 1
+                for hole, t in taken.items():
+                    if t not in nxt.pos:
+                        nxt.pos[t] = holes[hole]
+                nxt.base.update(bases)
+                yield from self._dfs(nxt)
             return
         if j == k0:
             yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, taken, bases, end_tower)
@@ -287,6 +292,29 @@ class GeometrySolver:
                 yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, {**taken, j: c[0]},
                                       {**bases, c[0]: c[1]}, end_tower)
 
+
+    def _rail_fits(self, s: State, kind, yaw, taken, end_tower, flip) -> bool:
+        """A hinted rail (type, towers, axis) is still free for this one."""
+        def sig(k, y, tk, et):
+            towers = frozenset(tk.values()) | ({et} if et is not None else set())
+            return k, towers, (round(y / 90) % 2) ^ (flip or 0)
+        used = Counter(sig(r.kind, r.yaw, r.taken, r.end_tower) for r in s.rails)
+        k, towers, axis = sig(kind, yaw, taken, end_tower)
+        if flip is None:
+            axis = None
+        free = Counter()
+        for wk, wt, wa in self.rail_towers:
+            free[(wk, wt, wa)] += 1
+        # rails placed so far take their hinted entries (exact axis first)
+        for (uk, ut, ua), n in used.items():
+            for _ in range(n):
+                if free[(uk, ut, ua)] > 0:
+                    free[(uk, ut, ua)] -= 1
+                elif free[(uk, ut, None)] > 0:
+                    free[(uk, ut, None)] -= 1
+                else:
+                    return False
+        return free[(k, towers, axis)] > 0 or free[(k, towers, None)] > 0
 
     def _route_covers(self, z, n, taken, end_tower, bases) -> int | None:
         """Covers a new rail needs for the hinted route steps along it, or
