@@ -46,6 +46,10 @@ class Tower:
 
 def parse_towers(towers: Sequence[Sequence[str]], catalog: PartCatalog) -> list[Tower]:
     out = []
+    for tokens in towers:
+        for t in tokens:
+            if t != RAIL:
+                _HEIGHT[t.rstrip("<>")] = catalog.height_units(t.rstrip("<>"))
     for i, tokens in enumerate(towers):
         lv, levels, ends = 0, [], []
         for t in tokens:
@@ -76,11 +80,12 @@ class State:
     base: dict[int, int] = field(default_factory=dict)    # absolute level of each tower's level 0
     rails: list[Rail] = field(default_factory=list)
     left: Counter = field(default_factory=Counter)
+    covers: int = 0                                       # covers the route needs so far
 
     def copy(self) -> "State":
         return State(dict(self.pos), dict(self.base),
                      [Rail(r.kind, r.z, r.holes, r.yaw, dict(r.taken), r.end_tower) for r in self.rails],
-                     Counter(self.left))
+                     Counter(self.left), self.covers)
 
 
 def _near(a, b) -> bool:
@@ -89,8 +94,14 @@ def _near(a, b) -> bool:
 
 class GeometrySolver:
     def __init__(self, towers: list[Tower], rail_counts: Mapping[str, int], catalog: PartCatalog,
-                 max_nodes: int = 200000, rail_towers: Sequence[Mapping[str, Any]] | None = None):
+                 max_nodes: int = 200000, rail_towers: Sequence[Mapping[str, Any]] | None = None,
+                 route: Sequence[Sequence[int]] | None = None, covers: int | None = None):
         self.towers, self.catalog = towers, catalog
+        # optional hint: the marble rolls from tower a over to tower b ([a, b]);
+        # the holes it passes in between carry covers (at most `covers` in all)
+        self.route = [(a, b) for a, b in route if b >= 0] if route else []
+        self.covers = covers
+        self.rng = None                       # set by `sample`: random branch order
         # optional hint: for each rail, its type and the towers it lies on
         self.rail_towers = [(r["type"], frozenset(r["towers"])) for r in rail_towers] if rail_towers else None
         self.counts = Counter({k: v for k, v in rail_counts.items() if k in RAIL_TYPES})
@@ -175,27 +186,43 @@ class GeometrySolver:
             return
         t, z, what = open_[0]
         here = s.pos[t]
+        yaws = (0.0,) if first else (0.0, 90.0, 180.0, 270.0)
+        options = []
         for kind in [k for k in RAIL_TYPES if s.left[k] > 0]:
             holes_cm = self.catalog.rails[kind].holes_cm
             if what == "end":
                 # the rail's end touches the tower's side, the rail runs away from it
                 for zr in (z, z - 1):
-                    for yaw in ((0.0,) if first else (0.0, 90.0, 180.0, 270.0)):
+                    for yaw in yaws:
                         h = radians(yaw)
                         ex, ey = here[0] + 2.25 * cos(h), here[1] + 2.25 * sin(h)
                         holes = [(ex + x * cos(h), ey + x * sin(h)) for x in holes_cm]
-                        if not self._rail_clear(s, holes, zr, kind):
-                            continue
-                        yield from self._fill(s, kind, zr, holes, yaw, -1, t, 0, {}, None, t)
+                        options.append((kind, zr, holes, yaw, -1, {}, t))
                 continue
             for k in range(len(holes_cm)):
-                for yaw in ((0.0,) if first else (0.0, 90.0, 180.0, 270.0)):
+                for yaw in yaws:
                     h = radians(yaw)
                     holes = [(here[0] + (x - holes_cm[k]) * cos(h), here[1] + (x - holes_cm[k]) * sin(h))
                              for x in holes_cm]
-                    if not self._rail_clear(s, holes, z, kind):
-                        continue
-                    yield from self._fill(s, kind, z, holes, yaw, k, t, 0, {k: t})
+                    options.append((kind, z, holes, yaw, k, {k: t}, None))
+        if self.rng is not None:
+            self.rng.shuffle(options)
+        for kind, zr, holes, yaw, k, taken, end_tower in options:
+            if not self._rail_clear(s, holes, zr, kind):
+                continue
+            yield from self._fill(s, kind, zr, holes, yaw, k, t, 0, taken, None, end_tower)
+
+    def sample(self, restarts: int = 200, nodes_each: int = 2000, seed: int = 1) -> Iterator[State]:
+        """Depth-first search is stuck for long in its first subtree; many
+        short searches in random branch order spread over the whole space."""
+        import random
+        rng = random.Random(seed)
+        for _ in range(restarts):
+            self.rng = random.Random(rng.random())
+            self.nodes, self.max_nodes = 0, nodes_each
+            self.__dict__.pop("_seen", None)
+            yield from self.solve()
+        self.rng = None
 
     def _fill(self, s: State, kind, z, holes, yaw, k0, t0, j, taken, bases=None, end_tower=None) -> Iterator[State]:
         """Decide hole j of the new rail: a placed tower there (forced), an
@@ -214,7 +241,11 @@ class GeometrySolver:
                 want = Counter(self.rail_towers)
                 if want[(kind, mine)] - used[(kind, mine)] <= 0:
                     return
+            need = self._route_covers(z, len(holes), taken, end_tower, all_bases)
+            if need is None or (self.covers is not None and s.covers + need > self.covers):
+                return
             nxt = s.copy()
+            nxt.covers += need
             nxt.rails.append(Rail(kind, z, holes, yaw, dict(taken), end_tower))
             nxt.left[kind] -= 1
             for hole, t in taken.items():
@@ -238,17 +269,68 @@ class GeometrySolver:
         if self._blocked(s, xy, z, end_tower):
             return
         placed_now = set(taken.values())
+        choices = []
         for tw in self.towers:
             if tw.index in s.pos or tw.index in placed_now:
                 continue
             cands = [z - lv for lv in tw.levels] if tw.on_rail else ([0] if z in tw.levels else [])
             for base in dict.fromkeys(cands):
-                if base < 0:
-                    continue
-                yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, {**taken, j: tw.index},
-                                      {**bases, tw.index: base}, end_tower)
-        yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, taken, bases, end_tower)   # leave free
+                if base >= 0:
+                    choices.append((tw.index, base))
+        choices.append(None)                                                            # leave free
+        if self.rng is not None:
+            self.rng.shuffle(choices)
+        for c in choices:
+            if c is None:
+                yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, taken, bases, end_tower)
+            else:
+                yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, {**taken, j: c[0]},
+                                      {**bases, c[0]: c[1]}, end_tower)
 
+
+    def _route_covers(self, z, n, taken, end_tower, bases) -> int | None:
+        """Covers a new rail needs for the hinted route steps along it, or
+        None when a step cannot happen on it (a stack in the way)."""
+        if not self.route:
+            return 0
+        at = {t: h for h, t in taken.items()}
+        drops, holds, stands = {}, set(), set()
+        for t, h in at.items():
+            tw = self.towers[t]
+            j = self._token_at(tw, z - bases[t])
+            if j is None:
+                continue
+            if j + 1 < len(tw.tokens) and tw.tokens[j + 1] != RAIL:
+                drops[t] = h
+                stands.add(h)
+            if j > 0 and tw.tokens[j - 1] != RAIL:
+                holds.add(t)
+        if end_tower is not None:
+            drops[end_tower] = -1                      # enters at its end, before hole 0
+        need = 0
+        for a, b in self.route:
+            if a in drops and b in holds and b in at:
+                lo, hi = sorted((drops[a], at[b]))
+                between = range(lo + 1, hi)
+                if any(h in stands for h in between):
+                    return None                       # stuck on a stack standing in the way
+                need += len(between)
+        return need
+
+    @staticmethod
+    def _token_at(tw: Tower, lv: int) -> int | None:
+        z = 0
+        for j, tok in enumerate(tw.tokens):
+            if tok == RAIL:
+                if z == lv:
+                    return j
+                z += 1
+            else:
+                z += _HEIGHT.get(tok.rstrip("<>"), 0)
+        return None
+
+
+_HEIGHT: dict[str, int] = {}
 
 
 def _seg_dist(p, a, b) -> float:
@@ -276,8 +358,10 @@ class RouteChecker:
     hinted count."""
 
     def __init__(self, state: State, towers: list[Tower], catalog: PartCatalog, covers: int,
-                 exit_level: int | None = None, max_branches: int = 20000):
+                 exit_level: int | None = None, max_branches: int = 20000,
+                 route: Sequence[Sequence[int]] | None = None):
         self.s, self.towers, self.catalog, self.covers = state, towers, catalog, covers
+        self.route = {(a, b) for a, b in route} if route else None
         self.rails = state.rails
         self.routes = {}
         for k, spec in (catalog.raw.get("routing_blocks") or {}).items():
@@ -333,10 +417,18 @@ class RouteChecker:
     def valid(self) -> list[dict]:
         """Up to a few route assignments (flows, covers, block turns)."""
         start = self.input()
+        if self.route:
+            heads = {a for a, _ in self.route} - {b for _, b in self.route}
+            if len(heads) == 1:
+                t = heads.pop()
+                start = (t, len(self.towers[t].tokens) - 1) if t in self.s.base else None
         if start is None:
             return []
         out: list[dict] = []
-        for res in self._into_block(start[0], start[1], {"flow": {}, "covered": set(), "turn": {}, "exits": [], "stops": {}}):
+        acc0 = {"flow": {}, "covered": set(), "turn": {}, "exits": [], "stops": {}, "edges": frozenset(), "last": start[0]}
+        for res in self._into_block(start[0], start[1], acc0):
+            if self.route is not None and set(res["edges"]) != self.route:
+                continue
             if len(res["covered"]) == self.covers:
                 out.append(res)
                 if len(out) >= 3:
@@ -348,6 +440,8 @@ class RouteChecker:
         self.branches += 1
         if self.branches > self.max_branches:
             return
+        if acc["last"] != t:
+            acc = {**acc, "edges": acc["edges"] | {(acc["last"], t)}, "last": t}
         part = self._part(t, j)
         routes = self.routes.get(part, [])
         if part in PASS_DOWN:
@@ -380,7 +474,7 @@ class RouteChecker:
             yield acc
             return
         for res in self._roll(ri, h, ds[0], acc):
-            yield from self._branches(ri, h, ds[1:], res)
+            yield from self._branches(ri, h, ds[1:], {**res, "last": acc["last"]})
 
     def _base_rail(self, t, j):
         for (ri, h), (tt, jj) in self.above.items():
@@ -401,7 +495,8 @@ class RouteChecker:
             t, j = self.below[(ri, h)]
             yield from self._into_block(t, j, {**acc, "stops": {**acc["stops"], (ri, h): "block"}})
         elif r.z <= self.exit_level:
-            yield {**acc, "exits": acc["exits"] + [(ri, h)], "stops": {**acc["stops"], (ri, h): "exit"}}
+            yield {**acc, "exits": acc["exits"] + [(ri, h)], "stops": {**acc["stops"], (ri, h): "exit"},
+                   "edges": acc["edges"] | {(acc["last"], -1)}}
 
     def _roll(self, ri, h, d, acc, from_end=False) -> Iterator[dict]:
         r = self.rails[ri]
@@ -430,4 +525,5 @@ class RouteChecker:
             k += d
         # off the end
         if r.z <= self.exit_level:
-            yield {**acc, "covered": covered, "exits": acc["exits"] + [(ri, "end")]}
+            yield {**acc, "covered": covered, "exits": acc["exits"] + [(ri, "end")],
+                   "edges": acc["edges"] | {(acc["last"], -1)}}

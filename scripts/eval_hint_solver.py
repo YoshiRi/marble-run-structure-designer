@@ -40,21 +40,27 @@ def gt_holes(layout):
 def sol_holes(st):
     return [(x,y,r.z) for r in st.rails for (x,y) in r.holes]
 LIMIT = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
-WITH_RAILS = len(sys.argv) > 3 and sys.argv[3] == 'rails'
+OPTS = set(sys.argv[3].split(',')) if len(sys.argv) > 3 else set()
+WITH_RAILS = 'rails' in OPTS
+WITH_ROUTE = 'route' in OPTS
 for base in sys.argv[1].split(","):
-    for seed in (11,12,13,14,15):
+    for seed in [int(x) for x in __import__("os").environ.get("SEEDS","11,12,13,14,15").split(",")]:
         gt = generate(CAT, owned, config=GeneratorConfig(**CASES[base]), attempts=60, seed=seed, keep=1)
         if not gt: print(base, seed, "no GT"); continue
         L = gt[0].layout
         if any(r.rail_type not in ("straight_long","straight_long_center","straight_short") for r in L.rails):
             print(base, seed, "skip (curves/twists)"); continue
-        h = extract_hints(L, CAT, base)
+        h = extract_hints(L, CAT, base, gt[0].source)
         towers = parse_towers(h["towers"], CAT)
-        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=100000, rail_towers=h["rails"] if WITH_RAILS else None)
+        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=h["rails"] if WITH_RAILS else None,
+                                route=h["route"] if WITH_ROUTE else None, covers=h["parts"].get("cover", 0))
+        covers = h["parts"].get("cover", 0)
         t = time.time(); gt_pts = gt_holes(L)
         n = found = 0; first_match = None; distinct = set(); routed = set(); gt_routed = False
-        covers = h["parts"].get("cover", 0)
-        for st in solver.solve():
+
+        SAMPLE = 'sample' in OPTS
+        it = solver.sample(int(__import__('os').environ.get('RESTARTS', '300')), int(__import__('os').environ.get('EACH', '3000'))) if SAMPLE else solver.solve()
+        for st in it:
             n += 1
             c = canon_holes(sol_holes(st))
             new = c not in distinct
@@ -63,7 +69,7 @@ for base in sys.argv[1].split(","):
             if is_gt:
                 found += 1
                 first_match = first_match or len(distinct)
-            if c not in routed and RouteChecker(st, towers, CAT, covers).valid():
+            if c not in routed and RouteChecker(st, towers, CAT, covers, route=h['route'] if WITH_ROUTE else None).valid():
                 routed.add(c)
                 gt_routed = gt_routed or is_gt
             if n >= LIMIT: break

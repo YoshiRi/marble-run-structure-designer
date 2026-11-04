@@ -37,7 +37,7 @@ def _key(x: float, y: float) -> tuple[float, float]:
     return (round(x * 2) / 2, round(y * 2) / 2)
 
 
-def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid") -> dict[str, Any]:
+def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", source=None) -> dict[str, Any]:
     parts = layout.part_map()
     rail_ids = {r.id for r in layout.rails}
     # a block whose side sends the marble into a rail's end (">"), or takes it
@@ -94,8 +94,43 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid") -> d
     rails = sorted(({"type": r.rail_type, "towers": sorted(index_of[sp] for sp in rail_spots[r.id] if sp in index_of)}
                     for r in layout.rails), key=lambda x: (x["type"], x["towers"]))
     top = max((r.z_units for r in layout.rails), default=0)
-    return {"parts": {k: v for k, v in sorted(usage.items()) if v}, "towers": towers, "base": base,
-            "top_level": int(top), "rails": rails}
+    out = {"parts": {k: v for k, v in sorted(usage.items()) if v}, "towers": towers, "base": base,
+           "top_level": int(top), "rails": rails}
+    if source is not None:
+        tower_of = {}
+        for s in layout.supports:
+            stack = [parts[p] for p in s.stack_part_ids if p in parts]
+            if stack:
+                for p in stack:
+                    tower_of[p.id] = index_of[_key(stack[0].x_cm, stack[0].y_cm)]
+        out["route"] = route_edges(layout, catalog, source, tower_of)
+    return out
+
+
+def route_edges(layout: Layout, catalog: PartCatalog, source, tower_of: Mapping[str, int]) -> list[list[int]]:
+    """What a person sees the marble do: from which tower it rolls over to
+    which tower ([a, b]), and from which tower it leaves the run ([a, -1])."""
+    from .connectivity import build_routing_graph
+    edges = build_routing_graph(layout, catalog).edges
+    found: set[tuple[int, int]] = set()
+    start = source.key
+    seen = {(start, None)}
+    stack = [(start, tower_of.get(start.split(":", 1)[0]))]
+    while stack:
+        node, last = stack.pop()
+        here = tower_of.get(node.split(":", 1)[0])
+        if here is not None:
+            if last is not None and here != last:
+                found.add((last, here))
+            last = here
+        nxt = edges.get(node, ())
+        if not nxt and last is not None:
+            found.add((last, -1))
+        for n in nxt:
+            if (n, last) not in seen:
+                seen.add((n, last))
+                stack.append((n, last))
+    return sorted([a, b] for a, b in found)
 
 
 def _edit(a: Sequence[str], b: Sequence[str]) -> int:
