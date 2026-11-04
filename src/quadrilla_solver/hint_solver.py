@@ -108,8 +108,9 @@ class GeometrySolver:
         # optional hint: for each rail, its type and the towers it lies on
         # (and, optionally, "axis": rails with the same axis lie parallel, with
         # the other one at a right angle: only the grouping matters)
-        self.rail_towers = [(r["type"], frozenset(r["towers"]), r.get("axis")) for r in rail_towers] \
-            if rail_towers else None
+        self.rail_towers = [(r["type"], frozenset(r["towers"]), r.get("axis"),
+                             min(tuple(r["order"]), tuple(reversed(r["order"]))) if r.get("order") else None)
+                            for r in rail_towers] if rail_towers else None
         self.counts = Counter({k: v for k, v in rail_counts.items() if k in RAIL_TYPES})
         self.nodes, self.max_nodes = 0, max_nodes
 
@@ -166,7 +167,7 @@ class GeometrySolver:
     def _key(self, s: State):
         rails = frozenset((r.kind, r.z, tuple(sorted((round(x, 1), round(y, 1)) for x, y in r.holes))) for r in s.rails)
         towers = frozenset((t, round(p[0], 1), round(p[1], 1), s.base[t]) for t, p in s.pos.items())
-        return rails, towers
+        return rails, towers, s.flip, s.covers
 
     def _dfs(self, s: State, first: bool = False) -> Iterator[State]:
         self.nodes += 1
@@ -311,28 +312,32 @@ class GeometrySolver:
         mid = (cm[0] + cm[-1]) / 2
         return bool(at) and min(at) - 0.5 <= mid <= max(at) + 0.5
 
+    @staticmethod
+    def _order(taken, end_tower) -> tuple:
+        """Towers along a rail from one end to the other, read either way."""
+        seq = ([end_tower] if end_tower is not None else []) + [taken[h] for h in sorted(taken)]
+        return min(tuple(seq), tuple(reversed(seq)))
+
     def _rail_fits(self, s: State, kind, yaw, taken, end_tower, flip) -> bool:
-        """A hinted rail (type, towers, axis) is still free for this one."""
-        def sig(k, y, tk, et):
+        """A hinted rail (type, towers, axis, order) is still free for this one;
+        a hint without axis or order matches any."""
+        def sig(k, y, tk, et, f):
             towers = frozenset(tk.values()) | ({et} if et is not None else set())
-            return k, towers, (round(y / 90) % 2) ^ (flip or 0)
-        used = Counter(sig(r.kind, r.yaw, r.taken, r.end_tower) for r in s.rails)
-        k, towers, axis = sig(kind, yaw, taken, end_tower)
-        if flip is None:
-            axis = None
-        free = Counter()
-        for wk, wt, wa in self.rail_towers:
-            free[(wk, wt, wa)] += 1
-        # rails placed so far take their hinted entries (exact axis first)
-        for (uk, ut, ua), n in used.items():
-            for _ in range(n):
-                if free[(uk, ut, ua)] > 0:
-                    free[(uk, ut, ua)] -= 1
-                elif free[(uk, ut, None)] > 0:
-                    free[(uk, ut, None)] -= 1
-                else:
-                    return False
-        return free[(k, towers, axis)] > 0 or free[(k, towers, None)] > 0
+            axis = None if f is None else (round(y / 90) % 2) ^ f
+            return k, towers, axis, self._order(tk, et)
+        def fits(have, want):
+            return (have[0] == want[0] and have[1] == want[1] and (want[2] is None or have[2] is None or have[2] == want[2])
+                    and (want[3] is None or have[3] == want[3]))
+        free = list(self.rail_towers)
+        for r in s.rails + [Rail(kind, 0, [], yaw, taken, end_tower)]:
+            have = sig(r.kind, r.yaw, r.taken, r.end_tower, flip)
+            # an exact match first, so that a wildcard entry stays for others
+            best = next((w for w in free if fits(have, w) and None not in w[2:]), None) or \
+                next((w for w in free if fits(have, w)), None)
+            if best is None:
+                return False
+            free.remove(best)
+        return True
 
     def _route_covers(self, z, n, taken, end_tower, bases) -> int | None:
         """Covers a new rail needs for the hinted route steps along it, or

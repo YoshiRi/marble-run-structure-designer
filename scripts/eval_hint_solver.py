@@ -27,10 +27,17 @@ def variants(pts):
             out.append(sorted((round(x-mx,1),round(y-my,1),z) for x,y,z in o))
     return out
 def match(gt_pts, pts):
+    """Same points (with the same labels) up to a turn, a mirror and a shift."""
     if len(gt_pts)!=len(pts): return False
-    g=sorted((round(x-min(a[0] for a in gt_pts),1),round(y-min(a[1] for a in gt_pts),1),z) for x,y,z in gt_pts)
+    mx=min(a[0] for a in gt_pts); my=min(a[1] for a in gt_pts)
+    g=[(x-mx,y-my,z) for x,y,z in gt_pts]
     for v in variants(pts):
-        if all(abs(a[0]-b[0])<0.6 and abs(a[1]-b[1])<0.6 and a[2]==b[2] for a,b in zip(g,v)): return True
+        pool=list(v); ok=True
+        for x,y,z in g:
+            i=next((i for i,(a,b,c) in enumerate(pool) if c==z and abs(a-x)<0.6 and abs(b-y)<0.6), None)
+            if i is None: ok=False; break
+            pool.pop(i)
+        if ok: return True
     return False
 def canon_holes(pts):
     return min(tuple((round(x),round(y),z) for x,y,z in v) for v in variants(pts))
@@ -55,7 +62,7 @@ for base in sys.argv[1].split(","):
             print(base, seed, "skip (curves/twists)"); continue
         h = extract_hints(L, CAT, base, gt[0].source)
         towers = parse_towers(h["towers"], CAT)
-        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=([{k: v for k, v in r.items() if k != "axis"} for r in h["rails"]] if 'noaxis' in OPTS else h["rails"]) if WITH_RAILS else None,
+        solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=[{k: v for k, v in r.items() if not (k == "axis" and 'noaxis' in OPTS) and not (k == "order" and 'noorder' in OPTS)} for r in h["rails"]] if WITH_RAILS else None,
                                 route=h["route"] if WITH_ROUTE else None, covers=None if 'nocovers' in OPTS else h["parts"].get("cover", 0))
         covers = None if 'nocovers' in OPTS else h["parts"].get("cover", 0)
         ranked = {}; gt_keys = set()

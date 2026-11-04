@@ -51,6 +51,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     usage = Counter(r.rail_type for r in layout.rails) + Counter(p.part_type for p in layout.parts)
     usage["cover"] = sum(1 for r in layout.rails for s in r.hole_states.values() if s == "covered")
     spots: dict[tuple[float, float], list[tuple[float, list[str]]]] = {}
+    exact: dict[tuple[float, float], list[float]] = {}
     for s in layout.supports:
         stack = [parts[p] for p in s.stack_part_ids if p in parts]
         if not stack:
@@ -58,6 +59,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
         tokens = ([RAIL] if s.lower_rail_id is not None else []) + [p.part_type + marks.get(p.id, "") for p in stack] + \
             ([RAIL] if s.upper_rail_id is not None else [])
         spots.setdefault(_key(stack[0].x_cm, stack[0].y_cm), []).append((stack[0].z_units, tokens))
+        exact.setdefault(_key(stack[0].x_cm, stack[0].y_cm), [stack[0].x_cm, stack[0].y_cm])
     # which spots each rail lies on (or touches with its end): a person sees
     # which columns a rail rests on
     spot_of_part = {}
@@ -91,7 +93,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     ranked = sorted(range(len(towers)), key=lambda i: (-len(towers[i]), towers[i]))
     index_of = {order[i]: n for n, i in enumerate(ranked)}
     towers = [towers[i] for i in ranked]
-    spots_xy = [list(order[i]) for i in ranked]
+    spots_xy = [exact[order[i]] for i in ranked]
     # rails lying the same way (parallel) share an axis; 0/1 only says
     # which rails are parallel and which cross at a right angle
     yaws = [r.yaw_deg % 180 for r in layout.rails]
@@ -99,8 +101,14 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     def axis(y):
         d = (y - axis0) % 180
         return 0 if min(d, 180 - d) < 1 else 1 if abs(d - 90) < 1 else None
+    def order(r):
+        # towers along the rail, end A to end B: a person reads them off in a row
+        d = (math.cos(math.radians(r.yaw_deg)), math.sin(math.radians(r.yaw_deg)))
+        sp = [s for s in rail_spots[r.id] if s in index_of]
+        sp.sort(key=lambda s: (s[0] - r.x_cm) * d[0] + (s[1] - r.y_cm) * d[1])
+        return [index_of[s] for s in sp]
     rails = sorted(({"type": r.rail_type, "towers": sorted(index_of[sp] for sp in rail_spots[r.id] if sp in index_of),
-                     "axis": axis(y)}
+                     "axis": axis(y), "order": order(r)}
                     for r, y in zip(layout.rails, yaws)), key=lambda x: (x["type"], x["towers"]))
     top = max((r.z_units for r in layout.rails), default=0)
     out = {"parts": {k: v for k, v in sorted(usage.items()) if v}, "towers": towers, "base": base,
