@@ -96,13 +96,15 @@ def _near(a, b) -> bool:
 class GeometrySolver:
     def __init__(self, towers: list[Tower], rail_counts: Mapping[str, int], catalog: PartCatalog,
                  max_nodes: int = 200000, rail_towers: Sequence[Mapping[str, Any]] | None = None,
-                 route: Sequence[Sequence[int]] | None = None, covers: int | None = None):
+                 route: Sequence[Sequence[int]] | None = None, covers: int | None = None,
+                 balanced: bool = True):
         self.towers, self.catalog = towers, catalog
         # optional hint: the marble rolls from tower a over to tower b ([a, b]);
         # the holes it passes in between carry covers (at most `covers` in all)
         self.route = [(a, b) for a, b in route if b >= 0] if route else []
         self.covers = covers
         self.rng = None                       # set by `sample`: random branch order
+        self.balanced = balanced              # every rail sits steady on its columns
         # optional hint: for each rail, its type and the towers it lies on
         # (and, optionally, "axis": rails with the same axis lie parallel, with
         # the other one at a right angle: only the grouping matters)
@@ -238,6 +240,8 @@ class GeometrySolver:
             held = sum(1 for t in taken.values() if not (self.towers[t].on_rail and z - all_bases[t] == 0))
             if held < 2:
                 return
+            if self.balanced and not self._steady(kind, z, taken, end_tower, all_bases):
+                return
             flips = [s.flip]
             if self.rail_towers is not None:
                 flips = [f for f in ((0, 1) if s.flip is None else (s.flip,))
@@ -292,6 +296,20 @@ class GeometrySolver:
                 yield from self._fill(s, kind, z, holes, yaw, k0, t0, j + 1, {**taken, j: c[0]},
                                       {**bases, c[0]: c[1]}, end_tower)
 
+
+    def _steady(self, kind, z, taken, end_tower, bases) -> bool:
+        """The rail's middle lies between its outermost holding columns."""
+        cm = self.catalog.rails[kind].holes_cm
+        at = []
+        for h, t in taken.items():
+            tw = self.towers[t]
+            j = self._token_at(tw, z - bases[t])
+            if j is not None and j > 0 and tw.tokens[j - 1] != RAIL:
+                at.append(cm[h])
+        if end_tower is not None:
+            at.append(-2.25)
+        mid = (cm[0] + cm[-1]) / 2
+        return bool(at) and min(at) - 0.5 <= mid <= max(at) + 0.5
 
     def _rail_fits(self, s: State, kind, yaw, taken, end_tower, flip) -> bool:
         """A hinted rail (type, towers, axis) is still free for this one."""
@@ -385,7 +403,7 @@ class RouteChecker:
     lowest levels (`exit_level`). Covers over passed holes must add up to the
     hinted count."""
 
-    def __init__(self, state: State, towers: list[Tower], catalog: PartCatalog, covers: int,
+    def __init__(self, state: State, towers: list[Tower], catalog: PartCatalog, covers: int | None,
                  exit_level: int | None = None, max_branches: int = 20000,
                  route: Sequence[Sequence[int]] | None = None):
         self.s, self.towers, self.catalog, self.covers = state, towers, catalog, covers
@@ -457,11 +475,16 @@ class RouteChecker:
         for res in self._into_block(start[0], start[1], acc0):
             if self.route is not None and set(res["edges"]) != self.route:
                 continue
-            if len(res["covered"]) == self.covers:
+            if self.covers is None:
+                out.append(res)                 # no cover count given: fewest covers first
+                if len(out) >= 50:
+                    break
+            elif len(res["covered"]) == self.covers:
                 out.append(res)
                 if len(out) >= 3:
                     break
-        return out
+        out.sort(key=lambda r: len(r["covered"]))
+        return out[:3]
 
     # marble enters part (t, j) from the top
     def _into_block(self, t, j, acc) -> Iterator[dict]:
@@ -547,7 +570,7 @@ class RouteChecker:
             target_ok = (ri, k) in self.below or r.z <= self.exit_level
             if target_ok and (ri, k) not in covered:
                 yield from self._fall(ri, k, {**acc, "covered": set(covered)})
-            if len(covered) >= self.covers:
+            if self.covers is not None and len(covered) >= self.covers:
                 return
             covered.add((ri, k))
             k += d
@@ -555,3 +578,46 @@ class RouteChecker:
         if r.z <= self.exit_level:
             yield {**acc, "covered": covered, "exits": acc["exits"] + [(ri, "end")],
                    "edges": acc["edges"] | {(acc["last"], -1)}}
+
+
+# ---- Stage C: rank what is left (balance, few covers, compact) ---------------
+
+def holders(state: State, towers: list[Tower], rail: Rail) -> list[int]:
+    """Holes of a rail that a column holds up from below (a stack standing on
+    it does not hold it)."""
+    out = []
+    for h, t in rail.taken.items():
+        tw = towers[t]
+        j = GeometrySolver._token_at(tw, rail.z - state.base[t])
+        if j is not None and j > 0 and tw.tokens[j - 1] != RAIL:
+            out.append(h)
+    return sorted(out)
+
+
+def balance(state: State, towers: list[Tower], catalog: PartCatalog) -> tuple[bool, float]:
+    """Every rail's middle lies between its outermost holding columns (else it
+    tips); the overhang past them (cm, summed) says how well it sits."""
+    over = 0.0
+    for r in state.rails:
+        cm = catalog.rails[r.kind].holes_cm
+        at = [cm[h] for h in holders(state, towers, r)]
+        if r.end_tower is not None:
+            at.append(-2.25)                        # the block at its end props it
+        if not at:
+            return False, float("inf")
+        lo, hi, mid = min(at), max(at), (cm[0] + cm[-1]) / 2
+        if not (lo - 0.5 <= mid <= hi + 0.5):
+            return False, float("inf")
+        over += max(0.0, lo - cm[0]) + max(0.0, cm[-1] - hi)
+    return True, over
+
+
+def rank_key(state: State, towers: list[Tower], catalog: PartCatalog, route: dict | None) -> tuple:
+    """Smaller is more likely: fewer covers on the marble's way, then a
+    better-held build, then a smaller footprint."""
+    ok, over = balance(state, towers, catalog)
+    xs = [p[0] for r in state.rails for p in r.holes]
+    ys = [p[1] for r in state.rails for p in r.holes]
+    area = (max(xs) - min(xs)) * (max(ys) - min(ys)) if xs else 0.0
+    covers = len(route["covered"]) if route else 99
+    return (not ok, covers, round(over, 1), round(area))

@@ -4,7 +4,7 @@ sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1]
 from quadrilla_solver.catalog import load_catalog
 from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
 from quadrilla_solver.hints import extract_hints
-from quadrilla_solver.hint_solver import parse_towers, GeometrySolver, RouteChecker
+from quadrilla_solver.hint_solver import parse_towers, GeometrySolver, RouteChecker, rank_key, balance
 from quadrilla_solver.model import rail_hole_world
 from math import cos, sin, radians
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +38,10 @@ def gt_holes(layout):
     return [ (x,y,z) for r in layout.rails if r.rail_type in ("straight_long","straight_long_center","straight_short")
              for k in range(len(CAT.rails[r.rail_type].holes_cm)) for (x,y,z) in [rail_hole_world(r,CAT,k)]]
 def sol_holes(st):
-    return [(x,y,r.z) for r in st.rails for (x,y) in r.holes]
+    # rail holes, and each tower's spot (labelled by its index) so that the
+    # same holes with towers in other holes do not count as the answer
+    return [(x,y,r.z) for r in st.rails for (x,y) in r.holes] + [(p[0], p[1], LABEL[t]) for t, p in st.pos.items()]
+LABEL = []
 LIMIT = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
 OPTS = set(sys.argv[3].split(',')) if len(sys.argv) > 3 else set()
 WITH_RAILS = 'rails' in OPTS
@@ -53,9 +56,11 @@ for base in sys.argv[1].split(","):
         h = extract_hints(L, CAT, base, gt[0].source)
         towers = parse_towers(h["towers"], CAT)
         solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=int(__import__("os").environ.get("NODES","100000")), rail_towers=([{k: v for k, v in r.items() if k != "axis"} for r in h["rails"]] if 'noaxis' in OPTS else h["rails"]) if WITH_RAILS else None,
-                                route=h["route"] if WITH_ROUTE else None, covers=h["parts"].get("cover", 0))
-        covers = h["parts"].get("cover", 0)
-        t = time.time(); gt_pts = gt_holes(L)
+                                route=h["route"] if WITH_ROUTE else None, covers=None if 'nocovers' in OPTS else h["parts"].get("cover", 0))
+        covers = None if 'nocovers' in OPTS else h["parts"].get("cover", 0)
+        ranked = {}; gt_keys = set()
+        kinds = {}; LABEL[:] = [1000 + kinds.setdefault(tuple(tw), len(kinds)) for tw in h['towers']]   # same-looking towers are interchangeable
+        t = time.time(); gt_pts = gt_holes(L) + [(x, y, LABEL[i]) for i, (x, y) in enumerate(h['spots'])]
         n = found = 0; first_match = None; distinct = set(); routed = set(); gt_routed = False
 
         SAMPLE = 'sample' in OPTS
@@ -69,10 +74,20 @@ for base in sys.argv[1].split(","):
             if is_gt:
                 found += 1
                 first_match = first_match or len(distinct)
-            if c not in routed and RouteChecker(st, towers, CAT, covers, route=h['route'] if WITH_ROUTE else None).valid():
-                routed.add(c)
-                gt_routed = gt_routed or is_gt
+            if c not in routed:
+                res = RouteChecker(st, towers, CAT, covers, route=h['route'] if WITH_ROUTE else None).valid()
+                if res:
+                    routed.add(c)
+                    gt_routed = gt_routed or is_gt
+                    ranked[c] = rank_key(st, towers, CAT, res[0])
+                    if is_gt: gt_keys.add(c)
             if n >= LIMIT: break
+        order = sorted(ranked, key=ranked.get)
+        balanced = sum(1 for k in ranked.values() if not k[0])
+        gt_rank = min((order.index(k) + 1 for k in gt_keys), default=None)
+        gt_key = ranked[min(gt_keys, key=order.index)] if gt_keys else None
+        ties = sum(1 for k in ranked.values() if gt_key and k <= gt_key)
+        print(json.dumps({"rank": gt_rank, "ties_upto_gt": ties, "balanced": balanced, "gt_key": gt_key}))
         print(json.dumps({"base": base, "seed": seed, "rails": len(L.rails), "towers": len(towers),
                           "solutions": n, "distinct": len(distinct), "route_ok": len(routed), "gt_route_ok": gt_routed, "matching": found, "first_match_at": first_match,
                           "nodes": solver.nodes, "secs": round(time.time()-t,1)}))
