@@ -1,13 +1,13 @@
 import sys, time, json
 from pathlib import Path
-sys.path.insert(0, '/home/claude/marble-run-structure-designer/src')
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parents[1] / 'src'))
 from quadrilla_solver.catalog import load_catalog
 from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
 from quadrilla_solver.hints import extract_hints
 from quadrilla_solver.hint_solver import parse_towers, GeometrySolver, RouteChecker
 from quadrilla_solver.model import rail_hole_world
 from math import cos, sin, radians
-ROOT = Path('/home/claude/marble-run-structure-designer')
+ROOT = Path(__file__).resolve().parents[1]
 CAT = load_catalog(ROOT / 'catalog/parts.yaml')
 owned = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
 PLAIN = dict(twist_probability=0, curve_ready_bias=0, seesaw_probability=0, frame_probability=0)
