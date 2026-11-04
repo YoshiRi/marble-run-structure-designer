@@ -1,20 +1,13 @@
-"""Discovery: rebuild generated layouts from their hints (towers, parts[, rails]).
-
-    PYTHONPATH=src python scripts/eval_hint_solver.py grid,ladder 20000 [rails]
-
-Reports, per ground-truth layout, how many distinct geometries fit the hints
-and whether the true one is among them.
-"""
 import sys, time, json
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+sys.path.insert(0, '/home/claude/marble-run-structure-designer/src')
 from quadrilla_solver.catalog import load_catalog
 from quadrilla_solver.generator import Budget, GeneratorConfig, generate, resolve_set_paths
 from quadrilla_solver.hints import extract_hints
-from quadrilla_solver.hint_solver import parse_towers, GeometrySolver
+from quadrilla_solver.hint_solver import parse_towers, GeometrySolver, RouteChecker
 from quadrilla_solver.model import rail_hole_world
 from math import cos, sin, radians
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path('/home/claude/marble-run-structure-designer')
 CAT = load_catalog(ROOT / 'catalog/parts.yaml')
 owned = Budget.from_sets(resolve_set_paths(ROOT, ["OWNED"]))
 PLAIN = dict(twist_probability=0, curve_ready_bias=0, seesaw_probability=0, frame_probability=0)
@@ -59,14 +52,21 @@ for base in sys.argv[1].split(","):
         towers = parse_towers(h["towers"], CAT)
         solver = GeometrySolver(towers, h["parts"], CAT, max_nodes=100000, rail_towers=h["rails"] if WITH_RAILS else None)
         t = time.time(); gt_pts = gt_holes(L)
-        n = found = 0; first_match = None; distinct = set()
+        n = found = 0; first_match = None; distinct = set(); routed = set(); gt_routed = False
+        covers = h["parts"].get("cover", 0)
         for st in solver.solve():
             n += 1
-            c = canon_holes(sol_holes(st)); distinct.add(c)
-            if match(gt_pts, sol_holes(st)):
+            c = canon_holes(sol_holes(st))
+            new = c not in distinct
+            distinct.add(c)
+            is_gt = match(gt_pts, sol_holes(st))
+            if is_gt:
                 found += 1
                 first_match = first_match or len(distinct)
+            if c not in routed and RouteChecker(st, towers, CAT, covers).valid():
+                routed.add(c)
+                gt_routed = gt_routed or is_gt
             if n >= LIMIT: break
         print(json.dumps({"base": base, "seed": seed, "rails": len(L.rails), "towers": len(towers),
-                          "solutions": n, "distinct": len(distinct), "matching": found, "first_match_at": first_match,
+                          "solutions": n, "distinct": len(distinct), "route_ok": len(routed), "gt_route_ok": gt_routed, "matching": found, "first_match_at": first_match,
                           "nodes": solver.nodes, "secs": round(time.time()-t,1)}))

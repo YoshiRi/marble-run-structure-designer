@@ -258,3 +258,176 @@ def _seg_dist(p, a, b) -> float:
     L = dx * dx + dy * dy
     t = 0.0 if L == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L))
     return hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy))
+
+
+# ---- Stage B: is there a route that never jumps out high or gets stuck? ------
+
+PASS_DOWN = {"purple_drop", "orange_vertical"}
+
+
+class RouteChecker:
+    """Marble route over a geometry: the marble is put into the top of the
+    highest free-standing stack; a block sends it out of its front (either
+    way along the rail it stands on; a red splitter both ways); on a rail it
+    drops at the first uncovered hole ahead, into the column below, or
+    through to the ground; a stack standing on a hole stops it (stuck); a
+    fall to the ground or off a rail end is an exit, allowed only from the
+    lowest levels (`exit_level`). Covers over passed holes must add up to the
+    hinted count."""
+
+    def __init__(self, state: State, towers: list[Tower], catalog: PartCatalog, covers: int,
+                 exit_level: int | None = None, max_branches: int = 20000):
+        self.s, self.towers, self.catalog, self.covers = state, towers, catalog, covers
+        self.rails = state.rails
+        self.routes = {}
+        for k, spec in (catalog.raw.get("routing_blocks") or {}).items():
+            self.routes[k] = spec.get("routes", [])
+        low = min((r.z for r in self.rails), default=0)
+        self.exit_level = exit_level if exit_level is not None else low + 1
+        self.max_branches, self.branches = max_branches, 0
+        self.below: dict[tuple[int, int], tuple[int, int]] = {}    # (rail, hole) -> (tower, token index)
+        self.above: dict[tuple[int, int], tuple[int, int]] = {}
+        self.side: dict[tuple[int, int], tuple[int, int]] = {}     # (tower, token) -> (rail, end)
+        rail_at = {}
+        for i, r in enumerate(self.rails):
+            for h, t in r.taken.items():
+                rail_at[(t, r.z)] = (i, h)
+        for tw in towers:
+            if tw.index not in state.base:
+                continue
+            z = state.base[tw.index]
+            for j, tok in enumerate(tw.tokens):
+                if tok == RAIL:
+                    if (tw.index, z) in rail_at:
+                        ri, h = rail_at[(tw.index, z)]
+                        if j > 0 and tw.tokens[j - 1] != RAIL:
+                            self.below[(ri, h)] = (tw.index, j - 1)
+                        if j + 1 < len(tw.tokens) and tw.tokens[j + 1] != RAIL:
+                            self.above[(ri, h)] = (tw.index, j + 1)
+                    z += 1
+                else:
+                    if tok[-1] in "<>":
+                        for i, r in enumerate(self.rails):
+                            if r.end_tower == tw.index and r.z in (z, z - 1):
+                                self.side[(tw.index, j)] = (i, 0)
+                    z += catalog.height_units(tok.rstrip("<>"))
+
+    def _part(self, t: int, j: int) -> str:
+        return self.towers[t].tokens[j].rstrip("<>")
+
+    def _stack_bottom(self, t: int, j: int) -> int:
+        while j > 0 and self.towers[t].tokens[j - 1] != RAIL:
+            j -= 1
+        return j
+
+    def input(self) -> tuple[int, int] | None:
+        best = None
+        for tw in self.towers:
+            if tw.index not in self.s.base or not tw.tokens or tw.tokens[-1] == RAIL:
+                continue
+            top = self.s.base[tw.index] + tw.top
+            if best is None or top > best[0]:
+                best = (top, tw.index, len(tw.tokens) - 1)
+        return None if best is None else (best[1], best[2])
+
+    def valid(self) -> list[dict]:
+        """Up to a few route assignments (flows, covers, block turns)."""
+        start = self.input()
+        if start is None:
+            return []
+        out: list[dict] = []
+        for res in self._into_block(start[0], start[1], {"flow": {}, "covered": set(), "turn": {}, "exits": [], "stops": {}}):
+            if len(res["covered"]) == self.covers:
+                out.append(res)
+                if len(out) >= 3:
+                    break
+        return out
+
+    # marble enters part (t, j) from the top
+    def _into_block(self, t, j, acc) -> Iterator[dict]:
+        self.branches += 1
+        if self.branches > self.max_branches:
+            return
+        part = self._part(t, j)
+        routes = self.routes.get(part, [])
+        if part in PASS_DOWN:
+            if j == 0 or self.towers[t].tokens[j - 1] == RAIL:
+                yield from self._through_hole(t, j, acc)   # falls through the hole it stands on
+            else:
+                yield from self._into_block(t, j - 1, acc)
+            return
+        outs = [r for r in routes if r.get("from") == "top"]
+        if not outs:
+            return                                          # no top inlet: stuck
+        if (t, j) in self.side:                             # side outlet into a rail end
+            ri, _ = self.side[(t, j)]
+            yield from self._roll(ri, None, +1, acc, from_end=True)
+            return
+        bottom = j == 0 or self.towers[t].tokens[j - 1] == RAIL
+        if not bottom:
+            return                                          # a side outlet onto nothing
+        base = self._base_rail(t, j)
+        if base is None:
+            return                                          # on the ground: nowhere to roll
+        ri, h = base
+        both = "to_any_of" in outs[0] and part == "red_random_split"
+        dirs = [(+1, -1)] if both else [(+1,), (-1,)]
+        for ds in dirs:
+            yield from self._branches(ri, h, list(ds), {**acc, "turn": {**acc["turn"], (t, j): ds[0]}})
+
+    def _branches(self, ri, h, ds, acc) -> Iterator[dict]:
+        if not ds:
+            yield acc
+            return
+        for res in self._roll(ri, h, ds[0], acc):
+            yield from self._branches(ri, h, ds[1:], res)
+
+    def _base_rail(self, t, j):
+        for (ri, h), (tt, jj) in self.above.items():
+            if tt == t and jj == j:
+                return ri, h
+        return None
+
+    def _through_hole(self, t, j, acc):
+        base = self._base_rail(t, j)
+        if base is None:
+            return
+        ri, h = base
+        yield from self._fall(ri, h, acc)
+
+    def _fall(self, ri, h, acc) -> Iterator[dict]:
+        r = self.rails[ri]
+        if (ri, h) in self.below:
+            t, j = self.below[(ri, h)]
+            yield from self._into_block(t, j, {**acc, "stops": {**acc["stops"], (ri, h): "block"}})
+        elif r.z <= self.exit_level:
+            yield {**acc, "exits": acc["exits"] + [(ri, h)], "stops": {**acc["stops"], (ri, h): "exit"}}
+
+    def _roll(self, ri, h, d, acc, from_end=False) -> Iterator[dict]:
+        r = self.rails[ri]
+        n = len(r.holes)
+        if from_end:
+            # enters at the end next to its tower: hole 0 side or the last
+            et = self.s.pos[r.end_tower]
+            first, last = r.holes[0], r.holes[-1]
+            d = +1 if hypot(first[0] - et[0], first[1] - et[1]) < hypot(last[0] - et[0], last[1] - et[1]) else -1
+            h = -1 if d > 0 else n
+        prev = acc["flow"].get(ri)
+        if prev is not None and prev != d:
+            return
+        acc = {**acc, "flow": {**acc["flow"], ri: d}}
+        k = h + d
+        covered = set(acc["covered"])
+        while 0 <= k < n:
+            if (ri, k) in self.above:
+                return                                      # a stack stands in the way: stuck
+            target_ok = (ri, k) in self.below or r.z <= self.exit_level
+            if target_ok and (ri, k) not in covered:
+                yield from self._fall(ri, k, {**acc, "covered": set(covered)})
+            if len(covered) >= self.covers:
+                return
+            covered.add((ri, k))
+            k += d
+        # off the end
+        if r.z <= self.exit_level:
+            yield {**acc, "covered": covered, "exits": acc["exits"] + [(ri, "end")]}
