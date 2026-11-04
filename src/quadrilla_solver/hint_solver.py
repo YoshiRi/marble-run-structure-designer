@@ -100,7 +100,9 @@ class GeometrySolver:
         """Rail holes ("hole") and side links ("end") of placed towers
         (absolute level) not yet on a rail."""
         covered = {(t, r.z) for r in s.rails for t in r.taken.values()}
-        ends = {(r.end_tower, r.z) for r in s.rails if r.end_tower is not None}
+        # a side outlet feeds a rail level with the block's base or one level
+        # below it (the generator does both)
+        ends = {(r.end_tower, z) for r in s.rails if r.end_tower is not None for z in (r.z, r.z + 1)}
         out = []
         for t, base in s.base.items():
             for lv in self.towers[t].levels:
@@ -177,13 +179,14 @@ class GeometrySolver:
             holes_cm = self.catalog.rails[kind].holes_cm
             if what == "end":
                 # the rail's end touches the tower's side, the rail runs away from it
-                for yaw in ((0.0,) if first else (0.0, 90.0, 180.0, 270.0)):
-                    h = radians(yaw)
-                    ex, ey = here[0] + 2.25 * cos(h), here[1] + 2.25 * sin(h)
-                    holes = [(ex + x * cos(h), ey + x * sin(h)) for x in holes_cm]
-                    if not self._rail_clear(s, holes, z, kind):
-                        continue
-                    yield from self._fill(s, kind, z, holes, yaw, -1, t, 0, {}, None, t)
+                for zr in (z, z - 1):
+                    for yaw in ((0.0,) if first else (0.0, 90.0, 180.0, 270.0)):
+                        h = radians(yaw)
+                        ex, ey = here[0] + 2.25 * cos(h), here[1] + 2.25 * sin(h)
+                        holes = [(ex + x * cos(h), ey + x * sin(h)) for x in holes_cm]
+                        if not self._rail_clear(s, holes, zr, kind):
+                            continue
+                        yield from self._fill(s, kind, zr, holes, yaw, -1, t, 0, {}, None, t)
                 continue
             for k in range(len(holes_cm)):
                 for yaw in ((0.0,) if first else (0.0, 90.0, 180.0, 270.0)):
