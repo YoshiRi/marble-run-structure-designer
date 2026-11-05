@@ -53,6 +53,7 @@
     structure: [],
     build: [],
     review: [],
+    recon: [],
   };
 
   // Show the z=0 datum explicitly instead of relying on a plain ground plane.
@@ -2295,6 +2296,7 @@
     renderBuildPanel();
     renderEditPanel();
     renderReview();
+    renderRecon();
     requestAnimationFrame(sheetOffset);
   }
 
@@ -2966,6 +2968,305 @@
     edit.on = on;
     if (!on) { edit.selected = null; edit.popupAt = null; }
     renderAll();
+  }
+
+  // ---- rebuild from hints (Python, hint_quiz.py; debug): the hints are read
+  // off the shown layout, the solver lists the builds that fit them and asks
+  // which hole a tower is in until one is left; the layout is the answer, so
+  // "auto" answers from it and the result is checked against it.
+  const recon = { on: false, busy: false, original: null, hints: null, state: null, view: "original",
+                  note: "", pending: null, id: 0 };
+  const RECON_COLORS = { asked: "#facc15", from: "#38bdf8", rail: "#f97316" };
+
+  function reconListener(message) {
+    if (message.type === "status" && recon.busy) { recon.note = message.text; renderReconPanel(); }
+    const p = recon.pending;
+    if (!p || message.id !== p.id) return;
+    recon.pending = null;
+    if (message.type === "quizzed") p.resolve(message.response);
+    else if (message.type === "error") p.reject(new Error(message.message));
+  }
+
+  function pyQuiz(request) {
+    const id = "quiz-" + (++recon.id);
+    return new Promise((resolve, reject) => {
+      recon.pending = { id, resolve, reject };
+      pyWorker(reconListener).postMessage({
+        type: "quiz", id, base: new URL(DATA_ROOT, window.location.href).href, request,
+      });
+    });
+  }
+
+  async function reconCall(request) {
+    if (recon.busy) return;
+    recon.busy = true;
+    recon.note = T(request.action === "start" ? "recon.searching" : "recon.working");
+    renderReconPanel();
+    try {
+      const response = await pyQuiz(request);
+      if (response.error) throw new Error(response.code === "unsupported" ? T("recon.unsupported") : response.error);
+      if (response.hints) recon.hints = response.hints;
+      recon.state = response;
+      recon.note = "";
+      if (response.count === 1) recon.view = "candidate";
+    } catch (error) {
+      recon.note = error.message;
+    }
+    recon.busy = false;
+    showRecon();
+  }
+
+  function showRecon() {
+    if (!recon.on) return;
+    const data = recon.view === "candidate" && recon.state?.layout ? recon.state.layout : recon.original;
+    if (data && data !== fullLayout) setLayout(data);
+    else renderAll();
+  }
+
+  function setReconMode(on) {
+    if (on === recon.on) return;
+    if (on) {
+      if (!fullLayout) return;
+      if (edit.on) setEditMode(false);
+      if (review.on) review.on = false;
+      if (build.on) {
+        build.on = false;
+        const url = new URL(window.location.href);
+        url.searchParams.delete("mode");
+        url.searchParams.delete("step");
+        window.history.replaceState(null, "", url);
+      }
+      Object.assign(recon, { on: true, original: fullLayout, hints: null, state: null, view: "original", note: "" });
+      reconCall({ action: "start", layout: recon.original, base: "grid" });
+    } else {
+      recon.on = false;
+      const original = recon.original;
+      recon.original = null;
+      if (original && original !== fullLayout) setLayout(original);
+      else renderAll();
+    }
+  }
+
+  const towerLetter = t => (t < 26 ? String.fromCharCode(65 + t) : "T" + t);
+
+  // the parts of tower t in the layout on show
+  function reconTowerParts(t) {
+    if (recon.view === "original") return recon.hints?.tower_parts?.[t] || [];
+    const prefix = "t" + t + "_";
+    return (fullLayout?.parts || []).filter(p => p.id.startsWith(prefix)).map(p => p.id);
+  }
+
+  function reconMarks() {
+    const q = recon.state?.question;
+    const marks = new Map();
+    if (!q || !recon.hints) return marks;
+    if (q.kind === "hole") {
+      for (const id of reconTowerParts(q.from_tower)) marks.set(id, RECON_COLORS.from);
+      for (const id of reconTowerParts(q.tower)) marks.set(id, RECON_COLORS.asked);
+      if (recon.view === "original") marks.set(recon.hints.rail_ids[q.rail], RECON_COLORS.rail);
+    } else {
+      for (const order of [q.order, q.other_order]) {
+        for (const id of reconTowerParts(order[0])) marks.set(id, RECON_COLORS.from);
+        for (const id of reconTowerParts(order[order.length - 1])) marks.set(id, RECON_COLORS.asked);
+      }
+      if (recon.view === "original") {
+        marks.set(recon.hints.rail_ids[q.rail], RECON_COLORS.rail);
+        marks.set(recon.hints.rail_ids[q.other], RECON_COLORS.rail);
+      }
+    }
+    return marks;
+  }
+
+  // Letters over every tower; the ones a question is about in color, the rest faded.
+  function decorateRecon() {
+    for (const mesh of groups.recon) if (!mesh.isDisposed()) mesh.dispose();
+    groups.recon.length = 0;
+    if (!recon.on || !recon.hints || !fullLayout) return;
+    const marks = reconMarks();
+    for (const mesh of scene.meshes) {
+      const owner = mesh.metadata?.owner;
+      if (owner === undefined || mesh.isDisposed()) continue;
+      const color = marks.get(owner);
+      mesh.visibility = !marks.size || color ? 1 : 0.3;
+      mesh.renderOutline = Boolean(color && mesh.metadata?.info?.id === owner);
+      if (mesh.renderOutline) {
+        mesh.outlineColor = BABYLON.Color3.FromHexString(color);
+        mesh.outlineWidth = 0.2;
+      }
+    }
+    const parts = new Map((fullLayout.parts || []).map(p => [p.id, p]));
+    recon.hints.towers.forEach((_, t) => {
+      const mine = reconTowerParts(t).map(id => parts.get(id)).filter(Boolean);
+      if (!mine.length) return;
+      const top = mine.reduce((a, b) => (b.z_units > a.z_units ? b : a));
+      const color = marks.get(top.id) || "#64748b";
+      const tex = new BABYLON.DynamicTexture("recon-tex-" + t, { width: 128, height: 128 }, scene, true);
+      tex.hasAlpha = true;
+      const ctx = tex.getContext();
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(64, 64, 58, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 8; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+      ctx.fillStyle = "#111827";
+      ctx.font = "bold 72px system-ui, sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(towerLetter(t), 64, 70);
+      tex.update();
+      const plane = BABYLON.MeshBuilder.CreatePlane("recon-label-" + t, { size: 3.6 }, scene);
+      plane.position = new BABYLON.Vector3(top.x_cm, (top.z_units + 6) * HEIGHT_SCALE_CM, top.y_cm);
+      plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+      const mat = new BABYLON.StandardMaterial("recon-mat-" + t, scene);
+      mat.diffuseTexture = tex;
+      mat.emissiveColor = BABYLON.Color3.White();
+      mat.disableLighting = true;
+      mat.useAlphaFromDiffuseTexture = true;
+      mat.backFaceCulling = false;
+      plane.material = mat;
+      plane.renderingGroupId = 1;
+      plane.isPickable = false;
+      groups.recon.push(plane);
+    });
+  }
+
+  function towerName(t) {
+    const tokens = recon.hints?.towers?.[t] || [];
+    return towerLetter(t) + "（" + tokens.map(k => (k === "R" ? "R" : partName(k.replace(/[<>]$/, "")))).join(" · ") + "）";
+  }
+
+  function reconQuestionText(q) {
+    if (q.kind === "dir") {
+      const a = q.order, b = q.other_order;
+      return T("recon.qDir", { a0: towerLetter(a[0]), a1: towerLetter(a[a.length - 1]),
+                               b0: towerLetter(b[0]), b1: towerLetter(b[b.length - 1]) });
+    }
+    return T(q.tower === q.from_tower ? "recon.qHoleOwn" : "recon.qHole", {
+      tower: towerLetter(q.tower), from: towerLetter(q.from_tower), rail: partName(q.rail_type),
+      order: q.order.map(towerLetter).join("→"), holes: q.holes,
+    });
+  }
+
+  function reconOptionLabel(q, value) {
+    if (q.kind === "dir") return T(value === "same" ? "recon.same" : "recon.opposite");
+    return T("recon.nth", { n: value });
+  }
+
+  function renderRecon() {
+    const menu = document.getElementById("menuRecon");
+    if (menu) {
+      menu.textContent = T(recon.on ? "menu.reconClose" : "menu.recon");
+      menu.setAttribute("aria-pressed", String(recon.on));
+    }
+    document.getElementById("reconPanel").hidden = !recon.on;
+    decorateRecon();
+    renderReconPanel();
+  }
+
+  function renderReconPanel() {
+    const panel = document.getElementById("reconPanel");
+    if (!recon.on) return;
+    const body = document.getElementById("reconBody");
+    body.replaceChildren();
+    const st = recon.state;
+    const status = document.createElement("p");
+    status.className = "validation-status " + (st?.count === 1 ? (st.same === false ? "warn" : "ok") : "");
+    if (st) {
+      status.textContent = st.count === 0 ? T("recon.none") + " " + T("recon.noneHint")
+        : st.count === 1 ? T(st.same === true ? "recon.oneSame" : st.same === false ? "recon.oneDiff" : "recon.one")
+        : T("recon.count", { n: st.count }) + (st.complete ? "" : " " + T("recon.incomplete"));
+    } else status.textContent = recon.note || T("recon.searching");
+    body.append(status);
+    if (st && st.count > 0) {
+      const views = document.createElement("div");
+      views.className = "edit-row";
+      const orig = button(T("recon.viewOriginal"), { "aria-pressed": String(recon.view === "original"), disabled: recon.busy },
+        () => { recon.view = "original"; showRecon(); });
+      const cand = button(T("recon.viewCandidate", { n: (st.index || 0) + 1, m: st.count }),
+        { "aria-pressed": String(recon.view === "candidate"), disabled: recon.busy },
+        () => { recon.view = "candidate"; showRecon(); });
+      views.append(orig, cand);
+      if (st.count > 1 && recon.view === "candidate") {
+        views.append(button("▶", { title: T("recon.nextCandidate"), disabled: recon.busy },
+          () => reconCall({ action: "show", index: ((st.index || 0) + 1) % st.count })));
+      }
+      body.append(views);
+    }
+    const q = st?.question;
+    if (q) {
+      const text = document.createElement("p");
+      text.className = "recon-question";
+      text.textContent = reconQuestionText(q);
+      const legend = document.createElement("p");
+      legend.className = "muted small-note";
+      legend.innerHTML = '<i class="swatch" style="background:' + RECON_COLORS.asked + '"></i>' + esc(T("recon.legendAsked")) +
+        ' <i class="swatch" style="background:' + RECON_COLORS.from + '"></i>' + esc(T("recon.legendFrom")) +
+        ' <i class="swatch" style="background:' + RECON_COLORS.rail + '"></i>' + esc(T("recon.legendRail"));
+      const options = document.createElement("div");
+      options.className = "edit-row recon-options";
+      for (const o of q.options) {
+        const debug = document.body.classList.contains("debug") ? ' <span class="muted">(' + o.count + ")</span>" : "";
+        options.append(button(esc(reconOptionLabel(q, o.value)) + debug, { disabled: recon.busy },
+          () => reconCall({ action: "answer", qid: q.id, value: o.value })));
+      }
+      options.append(button(esc(T("recon.skip")), { class: "text", disabled: recon.busy },
+        () => reconCall({ action: "answer", qid: q.id, value: null })));
+      body.append(text, legend, options);
+      const truth = recon.hints?.answers?.[q.id];
+      if (truth !== undefined) {
+        const auto = document.createElement("div");
+        auto.className = "edit-row";
+        auto.append(button(esc(T("recon.autoOne")), { disabled: recon.busy },
+          () => reconCall({ action: "answer", qid: q.id, value: truth })),
+        button(esc(T("recon.autoAll")), { disabled: recon.busy }, reconAutoAll));
+        body.append(auto);
+      }
+    } else if (st && st.count > 1) {
+      const p = document.createElement("p");
+      p.className = "muted small-note";
+      p.textContent = T("recon.noMore");
+      body.append(p);
+    }
+    if (st?.asked?.length) {
+      const asked = document.createElement("p");
+      asked.className = "muted small-note";
+      asked.textContent = T("recon.asked", { n: st.asked.filter(a => a[1] !== null).length });
+      body.append(asked);
+    }
+    if (recon.hints) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = T("recon.hints");
+      const list = document.createElement("ol");
+      list.className = "recon-towers";
+      recon.hints.towers.forEach((_, t) => {
+        const li = document.createElement("li");
+        li.textContent = towerName(t);
+        list.append(li);
+      });
+      const rails = document.createElement("ul");
+      rails.className = "recon-towers";
+      for (const r of recon.hints.rails) {
+        const li = document.createElement("li");
+        li.textContent = partName(r.type) + ": " + (r.order || r.towers).map(towerLetter).join("→");
+        rails.append(li);
+      }
+      const route = document.createElement("p");
+      route.className = "muted small-note";
+      route.textContent = T("recon.route") + " " + (recon.hints.route || [])
+        .map(([a, b]) => towerLetter(a) + "→" + (b < 0 ? T("recon.out") : towerLetter(b))).join(", ");
+      details.append(summary, list, rails, route);
+      body.append(details);
+    }
+    document.getElementById("reconNote").textContent = recon.busy || !st ? recon.note : "";
+    panel.querySelector("#reconRestart").disabled = recon.busy;
+  }
+
+  async function reconAutoAll() {
+    while (recon.on && recon.state?.question) {
+      const q = recon.state.question;
+      const truth = recon.hints?.answers?.[q.id];
+      if (truth === undefined) break;
+      await reconCall({ action: "answer", qid: q.id, value: truth });
+    }
   }
 
   function exportEdited() {
@@ -3682,6 +3983,14 @@
   document.getElementById("resetCamera").addEventListener("click", fitCamera);
   document.getElementById("buildToggle").addEventListener("click", () => setBuildMode(!build.on));
   document.getElementById("menuEdit").addEventListener("click", () => setEditMode(!edit.on));
+  document.getElementById("menuRecon").addEventListener("click", () => setReconMode(!recon.on));
+  document.getElementById("reconClose").addEventListener("click", () => setReconMode(false));
+  document.getElementById("reconRestart").addEventListener("click", () => {
+    if (!recon.on || recon.busy) return;
+    Object.assign(recon, { state: null, view: "original" });
+    if (recon.original !== fullLayout) setLayout(recon.original);
+    reconCall({ action: "start", layout: recon.original, base: "grid" });
+  });
   document.getElementById("editDone").addEventListener("click", () => setEditMode(false));
   document.getElementById("editAlt").addEventListener("click", nextAlternative);
   document.getElementById("editSaveMine").addEventListener("click", () => saveMine());

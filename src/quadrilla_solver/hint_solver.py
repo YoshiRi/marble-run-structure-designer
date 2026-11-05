@@ -476,7 +476,8 @@ class RouteChecker:
         if start is None:
             return []
         out: list[dict] = []
-        acc0 = {"flow": {}, "covered": set(), "turn": {}, "exits": [], "stops": {}, "edges": frozenset(), "last": start[0]}
+        acc0 = {"flow": {}, "covered": set(), "turn": {}, "exits": [], "stops": {}, "edges": frozenset(), "last": start[0],
+                "start": start}
         for res in self._into_block(start[0], start[1], acc0):
             if self.route is not None and set(res["edges"]) != self.route:
                 continue
@@ -523,14 +524,14 @@ class RouteChecker:
         both = "to_any_of" in outs[0] and part == "red_random_split"
         dirs = [(+1, -1)] if both else [(+1,), (-1,)]
         for ds in dirs:
-            yield from self._branches(ri, h, list(ds), {**acc, "turn": {**acc["turn"], (t, j): ds[0]}})
+            yield from self._branches(ri, h, list(ds), {**acc, "turn": {**acc["turn"], (t, j): ds[0]}}, len(ds) > 1)
 
-    def _branches(self, ri, h, ds, acc) -> Iterator[dict]:
+    def _branches(self, ri, h, ds, acc, split=False) -> Iterator[dict]:
         if not ds:
             yield acc
             return
-        for res in self._roll(ri, h, ds[0], acc):
-            yield from self._branches(ri, h, ds[1:], {**res, "last": acc["last"]})
+        for res in self._roll(ri, h, ds[0], acc, pivot=h if split else None):
+            yield from self._branches(ri, h, ds[1:], {**res, "last": acc["last"]}, split)
 
     def _base_rail(self, t, j):
         for (ri, h), (tt, jj) in self.above.items():
@@ -554,7 +555,7 @@ class RouteChecker:
             yield {**acc, "exits": acc["exits"] + [(ri, h)], "stops": {**acc["stops"], (ri, h): "exit"},
                    "edges": acc["edges"] | {(acc["last"], -1)}}
 
-    def _roll(self, ri, h, d, acc, from_end=False) -> Iterator[dict]:
+    def _roll(self, ri, h, d, acc, from_end=False, pivot=None) -> Iterator[dict]:
         r = self.rails[ri]
         n = len(r.holes)
         if from_end:
@@ -564,9 +565,10 @@ class RouteChecker:
             d = +1 if hypot(first[0] - et[0], first[1] - et[1]) < hypot(last[0] - et[0], last[1] - et[1]) else -1
             h = -1 if d > 0 else n
         prev = acc["flow"].get(ri)
-        if prev is not None and prev != d:
+        mode = d if pivot is None else ("from", pivot)   # a splitter sends it both ways from its hole
+        if prev is not None and prev != mode:
             return
-        acc = {**acc, "flow": {**acc["flow"], ri: d}}
+        acc = {**acc, "flow": {**acc["flow"], ri: mode}}
         k = h + d
         covered = set(acc["covered"])
         while 0 <= k < n:

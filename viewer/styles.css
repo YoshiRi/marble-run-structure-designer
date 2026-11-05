@@ -457,3 +457,11 @@ body.play .viewport-panel { height: auto; }
   background: color-mix(in srgb, var(--accent) 14%, Canvas); color: CanvasText; font-size: 14px; cursor: pointer; }
 .edit-alt[hidden] { display: none; }
 .rb-any { display: flex; align-items: center; gap: 4px; margin: 0; }
+
+/* Rebuild from hints (debug) */
+.recon-question { font-weight: 600; margin: 8px 0 4px; line-height: 1.5; }
+.recon-options { flex-wrap: wrap; gap: 6px; }
+.recon-options button { min-width: 64px; min-height: 36px; }
+.recon-towers { margin: 6px 0; padding-left: 20px; font-size: 12px; line-height: 1.5; }
+.recon-panel button[aria-pressed="true"] { outline: 2px solid var(--accent, #2563eb); }
+.recon-panel .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 3px 0 6px; vertical-align: -1px; }

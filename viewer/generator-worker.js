@@ -4,9 +4,11 @@
  *
  * Messages in:  {type: "generate", id, base, options}
  *               {type: "edit", id, base, request}   (rail rewrites, web.edit_json)
+ *               {type: "quiz", id, base, request}   (rebuild from hints, web.quiz_json)
  *   base: URL of the site root (where src/, catalog/ live)
  * Messages out: {type: "status", text} | {type: "progress", id, done, total}
  *               {type: "result", id, layouts} | {type: "edited", id, response}
+ *               {type: "quizzed", id, response}
  *               {type: "error", id, message}
  */
 /* global loadPyodide, jsyaml */
@@ -45,17 +47,22 @@ _yaml = types.ModuleType("yaml")
 _yaml.safe_load = _safe_load
 sys.modules["yaml"] = _yaml
 sys.path.insert(0, "/repo/src")
-from quadrilla_solver.web import generate_json, edit_json
+from quadrilla_solver.web import generate_json, edit_json, quiz_json
 `);
-  return { generateJson: py.globals.get("generate_json"), editJson: py.globals.get("edit_json") };
+  return { generateJson: py.globals.get("generate_json"), editJson: py.globals.get("edit_json"),
+           quizJson: py.globals.get("quiz_json") };
 }
 
 self.onmessage = async event => {
   const { type, id, base, options, request } = event.data || {};
-  if (type !== "generate" && type !== "edit") return;
+  if (type !== "generate" && type !== "edit" && type !== "quiz") return;
   try {
     if (!ready) ready = boot(base);
-    const { generateJson, editJson } = await ready;
+    const { generateJson, editJson, quizJson } = await ready;
+    if (type === "quiz") {
+      self.postMessage({ type: "quizzed", id, response: JSON.parse(quizJson(JSON.stringify(request), "/repo")) });
+      return;
+    }
     if (type === "edit") {
       self.postMessage({ type: "edited", id, response: JSON.parse(editJson(JSON.stringify(request), "/repo")) });
       return;

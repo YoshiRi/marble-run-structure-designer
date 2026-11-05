@@ -10,6 +10,7 @@
     "src/quadrilla_solver/connectivity.py",
     "src/quadrilla_solver/generator.py",
     "src/quadrilla_solver/geometry.py",
+    "src/quadrilla_solver/hint_quiz.py",
     "src/quadrilla_solver/hint_solver.py",
     "src/quadrilla_solver/hints.py",
     "src/quadrilla_solver/inventory.py",

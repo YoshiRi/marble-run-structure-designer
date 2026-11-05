@@ -52,6 +52,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     usage["cover"] = sum(1 for r in layout.rails for s in r.hole_states.values() if s == "covered")
     spots: dict[tuple[float, float], list[tuple[float, list[str]]]] = {}
     exact: dict[tuple[float, float], list[float]] = {}
+    members: dict[tuple[float, float], list[str]] = {}
     for s in layout.supports:
         stack = [parts[p] for p in s.stack_part_ids if p in parts]
         if not stack:
@@ -60,6 +61,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
             ([RAIL] if s.upper_rail_id is not None else [])
         spots.setdefault(_key(stack[0].x_cm, stack[0].y_cm), []).append((stack[0].z_units, tokens))
         exact.setdefault(_key(stack[0].x_cm, stack[0].y_cm), [stack[0].x_cm, stack[0].y_cm])
+        members.setdefault(_key(stack[0].x_cm, stack[0].y_cm), []).extend(p.id for p in stack)
     # which spots each rail lies on (or touches with its end): a person sees
     # which columns a rail rests on
     spot_of_part = {}
@@ -94,6 +96,7 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     index_of = {order[i]: n for n, i in enumerate(ranked)}
     towers = [towers[i] for i in ranked]
     spots_xy = [exact[order[i]] for i in ranked]
+    tower_parts = [members[order[i]] for i in ranked]
     # rails lying the same way (parallel) share an axis; 0/1 only says
     # which rails are parallel and which cross at a right angle
     yaws = [r.yaw_deg % 180 for r in layout.rails]
@@ -101,18 +104,43 @@ def extract_hints(layout: Layout, catalog: PartCatalog, base: str = "grid", sour
     def axis(y):
         d = (y - axis0) % 180
         return 0 if min(d, 180 - d) < 1 else 1 if abs(d - 90) < 1 else None
-    def order(r):
+    def along(r):
         # towers along the rail, end A to end B: a person reads them off in a row
         d = (math.cos(math.radians(r.yaw_deg)), math.sin(math.radians(r.yaw_deg)))
         sp = [s for s in rail_spots[r.id] if s in index_of]
         sp.sort(key=lambda s: (s[0] - r.x_cm) * d[0] + (s[1] - r.y_cm) * d[1])
         return [index_of[s] for s in sp]
     rails = sorted(({"type": r.rail_type, "towers": sorted(index_of[sp] for sp in rail_spots[r.id] if sp in index_of),
-                     "axis": axis(y), "order": order(r)}
+                     "axis": axis(y), "order": along(r), "_id": r.id}
                     for r, y in zip(layout.rails, yaws)), key=lambda x: (x["type"], x["towers"]))
+    # the answers a person would give when asked which hole a tower is in
+    # (counted from end A, where the hinted order starts): for tests and the
+    # viewer's self-check, not a hint
+    answers = {}
+    rail_ids = []
+    for i, entry in enumerate(rails):
+        rid = entry.pop("_id")
+        rail_ids.append(rid)
+        for sup in layout.supports:
+            stack = [parts[p] for p in sup.stack_part_ids if p in parts]
+            if not stack:
+                continue
+            t = index_of.get(_key(stack[0].x_cm, stack[0].y_cm))
+            for r_id, h in ((sup.upper_rail_id, sup.upper_hole_index), (sup.lower_rail_id, sup.lower_hole_index)):
+                if r_id == rid and h is not None and t is not None:
+                    answers[f"hole:{i}:{t}"] = h + 1
+    pos = dict(enumerate(spots_xy))
+    for i, a in enumerate(rails):
+        for k, b in enumerate(rails):
+            if i < k and a["axis"] is not None and a["axis"] == b["axis"] and len(a["order"]) > 1 and len(b["order"]) > 1:
+                va = [pos[a["order"][-1]][n] - pos[a["order"][0]][n] for n in (0, 1)]
+                vb = [pos[b["order"][-1]][n] - pos[b["order"][0]][n] for n in (0, 1)]
+                answers[f"dir:{i}:{k}"] = "same" if va[0] * vb[0] + va[1] * vb[1] > 0 else "opposite"
     top = max((r.z_units for r in layout.rails), default=0)
     out = {"parts": {k: v for k, v in sorted(usage.items()) if v}, "towers": towers, "base": base,
-           "top_level": int(top), "rails": rails, "spots": spots_xy}   # spots: the answer (top view), not a hint
+           "top_level": int(top), "rails": rails, "spots": spots_xy, "answers": answers,
+           # which parts and rails of the layout each tower / hinted rail is (to point at them)
+           "tower_parts": tower_parts, "rail_ids": rail_ids}   # spots: the answer (top view), not a hint
     if source is not None:
         tower_of = {}
         for s in layout.supports:
