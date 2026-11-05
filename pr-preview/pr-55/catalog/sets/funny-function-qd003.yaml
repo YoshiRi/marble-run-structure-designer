@@ -1,0 +1,54 @@
+schema_version: "0.1"
+
+set:
+  id: QD003
+  name: quadrilla_funny_function
+  display_name_ja: "クアドリラ・ファニーファンクションセット"
+  market_status: current_core_lineup
+  role: special_function_set
+
+sources:
+  - type: official_product_page
+    url: "https://ec.bornelund.co.jp/shop/g/gQD003/"
+
+contents:
+  routing_blocks:
+    red_random_split: 2
+    orange_vertical: 2
+    yellow: 3
+    natural_drop: 2
+    green: 1
+    cyan: 1
+    blue: 4
+
+  routing_blocks_total: 15
+
+  rails:
+    straight_long: 1
+    straight_short: 3
+    spiral_medium:
+      count: 1
+      catalog_status: geometry_deferred
+
+  special_parts:
+    melody_step: 1
+    round_spinner: 1
+    clear_fall: 1
+
+  thin_and_structural_blocks:
+    purple_drop: 8
+    wooden_foundation: 5
+
+  routing_accessories:
+    cover: 6
+    covered_slope: 2
+
+  non_routing_accessories:
+    accelerator_plate: 3
+
+  marbles: 30
+  marble_catcher: 2
+
+notes:
+  - "Official page labels rails as straight large x1 and straight medium x3; mapped here to the working long/short categories."
+  - "Official page labels accelerator parts as large x2 and small x3. Working mapping: large -> covered_slope, small -> accelerator_plate."
