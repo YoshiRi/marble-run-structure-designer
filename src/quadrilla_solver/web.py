@@ -260,3 +260,73 @@ def edit_json(request_json: str, root: str) -> str:
         return json.dumps({"candidates": edit_layout(request["layout"], request["op"], root)})
     except ValueError as error:
         return json.dumps({"error": str(error), "code": getattr(error, "code", None)})
+
+
+# ---- rebuild from hints by asking (hint_quiz.py) -------------------------------
+
+_QUIZ: dict[str, Any] = {}
+
+
+def _quiz_state() -> dict[str, Any]:
+    quiz, hints = _QUIZ["quiz"], _QUIZ["hints"]
+    out: dict[str, Any] = {"count": len(quiz.cands), "complete": quiz.complete, "asked": quiz.asked,
+                           "question": quiz.question()}
+    if quiz.cands:
+        index = min(_QUIZ.get("index", 0), len(quiz.cands) - 1)
+        out["index"] = index
+        out["layout"] = quiz.layout(index, name=f"rebuild {index + 1}/{len(quiz.cands)}")
+        original = _QUIZ.get("original")
+        if original is not None:
+            from .hints import same_structure
+            out["same"] = same_structure(original, layout_from_dict(out["layout"]), _QUIZ["catalog"])
+    return out
+
+
+def quiz_json(request_json: str, root: str) -> str:
+    """{"action": "start", "layout": ..., "base": "grid"}: hints are read off
+    the layout (it is the answer, for testing), or {"action": "start",
+    "hints": ...}: given hints; then {"action": "answer", "qid", "value"}
+    (value null: skip), {"action": "show", "index"}."""
+    from .hint_quiz import Quiz
+    from .hints import extract_hints
+    request = json.loads(request_json)
+    action = request.get("action")
+    try:
+        if action == "start":
+            catalog = load_catalog(Path(root) / "catalog" / "parts.yaml")
+            original = None
+            if request.get("layout") is not None:
+                data = request["layout"]
+                original = layout_from_dict(data)
+                q = data.get("routing_query") or {}
+                src = q.get("source")
+                source = PortRef(src["component_id"], src["port"]) if src else None
+                hints = extract_hints(original, catalog, request.get("base", "grid"), source)
+            else:
+                hints = request["hints"]
+            unsupported = sorted(({r.rail_type for r in original.rails} - {"straight_long", "straight_long_center",
+                                                                         "straight_short"})
+                                 | ({p.part_type for p in original.parts} & {"seesaw"})) if original else []
+            if unsupported:
+                return json.dumps({"error": "straight rails only for now: " + ", ".join(unsupported),
+                                   "code": "unsupported"})
+            _QUIZ.clear()
+            _QUIZ.update(catalog=catalog, hints=hints, original=original,
+                         quiz=Quiz(hints, catalog, max_nodes=int(request.get("max_nodes", 300000))))
+            out = _quiz_state()
+            out["hints"] = hints
+            return json.dumps(out)
+        if "quiz" not in _QUIZ:
+            return json.dumps({"error": "no quiz", "code": "no_quiz"})
+        quiz = _QUIZ["quiz"]
+        if action == "answer":
+            if request.get("value") is None:
+                quiz.asked.append((request["qid"], None))       # skipped: not asked again
+            else:
+                quiz.answer(request["qid"], request["value"])
+            _QUIZ["index"] = 0
+        elif action == "show":
+            _QUIZ["index"] = int(request.get("index", 0))
+        return json.dumps(_quiz_state())
+    except (ValueError, KeyError) as error:
+        return json.dumps({"error": str(error), "code": getattr(error, "code", None)})

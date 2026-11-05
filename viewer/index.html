@@ -42,6 +42,7 @@
         <button id="generateOpen" type="button" class="menu-item" data-i18n="menu.generate">自動生成</button>
         <button id="buildToggle" type="button" class="menu-item" aria-pressed="false">組み立て手順</button>
         <button id="menuEdit" type="button" class="menu-item" aria-pressed="false" data-i18n="menu.edit">編集する</button>
+        <button id="menuRecon" type="button" class="menu-item debug-only" aria-pressed="false" data-i18n="menu.recon">ヒントから復元（テスト）</button>
         <hr class="menu-sep">
         <button id="mineSave" type="button" class="menu-item" data-i18n="menu.save">マイレイアウトに保存</button>
         <button id="shareLink" type="button" class="menu-item" data-i18n="menu.share">共有リンクを送る</button>
@@ -131,6 +132,18 @@
           <button id="editAlt" type="button" class="edit-alt" hidden>別の案</button>
           <p class="muted small-note debug-only">Click a rail or block. Keys: R rotate, Ctrl+Z undo, Esc deselect.
             Rail rewrites run the generator's own Python passes (loaded once).</p>
+        </section>
+        <section id="reconPanel" class="build-panel recon-panel" hidden>
+          <div class="build-head">
+            <h2 data-i18n="recon.title">ヒントから復元</h2>
+            <button id="reconClose" type="button" class="text" data-i18n="recon.close">閉じる</button>
+          </div>
+          <div id="reconBody" class="edit-body"></div>
+          <p id="reconNote" class="muted small-note" aria-live="polite"></p>
+          <div class="edit-row">
+            <button id="reconRestart" type="button" class="text" data-i18n="recon.restart">最初から</button>
+          </div>
+          <p class="muted small-note" data-i18n="recon.help">表示中のレイアウトからヒント（部品・柱の積み順・レールに載る柱の並び・向き・玉の流れ）を読み取り、それに合う構造を探します。質問に答えると候補が絞れます。元のレイアウトが正解です。</p>
         </section>
         <section id="buildPanel" class="build-panel" hidden>
           <div class="build-head">
